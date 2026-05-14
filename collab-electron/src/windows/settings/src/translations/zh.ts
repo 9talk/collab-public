@@ -1,4 +1,6 @@
-import { TranslationKey } from "./en";
+import { en } from "./en";
+
+type TranslationKey = keyof typeof en;
 
 export const zh: Record<TranslationKey, string> = {
   // Sidebar

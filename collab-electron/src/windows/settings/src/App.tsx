@@ -9,6 +9,8 @@ import {
   Monitor,
   Terminal,
 } from "@phosphor-icons/react";
+import { useTranslation } from "./translations";
+import type { SupportedLocale, TranslationKey } from "./translations";
 
 type ThemeMode = "light" | "dark" | "system";
 
@@ -175,9 +177,10 @@ function ThemeToggle({
   );
 }
 
-function AppearancePane() {
+function AppearancePane({ t }: { t: (key: TranslationKey) => string }) {
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [canvasOpacity, setCanvasOpacity] = useState(0);
+  const [locale, setLocale] = useState<SupportedLocale>("en");
 
   useEffect(() => {
     api.getPref("theme")
@@ -189,6 +192,11 @@ function AppearancePane() {
     api.getPref("canvasOpacity")
       .then((v) => {
         if (typeof v === "number") setCanvasOpacity(v);
+      })
+      .catch(() => { });
+    api.getPref("locale")
+      .then((v) => {
+        if (v === "en" || v === "zh") setLocale(v);
       })
       .catch(() => { });
   }, []);
@@ -206,23 +214,43 @@ function AppearancePane() {
   return (
     <div className="space-y-6 p-6">
       <div className="space-y-1">
-        <h2 className="text-base font-semibold">Appearance</h2>
+        <h2 className="text-base font-semibold">{t("appearance.title")}</h2>
         <p className="text-sm text-muted-foreground">
-          Customize how Collaborator looks.
+          {t("appearance.description")}
         </p>
       </div>
 
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">Theme</p>
+        <p className="text-sm font-medium">{t("appearance.theme")}</p>
         <ThemeToggle
           value={theme}
           onChange={(m) => { void handleThemeChange(m); }}
         />
       </div>
 
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{t("language.label")}</p>
+        <select
+          value={locale}
+          onChange={(e) => {
+            const value = e.target.value as SupportedLocale;
+            setLocale(value);
+            void api.setPref("locale", value);
+          }}
+          className="rounded-md border bg-transparent px-2 py-1 text-sm cursor-pointer"
+          style={{
+            borderColor: "color-mix(in srgb, var(--foreground) 15%, transparent)",
+            color: "var(--foreground)",
+          }}
+        >
+          <option value="en">{t("language.english")}</option>
+          <option value="zh">{t("language.chinese")}</option>
+        </select>
+      </div>
+
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">Canvas opacity</p>
+          <p className="text-sm font-medium">{t("appearance.canvasOpacity")}</p>
           <span className="text-xs tabular-nums text-muted-foreground">
             {canvasOpacity}%
           </span>
@@ -238,41 +266,10 @@ function AppearancePane() {
 
 const IS_MAC = window.api.getPlatform() === "darwin";
 
-const MOD = IS_MAC ? "\u2318" : "Ctrl+";
-const SHIFT = IS_MAC ? "\u21E7" : "Shift+";
-const CTRL = IS_MAC ? "\u2303" : "Ctrl+";
-const ALT = IS_MAC ? "\u2325" : "Alt+";
-
-const SHORTCUTS: { label: string; keys: string }[] = [
-  { label: "Settings", keys: `${MOD} ,` },
-  { label: "Find", keys: `${MOD} K` },
-  { label: "Toggle Navigator", keys: `${MOD} \\` },
-  { label: "Toggle Terminal List", keys: `${MOD} \`` },
-  { label: "Open Workspace", keys: `${SHIFT} ${MOD} O` },
-  { label: "Zoom In", keys: `${MOD} =` },
-  { label: "Zoom Out", keys: `${MOD} -` },
-  { label: "Actual Size", keys: `${MOD} 0` },
-  {
-    label: "Toggle Full Screen",
-    keys: IS_MAC ? "\u2303 \u2318 F" : "F11",
-  },
-  { label: "Focus Tile Left", keys: `${ALT} ←` },
-  { label: "Focus Tile Right", keys: `${ALT} →` },
-  { label: "Focus Tile Up", keys: `${ALT} ↑` },
-  { label: "Focus Tile Down", keys: `${ALT} ↓` },
-];
-
-const MOUSE_INPUTS: { label: string; keys: string }[] = [
-  { label: "Pan Canvas", keys: "Two-Finger Swipe" },
-  { label: "Pan Canvas", keys: "Middle Click + Drag" },
-  { label: "Pan Canvas", keys: "Space + Drag" },
-  { label: "Scroll Canvas Vertically", keys: "Scroll" },
-  { label: "Scroll Canvas Horizontally", keys: `${SHIFT} Scroll` },
-  { label: "Zoom", keys: `${CTRL} Scroll` },
-  ...(IS_MAC
-    ? [{ label: "Zoom", keys: `${MOD} Scroll` }]
-    : []),
-];
+const MOD = IS_MAC ? "⌘" : "Ctrl+";
+const SHIFT = IS_MAC ? "⇧" : "Shift+";
+const CTRL = IS_MAC ? "⌃" : "Ctrl+";
+const ALT = IS_MAC ? "⌥" : "Alt+";
 
 function Kbd({ children }: { children: string }) {
   return (
@@ -309,34 +306,54 @@ function ShortcutList({ items }: { items: { label: string; keys: string }[] }) {
   );
 }
 
+function ControlsPane({ t }: { t: (key: TranslationKey) => string }) {
+  const shortcuts: { label: string; keys: string }[] = [
+    { label: t("shortcut.settings"), keys: `${MOD} ,` },
+    { label: t("shortcut.find"), keys: `${MOD} K` },
+    { label: t("shortcut.toggleNavigator"), keys: `${MOD} \\` },
+    { label: t("shortcut.toggleTerminalList"), keys: `${MOD} \`` },
+    { label: t("shortcut.openWorkspace"), keys: `${SHIFT} ${MOD} O` },
+    { label: t("shortcut.zoomIn"), keys: `${MOD} =` },
+    { label: t("shortcut.zoomOut"), keys: `${MOD} -` },
+    { label: t("shortcut.actualSize"), keys: `${MOD} 0` },
+    {
+      label: t("shortcut.toggleFullScreen"),
+      keys: IS_MAC ? "⌃ ⌘ F" : "F11",
+    },
+    { label: t("shortcut.focusTileLeft"), keys: `${ALT} ←` },
+    { label: t("shortcut.focusTileRight"), keys: `${ALT} →` },
+    { label: t("shortcut.focusTileUp"), keys: `${ALT} ↑` },
+    { label: t("shortcut.focusTileDown"), keys: `${ALT} ↓` },
+  ];
+
+  const mouseInputs: { label: string; keys: string }[] = [
+    { label: t("mouse.panCanvas"), keys: t("mouse.twoFingerSwipe") },
+    { label: t("mouse.panCanvas"), keys: t("mouse.middleClickDrag") },
+    { label: t("mouse.panCanvas"), keys: t("mouse.spaceDrag") },
+    { label: t("mouse.scrollVertically"), keys: t("mouse.scroll") },
+    { label: t("mouse.scrollHorizontally"), keys: `${SHIFT} ${t("mouse.scroll")}` },
+    { label: t("mouse.zoom"), keys: `${CTRL} ${t("mouse.scroll")}` },
+    ...(IS_MAC
+      ? [{ label: t("mouse.zoom"), keys: `${MOD} ${t("mouse.scroll")}` }]
+      : []),
+  ];
+
+  return (
+    <div className="space-y-6 p-6">
+      <div className="space-y-1">
+        <h2 className="text-base font-semibold">{t("controls.shortcuts")}</h2>
+      </div>
+      <ShortcutList items={shortcuts} />
+
+      <div className="space-y-1 pt-2">
+        <h2 className="text-base font-semibold">{t("controls.mouse")}</h2>
+      </div>
+      <ShortcutList items={mouseInputs} />
+    </div>
+  );
+}
+
 type TerminalMode = "tmux" | "sidecar";
-
-const TERMINAL_MODES: {
-  value: TerminalMode;
-  label: string;
-  description: string;
-  deprecated?: boolean;
-}[] = [
-  {
-    value: "sidecar",
-    label: "node-pty",
-    description: "Clean scrollback rendering.",
-  },
-  {
-    value: "tmux",
-    label: "tmux",
-    description: "May cause scrollback artifacts.",
-    deprecated: true,
-  },
-];
-
-type TerminalTarget = string;
-
-type TerminalTargetOption = {
-  id: string;
-  label: string;
-  isDefault?: boolean;
-};
 
 function RadioOption({
   selected,
@@ -386,7 +403,7 @@ function RadioOption({
   );
 }
 
-function MacTerminalPane() {
+function MacTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
   const [mode, setMode] = useState<TerminalMode>("sidecar");
 
   useEffect(() => {
@@ -402,29 +419,30 @@ function MacTerminalPane() {
     await api.setPref("terminalMode", value);
   }
 
+  const terminalModes = [
+    { value: "sidecar" as const, label: t("terminal.nodePty.label"), description: t("terminal.nodePty.description") },
+    { value: "tmux" as const, label: t("terminal.tmux.label"), description: `${t("terminal.tmux.description")} ${t("terminal.tmux.deprecated")}`, deprecated: true },
+  ];
+
   return (
     <div className="space-y-6 p-6">
       <div className="space-y-1">
-        <h2 className="text-base font-semibold">Terminal</h2>
+        <h2 className="text-base font-semibold">{t("terminal.title")}</h2>
         <p className="text-sm text-muted-foreground">
-          Changes take effect for new terminals.
+          {t("terminal.description")}
         </p>
       </div>
 
       <div className="space-y-2">
-        <p className="text-sm font-medium">Terminal backend</p>
+        <p className="text-sm font-medium">{t("terminal.backend")}</p>
         <div className="space-y-1.5">
-          {TERMINAL_MODES.map(({ value, label, description, deprecated }) => (
+          {terminalModes.map(({ value, label, description }) => (
             <RadioOption
               key={value}
               selected={mode === value}
               onClick={() => { void handleModeChange(value); }}
               label={label}
-              description={
-                deprecated
-                  ? `${description} Deprecated — will be removed in a future release.`
-                  : description
-              }
+              description={description}
             />
           ))}
         </div>
@@ -433,7 +451,15 @@ function MacTerminalPane() {
   );
 }
 
-function WindowsTerminalPane() {
+type TerminalTarget = string;
+
+type TerminalTargetOption = {
+  id: string;
+  label: string;
+  isDefault?: boolean;
+};
+
+function WindowsTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
   const [target, setTarget] = useState<TerminalTarget>("auto");
   const [options, setOptions] = useState<TerminalTargetOption[]>([]);
 
@@ -456,14 +482,14 @@ function WindowsTerminalPane() {
   return (
     <div className="space-y-6 p-6">
       <div className="space-y-1">
-        <h2 className="text-base font-semibold">Terminal</h2>
+        <h2 className="text-base font-semibold">{t("terminal.title")}</h2>
         <p className="text-sm text-muted-foreground">
-          Changes take effect for new terminals.
+          {t("terminal.description")}
         </p>
       </div>
 
       <div className="space-y-2">
-        <p className="text-sm font-medium">Terminal target</p>
+        <p className="text-sm font-medium">{t("terminal.target")}</p>
         <div className="space-y-1.5">
           {options.map(({ id, label, isDefault }) => (
             <RadioOption
@@ -472,8 +498,8 @@ function WindowsTerminalPane() {
               onClick={() => { void handleTargetChange(id); }}
               label={label}
               description={isDefault
-                ? "Recommended default for this platform."
-                : "Available for new terminals."}
+                ? t("terminal.target.default")
+                : t("terminal.target.available")}
             />
           ))}
         </div>
@@ -482,24 +508,8 @@ function WindowsTerminalPane() {
   );
 }
 
-function TerminalPane() {
-  return IS_MAC ? <MacTerminalPane /> : <WindowsTerminalPane />;
-}
-
-function ControlsPane() {
-  return (
-    <div className="space-y-6 p-6">
-      <div className="space-y-1">
-        <h2 className="text-base font-semibold">Keyboard Shortcuts</h2>
-      </div>
-      <ShortcutList items={SHORTCUTS} />
-
-      <div className="space-y-1 pt-2">
-        <h2 className="text-base font-semibold">Mouse Controls</h2>
-      </div>
-      <ShortcutList items={MOUSE_INPUTS} />
-    </div>
-  );
+function TerminalPane(props: { t: (key: TranslationKey) => string }) {
+  return IS_MAC ? <MacTerminalPane {...props} /> : <WindowsTerminalPane {...props} />;
 }
 
 interface AgentStatus {
@@ -509,7 +519,7 @@ interface AgentStatus {
   installed: boolean;
 }
 
-function IntegrationsPane() {
+function IntegrationsPane({ t }: { t: (key: TranslationKey) => string }) {
   const [agents, setAgents] = useState<AgentStatus[]>([]);
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -545,10 +555,9 @@ function IntegrationsPane() {
   return (
     <div className="space-y-6 p-6">
       <div className="space-y-1">
-        <h2 className="text-base font-semibold">Integrations</h2>
+        <h2 className="text-base font-semibold">{t("integrations.title")}</h2>
         <p className="text-sm text-muted-foreground">
-          Install the Canvas Skill so AI agents can control
-          the canvas from the terminal.
+          {t("integrations.description")}
         </p>
       </div>
 
@@ -569,7 +578,7 @@ function IntegrationsPane() {
             <div className="space-y-0.5">
               <p className="text-sm font-medium">{agent.name}</p>
               <p className="text-xs text-muted-foreground">
-                {agent.detected ? "Detected" : "Not found"}
+                {agent.detected ? t("integrations.detected") : t("integrations.notFound")}
               </p>
             </div>
             <button
@@ -586,7 +595,7 @@ function IntegrationsPane() {
                   : "var(--background)",
               }}
             >
-              {agent.installed ? "Uninstall" : "Install"}
+              {agent.installed ? t("integrations.uninstall") : t("integrations.install")}
             </button>
           </div>
         ))}
@@ -596,17 +605,6 @@ function IntegrationsPane() {
 }
 
 type Pane = "appearance" | "terminal" | "integrations" | "controls";
-
-const NAV_ITEMS: {
-  id: Pane;
-  label: string;
-  icon: typeof Palette;
-}[] = [
-    { id: "appearance", label: "Appearance", icon: Palette },
-    { id: "terminal", label: "Terminal", icon: Terminal },
-    { id: "integrations", label: "Integrations", icon: PuzzlePiece },
-    { id: "controls", label: "Controls", icon: Keyboard },
-  ];
 
 function CloseButton({ onClick }: { onClick: () => void }) {
   return (
@@ -645,6 +643,7 @@ export default function App() {
   const [activePane, setActivePane] =
     useState<Pane>("appearance");
   const [appVersion, setAppVersion] = useState("");
+  const { t } = useTranslation(api);
   const paneRef =
     useRef<HTMLDivElement>(null);
 
@@ -675,6 +674,13 @@ export default function App() {
       .catch(() => { });
   }, []);
 
+  const navItems: { id: Pane; label: string; icon: typeof Palette }[] = [
+    { id: "appearance", label: t("nav.appearance"), icon: Palette },
+    { id: "terminal", label: t("nav.terminal"), icon: Terminal },
+    { id: "integrations", label: t("nav.integrations"), icon: PuzzlePiece },
+    { id: "controls", label: t("nav.controls"), icon: Keyboard },
+  ];
+
   return (
     <div
       ref={paneRef}
@@ -690,12 +696,12 @@ export default function App() {
         <div className="px-2 mt-4">
           <h1 className="flex items-center gap-2 text-lg font-semibold">
             <GearSix className="h-5 w-5" />
-            Settings
+            {t("settings.title")}
           </h1>
         </div>
 
         <nav className="mt-3 space-y-0.5">
-          {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+          {navItems.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
@@ -726,10 +732,10 @@ export default function App() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
-        {activePane === "appearance" && <AppearancePane />}
-        {activePane === "terminal" && <TerminalPane />}
-        {activePane === "integrations" && <IntegrationsPane />}
-        {activePane === "controls" && <ControlsPane />}
+        {activePane === "appearance" && <AppearancePane t={t} />}
+        {activePane === "terminal" && <TerminalPane t={t} />}
+        {activePane === "integrations" && <IntegrationsPane t={t} />}
+        {activePane === "controls" && <ControlsPane t={t} />}
       </div>
     </div>
   );

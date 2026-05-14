@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { en, TranslationKey } from "./en";
+import { en } from "./en";
 import { zh } from "./zh";
 
 export type SupportedLocale = "en" | "zh";
+export type TranslationKey = keyof typeof en;
 
 const dictionaries: Record<SupportedLocale, Record<string, string>> = {
   en,
