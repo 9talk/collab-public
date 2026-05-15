@@ -11,7 +11,7 @@ ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" \
   bun run --cwd "$PROJECT_DIR" package:unsigned
 
 echo "Installing to /Applications..."
-killall Collaborator 2>/dev/null || true
+kill $(pgrep -f "Collaborator.app/Contents/MacOS/Collaborator") 2>/dev/null || true
 sleep 1
 rm -rf /Applications/Collaborator.app
 cp -R "$PROJECT_DIR/dist/mac-arm64/Collaborator.app" /Applications/Collaborator.app
