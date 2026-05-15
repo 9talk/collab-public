@@ -185,3 +185,126 @@ export function inferTileType(filePath) {
 	if (IMAGE_EXTENSIONS.has(ext)) return "image";
 	return "code";
 }
+
+// ── Auto-placement for terminals ──
+
+const TERM_GAP = 40;
+
+/**
+ * Group terminal tiles by their exact cwd.
+ * Returns a map: cwd → [tiles that share it]
+ */
+function groupTerminalsByWorkspace() {
+	const groups = new Map();
+	const termTiles = tiles.filter((t) => t.type === "term");
+	for (const tile of termTiles) {
+		const cwd = tile.cwd || "~";
+		console.log(`[groupTerminalsByWorkspace] tile ${tile.id} cwd="${cwd}"`);
+		if (!groups.has(cwd)) {
+			groups.set(cwd, []);
+		}
+		groups.get(cwd).push(tile);
+	}
+	return groups;
+}
+
+/**
+ * Find an auto-layout position for a new terminal tile.
+ * - If terminals for the same workspace already exist, place to the right
+ *   of the rightmost one (horizontal insertion).
+ * - If no terminals exist or the workspace is new, place below all
+ *   existing tiles (vertical insertion).
+ */
+export function findAutoPlacementForTerminal(cwd, size) {
+	const groups = groupTerminalsByWorkspace();
+	const allTermTiles = tiles.filter((t) => t.type === "term");
+
+	// Find the matching cwd group
+	const normalizedCwd = cwd || "~";
+	console.log(`[findAutoPlacement] cwd="${normalizedCwd}" groups=[${[...groups.keys()].join(", ")}]`);
+	const matchedGroup = groups.get(normalizedCwd);
+
+	if (matchedGroup && matchedGroup.length > 0) {
+		// Horizontal: place to the right of the rightmost tile in the group
+		const rightmost = matchedGroup.reduce((a, b) =>
+			(a.x + a.width > b.x + b.width) ? a : b,
+		);
+		return {
+			x: rightmost.x + rightmost.width + TERM_GAP,
+			y: rightmost.y,
+		};
+	}
+
+	// Vertical: place below all existing tiles (all types, not just terminals)
+	if (allTermTiles.length === 0) {
+		return { x: 40, y: 40 };
+	}
+
+	const maxYBottom = tiles.reduce(
+		(max, t) => Math.max(max, t.y + t.height), 0,
+	);
+	// Align with the leftmost terminal's x, or default to 40
+	const minX = allTermTiles.reduce(
+		(min, t) => Math.min(min, t.x), 40,
+	);
+	return {
+		x: minX,
+		y: maxYBottom + TERM_GAP,
+	};
+}
+
+/**
+ * Compute new positions for all terminal tiles, grouped by cwd.
+ * Each cwd group forms a row, tiles sorted left-to-right by x position.
+ * Returns [tileId, newX, newY] tuples.
+ */
+export function computeTerminalLayout() {
+	const groups = groupTerminalsByWorkspace();
+	const positions = [];
+	const START_X = 40;
+	const START_Y = 40;
+	let rowY = START_Y;
+
+	for (const [, groupTiles] of [...groups.entries()].sort((a, b) =>
+		a[0].localeCompare(b[0]),
+	)) {
+		// Sort tiles left-to-right by current x position
+		const sorted = [...groupTiles].sort((a, b) => a.x - b.x);
+		let rowX = START_X;
+		for (const tile of sorted) {
+			positions.push([tile.id, rowX, rowY]);
+			rowX += tile.width + TERM_GAP;
+		}
+		rowY += groupTiles.reduce(
+			(max, t) => Math.max(max, t.height), 0,
+		) + TERM_GAP;
+	}
+
+	return positions;
+}
+
+/**
+ * Swap the x positions of two terminal tiles within the same cwd group.
+ * Tiles in the group are sorted by x, then the two specified tiles
+ * exchange their x positions.
+ */
+export function swapTerminalPositions(tileIdA, tileIdB) {
+	const tileA = tiles.find((t) => t.id === tileIdA);
+	const tileB = tiles.find((t) => t.id === tileIdB);
+	if (!tileA || !tileB || tileA.type !== "term" || tileB.type !== "term") return;
+
+	const tmpX = tileA.x;
+	tileA.x = tileB.x;
+	tileB.x = tmpX;
+
+	// Re-sort the cwd group so the layout stays consistent
+	const cwd = tileA.cwd;
+	const groupTiles = tiles
+		.filter((t) => t.type === "term" && t.cwd === cwd)
+		.sort((a, b) => a.x - b.x);
+	let rowX = 40;
+	for (const tile of groupTiles) {
+		tile.x = rowX;
+		rowX += tile.width + TERM_GAP;
+	}
+}

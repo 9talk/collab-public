@@ -1,5 +1,6 @@
 import {
 	tiles, getTile, defaultSize, snapToGrid,
+	findAutoPlacementForTerminal, swapTerminalPositions,
 } from "./canvas-state.js";
 
 /**
@@ -103,9 +104,15 @@ export function createCanvasRpc({
 				case "tileCreate": {
 					const tileType = params.tileType || "note";
 					const size = defaultSize(tileType);
-					const pos = params.position
-						? { x: params.position.x, y: params.position.y }
-						: findAutoPlacement(tiles, size.width, size.height);
+					let pos;
+					if (params.position) {
+						pos = { x: params.position.x, y: params.position.y };
+					} else if (tileType === "term") {
+						const cwd = params.cwd || "";
+						pos = findAutoPlacementForTerminal(cwd, size);
+					} else {
+						pos = findAutoPlacement(tiles, size.width, size.height);
+					}
 
 					let tile;
 					if (tileType === "term") {
@@ -377,6 +384,15 @@ export function createCanvasRpc({
 						focusTiles.push(t);
 					}
 					edgeIndicators.panToTiles(focusTiles);
+					result = {};
+					break;
+				}
+				case "tileReorder": {
+					if (!requireTile(requestId, params.tileIdA)) return;
+					if (!requireTile(requestId, params.tileIdB)) return;
+					swapTerminalPositions(params.tileIdA, params.tileIdB);
+					tileManager.repositionAllTiles();
+					tileManager.saveCanvasImmediate();
 					result = {};
 					break;
 				}

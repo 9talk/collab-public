@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap');
 
 :root {
-	--font-sans: 'Geist', system-ui, sans-serif;
+	--font-sans: 'Geist', 'PingFang SC', system-ui, sans-serif;
 	--font-mono: 'Geist Mono';
 	--bg: rgb(248, 248, 248);
 	--bg-rgb: 248, 248, 248;
@@ -306,6 +306,35 @@ body.platform-win {
 }
 
 #new-tile-btn:active {
+	transform: scale(0.94);
+}
+
+#relayout-btn {
+	position: absolute;
+	top: 10px;
+	right: 46px;
+	z-index: 100;
+	-webkit-app-region: no-drag;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--new-tile-btn-bg);
+	color: var(--muted);
+	cursor: pointer;
+	transition: color 0.15s ease, background 0.15s ease;
+}
+
+#relayout-btn:hover {
+	color: var(--fg);
+	background: var(--new-tile-btn-bg-hover);
+}
+
+#relayout-btn:active {
 	transform: scale(0.94);
 }
 

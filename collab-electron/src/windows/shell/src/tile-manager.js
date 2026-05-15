@@ -3,6 +3,7 @@ import {
 	generateId, defaultSize, inferTileType, snapToGrid,
 	selectTile, deselectTile, toggleTileSelection,
 	clearSelection, isSelected, getSelectedTiles,
+	findAutoPlacementForTerminal,
 } from "./canvas-state.js";
 import {
 	createTileDOM, positionTile, updateTileTitle, getTileLabel,
@@ -482,11 +483,12 @@ export function createTileManager({
 			onDuplicate: (id) => {
 				const t = getTile(id);
 				if (!t) return;
-				const gap = 40;
-				const newTile = createCanvasTile("term", t.x + t.width + gap, t.y, {
+				const size = defaultSize("term");
+				const pos = findAutoPlacementForTerminal(t.cwd, size);
+				const newTile = createCanvasTile("term", pos.x, pos.y, {
 					cwd: t.cwd,
-					width: t.width,
-					height: t.height,
+					width: size.width,
+					height: size.height,
 				});
 				spawnTerminalWebview(newTile, true);
 				saveCanvasImmediate();

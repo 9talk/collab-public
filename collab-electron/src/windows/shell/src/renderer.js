@@ -3,6 +3,7 @@ import "./tooltip.js";
 import {
 	tiles, getTile, defaultSize, inferTileType, tileAtPoint,
 	selectTile, clearSelection, getSelectedTiles, getNearestTileInDirection,
+	findAutoPlacementForTerminal, computeTerminalLayout,
 } from "./canvas-state.js";
 import { attachMarquee } from "./tile-interactions.js";
 import { initDarkMode, applyCanvasOpacity } from "./dark-mode.js";
@@ -132,6 +133,7 @@ async function init() {
 		document.getElementById("settings-backdrop");
 	const settingsModal = document.getElementById("settings-modal");
 	const newTileBtn = document.getElementById("new-tile-btn");
+	const relayoutBtn = document.getElementById("relayout-btn");
 	const settingsBtn = document.getElementById("settings-btn");
 	const updatePill = document.getElementById("update-pill");
 	const dragDropOverlay =
@@ -831,20 +833,16 @@ async function init() {
 			e.target !== tileLayer
 		) return;
 
-		const rect = canvasEl.getBoundingClientRect();
-		const screenX = e.clientX - rect.left;
-		const screenY = e.clientY - rect.top;
-		const cx = (screenX - viewportState.panX) / viewportState.zoom;
-		const cy = (screenY - viewportState.panY) / viewportState.zoom;
-
 		const cwd = getTerminalCwd();
 		const size = getTerminalSize();
+		const pos = findAutoPlacementForTerminal(cwd, size);
 		const tile = tileManager.createCanvasTile(
-			"term", cx, cy, { cwd, ...size },
+			"term", pos.x, pos.y, { cwd, ...size },
 		);
 		tileManager.spawnTerminalWebview(tile, true);
 		tileManager.saveCanvasImmediate();
 		minimap.update();
+		edgeIndicators.panToTile(tile);
 	});
 
 	// -- Right-click context menu --
@@ -856,12 +854,6 @@ async function init() {
 		) return;
 		e.preventDefault();
 
-		const rect = canvasEl.getBoundingClientRect();
-		const screenX = e.clientX - rect.left;
-		const screenY = e.clientY - rect.top;
-		const cx = (screenX - viewportState.panX) / viewportState.zoom;
-		const cy = (screenY - viewportState.panY) / viewportState.zoom;
-
 		const selected = await window.shellApi.showContextMenu([
 			{ id: "new-terminal", label: "New terminal tile" },
 			{ id: "new-browser", label: "New browser tile" },
@@ -870,13 +862,20 @@ async function init() {
 		if (selected === "new-terminal") {
 			const cwd = getTerminalCwd();
 			const size = getTerminalSize();
+			const pos = findAutoPlacementForTerminal(cwd, size);
 			const tile = tileManager.createCanvasTile(
-				"term", cx, cy, { cwd, ...size },
+				"term", pos.x, pos.y, { cwd, ...size },
 			);
 			tileManager.spawnTerminalWebview(tile, true);
 			tileManager.saveCanvasImmediate();
 			minimap.update();
+			edgeIndicators.panToTile(tile);
 		} else if (selected === "new-browser") {
+			const rect = canvasEl.getBoundingClientRect();
+			const screenX = e.clientX - rect.left;
+			const screenY = e.clientY - rect.top;
+			const cx = (screenX - viewportState.panX) / viewportState.zoom;
+			const cy = (screenY - viewportState.panY) / viewportState.zoom;
 			const tile = tileManager.createCanvasTile(
 				"browser", cx, cy,
 			);
@@ -1081,21 +1080,16 @@ async function init() {
 		} else if (action === "add-workspace") {
 			window.shellApi.workspaceAdd();
 		} else if (action === "new-tile") {
-			const rect = canvasEl.getBoundingClientRect();
-			const size = getTerminalSize();
-			const cx =
-				(rect.width / 2 - viewportState.panX) /
-				viewportState.zoom - size.width / 2;
-			const cy =
-				(rect.height / 2 - viewportState.panY) /
-				viewportState.zoom - size.height / 2;
 			const cwd = getTerminalCwd();
+			const size = getTerminalSize();
+			const pos = findAutoPlacementForTerminal(cwd, size);
 			const tile = tileManager.createCanvasTile(
-				"term", cx, cy, { cwd, ...size },
+				"term", pos.x, pos.y, { cwd, ...size },
 			);
 			tileManager.spawnTerminalWebview(tile, true);
 			tileManager.saveCanvasImmediate();
 			minimap.update();
+			edgeIndicators.panToTile(tile);
 		} else if (action === "close-tile") {
 			const focusedId = tileManager.getFocusedTileId();
 			if (focusedId) {
@@ -1209,21 +1203,17 @@ async function init() {
 			} else if (target === "canvas") {
 				if (channel === "open-terminal") {
 					const cwd = args[0];
+					console.log(`[open-terminal] cwd="${cwd}"`);
 					setLastTerminalCwd(cwd);
 					const size = getTerminalSize();
-					const rect = canvasEl.getBoundingClientRect();
-					const cx =
-						(rect.width / 2 - viewportState.panX) /
-						viewportState.zoom - size.width / 2;
-					const cy =
-						(rect.height / 2 - viewportState.panY) /
-						viewportState.zoom - size.height / 2;
+					const pos = findAutoPlacementForTerminal(cwd, size);
 					const tile = tileManager.createCanvasTile(
-						"term", cx, cy, { cwd, ...size },
+						"term", pos.x, pos.y, { cwd, ...size },
 					);
 					tileManager.spawnTerminalWebview(tile, true);
 					tileManager.saveCanvasImmediate();
 					minimap.update();
+					edgeIndicators.panToTile(tile);
 				}
 				if (channel === "open-browser-tile") {
 					const url = args[0];
@@ -1473,24 +1463,39 @@ async function init() {
 		]);
 		const type = selected === "new-terminal" ? "term" : selected === "new-browser" ? "browser" : null;
 		if (!type) return;
-		const rect = panelViewer.getBoundingClientRect();
 		const size = defaultSize(type);
-		const cx = (rect.width / 2 - viewportState.panX) / viewportState.zoom - size.width / 2;
-		const cy = (rect.height / 2 - viewportState.panY) / viewportState.zoom - size.height / 2;
 		if (type === "term") {
 			const cwd = getTerminalCwd();
-			const tile = tileManager.createCanvasTile("term", cx, cy, { cwd });
+			console.log(`[new-tile-btn] term cwd="${cwd}"`);
+			const pos = findAutoPlacementForTerminal(cwd, size);
+			const tile = tileManager.createCanvasTile("term", pos.x, pos.y, { cwd });
 			tileManager.spawnTerminalWebview(tile, true);
 		} else {
-			const tile = tileManager.createCanvasTile("browser", cx, cy);
+			const pos = findAutoPlacementForTerminal("", size);
+			const tile = tileManager.createCanvasTile("browser", pos.x, pos.y);
 			tileManager.spawnBrowserWebview(tile, true);
 		}
 		tileManager.saveCanvasImmediate();
 		minimap.update();
+		const newTile = tiles[tiles.length - 1];
+		edgeIndicators.panToTile(newTile);
 	});
 
 	settingsBtn.addEventListener("click", () => {
 		window.shellApi.toggleSettings();
+	});
+
+	relayoutBtn.addEventListener("click", () => {
+		const positions = computeTerminalLayout();
+		for (const [id, x, y] of positions) {
+			const tile = getTile(id);
+			if (!tile) continue;
+			tile.x = x;
+			tile.y = y;
+		}
+		tileManager.repositionAllTiles();
+		tileManager.saveCanvasImmediate();
+		minimap.update();
 	});
 
 	updatePill.addEventListener("click", () => {

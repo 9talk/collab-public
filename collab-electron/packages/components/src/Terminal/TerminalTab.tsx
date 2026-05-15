@@ -42,9 +42,9 @@ function TerminalTab({
 
 		const term = new Terminal({
 			theme: getTheme(),
-			fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+			fontFamily: '"JetBrains Mono", Menlo, Monaco, "PingFang SC", "Courier New", monospace',
 			fontSize: 12,
-			fontWeight: "300",
+			fontWeight: "400",
 			fontWeightBold: "500",
 			cursorBlink: true,
 			scrollback: 200000,
