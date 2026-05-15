@@ -243,7 +243,7 @@ export interface CollabApi {
     sessionId: string,
     cols: number,
     rows: number,
-  ) => Promise<PtySession & { scrollback: string; mode: "tmux" | "sidecar" }>;
+  ) => Promise<PtySession & { scrollback: string }>;
   ptyDiscover: () => Promise<
     Array<{
       sessionId: string;
@@ -263,7 +263,7 @@ export interface CollabApi {
     cwd: string;
     createdAt: string;
     target?: string;
-    backend?: "tmux" | "sidecar";
+    backend?: "sidecar";
   } | null>;
   notifyPtySessionId: (sessionId: string) => void;
   onPtyData: (sessionId: string, cb: PtyDataCb) => void;

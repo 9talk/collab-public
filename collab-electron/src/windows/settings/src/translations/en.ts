@@ -14,15 +14,9 @@ export const en = {
   "appearance.theme": "Theme",
   "appearance.canvasOpacity": "Canvas opacity",
 
-  // Terminal pane (macOS)
+  // Terminal pane
   "terminal.title": "Terminal",
   "terminal.description": "Changes take effect for new terminals.",
-  "terminal.backend": "Terminal backend",
-  "terminal.nodePty.label": "node-pty",
-  "terminal.nodePty.description": "Clean scrollback rendering.",
-  "terminal.tmux.label": "tmux",
-  "terminal.tmux.description": "May cause scrollback artifacts.",
-  "terminal.tmux.deprecated": "Deprecated — will be removed in a future release.",
 
   // Terminal pane (Windows)
   "terminal.target": "Terminal target",

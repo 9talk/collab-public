@@ -49,12 +49,12 @@ import {
 import { stopImageWorker } from "./image-service";
 import { installCli } from "./cli-installer";
 import { listTerminalTargets } from "./terminal-target";
-import { readSessionMeta } from "./tmux";
+import { readSessionMeta } from "./session-meta";
 import { registerBrowserIpc } from "./ipc-browser";
 import { registerAgentIpc } from "./acp-agent";
 
 // macOS apps launched from Finder don't inherit the user's shell
-// LANG, so child processes (tmux, shells) default to ASCII.
+// LANG, so child processes default to ASCII.
 if (!process.env.LANG || !process.env.LANG.includes("UTF-8")) {
   process.env.LANG = "en_US.UTF-8";
 }

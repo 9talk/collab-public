@@ -18,15 +18,9 @@ export const zh: Record<TranslationKey, string> = {
   "appearance.theme": "主题",
   "appearance.canvasOpacity": "画布不透明度",
 
-  // Terminal pane (macOS)
+  // Terminal pane
   "terminal.title": "终端",
   "terminal.description": "更改将在新终端中生效。",
-  "terminal.backend": "终端后端",
-  "terminal.nodePty.label": "node-pty",
-  "terminal.nodePty.description": "清晰的滚动回显渲染。",
-  "terminal.tmux.label": "tmux",
-  "terminal.tmux.description": "可能导致滚动回显异常。",
-  "terminal.tmux.deprecated": "已弃用 — 将在未来版本中移除。",
 
   // Terminal pane (Windows)
   "terminal.target": "终端目标",

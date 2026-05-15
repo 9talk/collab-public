@@ -353,7 +353,13 @@ function ControlsPane({ t }: { t: (key: TranslationKey) => string }) {
   );
 }
 
-type TerminalMode = "tmux" | "sidecar";
+type TerminalTarget = string;
+
+type TerminalTargetOption = {
+  id: string;
+  label: string;
+  isDefault?: boolean;
+};
 
 function RadioOption({
   selected,
@@ -404,26 +410,6 @@ function RadioOption({
 }
 
 function MacTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
-  const [mode, setMode] = useState<TerminalMode>("sidecar");
-
-  useEffect(() => {
-    api.getPref("terminalMode")
-      .then((v) => {
-        if (v === "tmux" || v === "sidecar") setMode(v);
-      })
-      .catch(() => { });
-  }, []);
-
-  async function handleModeChange(value: TerminalMode) {
-    setMode(value);
-    await api.setPref("terminalMode", value);
-  }
-
-  const terminalModes = [
-    { value: "sidecar" as const, label: t("terminal.nodePty.label"), description: t("terminal.nodePty.description") },
-    { value: "tmux" as const, label: t("terminal.tmux.label"), description: `${t("terminal.tmux.description")} ${t("terminal.tmux.deprecated")}`, deprecated: true },
-  ];
-
   return (
     <div className="space-y-6 p-6">
       <div className="space-y-1">
@@ -432,32 +418,13 @@ function MacTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
           {t("terminal.description")}
         </p>
       </div>
-
-      <div className="space-y-2">
-        <p className="text-sm font-medium">{t("terminal.backend")}</p>
-        <div className="space-y-1.5">
-          {terminalModes.map(({ value, label, description }) => (
-            <RadioOption
-              key={value}
-              selected={mode === value}
-              onClick={() => { void handleModeChange(value); }}
-              label={label}
-              description={description}
-            />
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
 
-type TerminalTarget = string;
-
-type TerminalTargetOption = {
-  id: string;
-  label: string;
-  isDefault?: boolean;
-};
+function TerminalPane(props: { t: (key: TranslationKey) => string }) {
+  return IS_MAC ? <MacTerminalPane {...props} /> : <WindowsTerminalPane {...props} />;
+}
 
 function WindowsTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
   const [target, setTarget] = useState<TerminalTarget>("auto");
@@ -506,10 +473,6 @@ function WindowsTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
       </div>
     </div>
   );
-}
-
-function TerminalPane(props: { t: (key: TranslationKey) => string }) {
-  return IS_MAC ? <MacTerminalPane {...props} /> : <WindowsTerminalPane {...props} />;
 }
 
 interface AgentStatus {

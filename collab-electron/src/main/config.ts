@@ -105,16 +105,6 @@ export function setPref(
   saveConfig(config);
 }
 
-export type TerminalMode = "tmux" | "sidecar";
-
-export function getTerminalMode(): TerminalMode {
-  if (process.platform !== "darwin") return "sidecar";
-  const config = loadConfig();
-  const mode = getPref(config, "terminalMode");
-  if (mode === "sidecar" || mode === "tmux") return mode;
-  return "sidecar";
-}
-
 export function isTerminalTarget(value: unknown): value is TerminalTarget {
   return value === "auto"
     || value === "powershell"
