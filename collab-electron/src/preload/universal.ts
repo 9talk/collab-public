@@ -363,6 +363,9 @@ contextBridge.exposeInMainWorld("api", {
   ) => ipcRenderer.invoke("context-menu:show", items),
   close: () => ipcRenderer.send("settings:close"),
 
+  openExternal: (url: string) =>
+    ipcRenderer.send("shell:open-external", url),
+
   // Integrations
   getAgents: () =>
     ipcRenderer.invoke("integrations:get-agents"),

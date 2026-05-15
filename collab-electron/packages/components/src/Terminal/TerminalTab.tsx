@@ -3,6 +3,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { getTheme } from "./theme";
 import "@xterm/xterm/css/xterm.css";
 import "./TerminalTab.css";
@@ -62,6 +63,16 @@ function TerminalTab({
 		const unicode11 = new Unicode11Addon();
 		term.loadAddon(unicode11);
 		term.unicode.activeVersion = "11";
+
+		// Auto-detect http/https URLs using WebLinksAddon's link provider
+		// (correct coordinate mapping for wide characters). Open via
+		// window.api.openExternal instead of window.open.
+		const webLinks = new WebLinksAddon(
+			(event: MouseEvent, uri: string) => {
+				window.api.openExternal(uri);
+			},
+		);
+		term.loadAddon(webLinks);
 
 		// WebGL renderer: double-buffered canvas avoids the
 		// partial-paint artifacts the DOM renderer can show
