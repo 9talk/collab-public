@@ -62,6 +62,13 @@ const pendingPtyDataTimers = new Map<
 >();
 const WINDOWS_POWERSHELL_PTY_BATCH_MS = 16;
 
+/**
+ * Incomplete UTF-8 byte tails from the previous socket chunk.
+ * When a chunk ends mid-sequence, the trailing bytes are saved here
+ * and prepended to the next chunk to avoid replacement-char corruption.
+ */
+const trailingUtf8Bytes = new Map<string, Buffer>();
+
 function getSidecarClient(): SidecarClient {
   if (!sidecarClient) throw new Error("Sidecar client not initialized");
   return sidecarClient;
@@ -112,6 +119,50 @@ function shouldBatchWindowsPowerShellOutput(sessionId: string): boolean {
   );
 }
 
+/**
+ * Return the number of trailing bytes in `buf` that form an incomplete
+ * UTF-8 sequence.  For example, if the buffer ends with 0xE2 (the start
+ * of a 3-byte sequence), this returns 1 so those bytes can be saved and
+ * prepended to the next chunk.
+ *
+ * Strategy: look at the last 1-4 bytes and decode backwards to find
+ * whether the tail contains a complete final character or is cut off.
+ */
+function countTrailingIncompleteUtf8Bytes(buf: Buffer): number {
+  if (buf.length === 0) return 0;
+
+  // Read up to 4 bytes from the end.
+  const n = Math.min(buf.length, 4);
+  const bytes: number[] = [];
+  for (let i = 0; i < n; i++) bytes.push(buf[buf.length - n + i]!);
+
+  // Walk backwards to find the lead byte of the final character.
+  // Continuation bytes are 10xxxxxx (0x80-0xBF).
+  let leadIdx = n - 1;
+  while (leadIdx > 0 && (bytes[leadIdx]! & 0xC0) === 0x80) {
+    leadIdx--;
+  }
+  const lead = bytes[leadIdx]!;
+  const contCount = n - 1 - leadIdx; // continuation bytes after the lead
+
+  // ASCII byte at the end → complete.
+  if ((lead & 0x80) === 0) return 0;
+
+  // Lone continuation byte (no lead byte in range) → all n bytes are orphaned.
+  if ((lead & 0xC0) === 0x80) return n;
+
+  // Determine how many continuation bytes this lead expects.
+  let expected: number;
+  if ((lead & 0xE0) === 0xC0) expected = 1;
+  else if ((lead & 0xF0) === 0xE0) expected = 2;
+  else if ((lead & 0xF8) === 0xF0) expected = 3;
+  else return 0; // invalid lead (11111xxx)
+
+  if (contCount >= expected) return 0; // complete sequence
+  // Incomplete: return total bytes from lead through last byte.
+  return n - leadIdx;
+}
+
 function clearPendingPtyData(sessionId: string): void {
   const timer = pendingPtyDataTimers.get(sessionId);
   if (timer) {
@@ -119,6 +170,7 @@ function clearPendingPtyData(sessionId: string): void {
     pendingPtyDataTimers.delete(sessionId);
   }
   pendingPtyData.delete(sessionId);
+  trailingUtf8Bytes.delete(sessionId);
 }
 
 function flushPendingPtyData(
@@ -135,7 +187,7 @@ function flushPendingPtyData(
     : Buffer.concat(chunks);
   sendToSender(senderWebContentsId, "pty:data", {
     sessionId,
-    data,
+    data: data.toString("utf-8"),
   });
   scheduleForegroundCheck(sessionId);
 }
@@ -145,17 +197,35 @@ function forwardPtyData(
   senderWebContentsId: number | undefined,
   data: Buffer,
 ): void {
+  // Prepend any incomplete UTF-8 bytes leftover from the previous chunk.
+  const leftover = trailingUtf8Bytes.get(sessionId);
+  const full = leftover
+    ? Buffer.concat([leftover, data])
+    : data;
+
+  // Detect trailing incomplete UTF-8 bytes and save them for the next chunk.
+  // Slice them off BEFORE decoding so Node.js doesn't replace them with .
+  const tail = countTrailingIncompleteUtf8Bytes(full);
+  if (tail > 0) {
+    trailingUtf8Bytes.set(sessionId, full.slice(-tail));
+  } else {
+    trailingUtf8Bytes.delete(sessionId);
+  }
+
+  const safeLen = tail > 0 ? full.length - tail : full.length;
+  const text = full.subarray(0, safeLen).toString("utf-8");
+
   if (!shouldBatchWindowsPowerShellOutput(sessionId)) {
     sendToSender(senderWebContentsId, "pty:data", {
       sessionId,
-      data,
+      data: text,
     });
     scheduleForegroundCheck(sessionId);
     return;
   }
 
   const queued = pendingPtyData.get(sessionId) ?? [];
-  queued.push(data);
+  queued.push(Buffer.from(text, "utf-8"));
   pendingPtyData.set(sessionId, queued);
   if (!pendingPtyDataTimers.has(sessionId)) {
     pendingPtyDataTimers.set(
