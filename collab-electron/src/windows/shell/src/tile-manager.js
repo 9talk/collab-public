@@ -202,6 +202,9 @@ export function createTileManager({
 		if (tile.ptySessionId) {
 			params.set("sessionId", tile.ptySessionId);
 			params.set("restored", "1");
+			if (tile.cwd) {
+				params.set("cwd", tile.cwd);
+			}
 		} else if (tile.cwd) {
 			params.set("cwd", tile.cwd);
 		}
