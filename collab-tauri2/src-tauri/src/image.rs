@@ -1,5 +1,4 @@
 use image::GenericImageView;
-use std::path::PathBuf;
 
 #[tauri::command]
 pub fn image_info(path: String) -> Result<serde_json::Value, String> {

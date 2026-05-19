@@ -25,7 +25,6 @@ use tauri::{Emitter, Manager};
 use tauri::menu::MenuEvent;
 
 fn main() {
-    // Install panic handler for crash reporting
     crash_handler::install_panic_handler();
 
     tauri::Builder::default()
@@ -37,12 +36,20 @@ fn main() {
             pty::pty_resize,
             pty::pty_kill,
             pty::pty_discover,
-            // File system
+            // File system - expanded
             fs::read_file,
+            fs::read_file_binary,
             fs::write_file,
             fs::list_dir,
             fs::get_home_dir,
             fs::exists,
+            fs::count_files,
+            fs::is_directory,
+            fs::file_stat,
+            fs::rename_file,
+            fs::trash_file,
+            fs::make_directory,
+            fs::get_app_version,
             // Config
             config::pref_get,
             config::pref_set,
@@ -102,7 +109,6 @@ fn main() {
             let window = app.get_webview_window("main").unwrap();
             window.set_title("Collaborator").ok();
 
-            // Restore window position and size
             if cfg.window_width > 0 && cfg.window_height > 0 {
                 window.set_size(
                     tauri::Size::Physical(tauri::PhysicalSize {
@@ -134,7 +140,6 @@ fn main() {
             let agent_activity_state = Arc::new(Mutex::new(AgentActivityState::new()));
             app.manage(agent_activity_state);
 
-            // Save window state on close
             let config_path_clone = config_path.clone();
             let app_handle = app.handle().clone();
             window.on_window_event(move |event| {
@@ -180,14 +185,8 @@ fn handle_menu_event(app: &tauri::AppHandle, event: MenuEvent) {
 
 fn apply_theme(window: &tauri::WebviewWindow, theme: &str) {
     match theme {
-        "dark" => {
-            let _ = window.set_theme(Some(tauri::Theme::Dark));
-        }
-        "light" => {
-            let _ = window.set_theme(Some(tauri::Theme::Light));
-        }
-        _ => {
-            let _ = window.set_theme(None);
-        }
+        "dark" => { let _ = window.set_theme(Some(tauri::Theme::Dark)); }
+        "light" => { let _ = window.set_theme(Some(tauri::Theme::Light)); }
+        _ => { let _ = window.set_theme(None); }
     }
 }

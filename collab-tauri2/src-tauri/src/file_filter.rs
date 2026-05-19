@@ -2,7 +2,6 @@ use std::path::Path;
 
 /// Default patterns to ignore (matching Electron's file-filter.ts)
 const DEFAULT_PATTERNS: &[&str] = &[
-    ".git",
     "node_modules",
     "bower_components",
     "dist",
