@@ -1,10 +1,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use collaborator_lib::acp_agent;
 use collaborator_lib::analytics;
+use collaborator_lib::cli;
 use collaborator_lib::config;
+use collaborator_lib::crash_handler;
 use collaborator_lib::fs;
+use collaborator_lib::image;
+use collaborator_lib::integrations;
 use collaborator_lib::menu;
 use collaborator_lib::pty;
+use collaborator_lib::updater;
 use collaborator_lib::watcher;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -12,6 +18,9 @@ use tauri::{Emitter, Manager};
 use tauri::menu::MenuEvent;
 
 fn main() {
+    // Install panic handler for crash reporting
+    crash_handler::install_panic_handler();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
@@ -34,13 +43,27 @@ fn main() {
             watcher::watch_start,
             // Analytics
             analytics::analytics_track,
+            // Updater
+            updater::check_for_updates,
+            // CLI
+            cli::install_cli,
+            cli::cli_installed,
+            cli::remove_cli,
+            // Image
+            image::image_info,
+            image::resize_image,
+            // Integrations
+            integrations::http_request,
+            // ACP Agent
+            acp_agent::agent_start,
+            acp_agent::agent_stop,
+            acp_agent::agent_running,
         ])
         .setup(|app| {
             let app_menu = menu::build_menu(app)?;
             app.set_menu(app_menu).ok();
 
             let config_path = config::config_path();
-            let config_path_clone = config_path.clone();
             let cfg = config::load_config(&config_path).unwrap_or_default();
 
             let window = app.get_webview_window("main").unwrap();
@@ -65,37 +88,15 @@ fn main() {
 
             let config_state = Arc::new(Mutex::new(cfg));
             app.manage(config_state);
-            app.manage(config_path.clone());
+            app.manage(config_path);
 
             let analytics_state = Arc::new(Mutex::new(
                 collaborator_lib::analytics::Analytics::new("", "unknown-device"),
             ));
             app.manage(analytics_state);
 
-            // Save window state on close
-            let config_path_clone = config_path.clone();
-            let app_handle = app.handle().clone();
-            window.on_window_event(move |event| {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    let _ = api;
-                    let app = app_handle.clone();
-                    let path = config_path_clone.clone();
-                    std::thread::spawn(move || {
-                        if let Some(win) = app.get_webview_window("main") {
-                            if let Ok(bounds) = win.outer_position() {
-                                if let Ok(size) = win.inner_size() {
-                                    let mut cfg = config::load_config(&path).unwrap_or_default();
-                                    cfg.window_x = bounds.x;
-                                    cfg.window_y = bounds.y;
-                                    cfg.window_width = size.width;
-                                    cfg.window_height = size.height;
-                                    let _ = config::save_config(&path, &cfg);
-                                }
-                            }
-                        }
-                    });
-                }
-            });
+            let agent_state = Arc::new(Mutex::new(None::<collaborator_lib::acp_agent::AgentProcess>));
+            app.manage(agent_state);
 
             Ok(())
         })

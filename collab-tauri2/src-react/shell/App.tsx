@@ -1,11 +1,21 @@
 import { useState, useEffect } from "react";
 import TerminalTile from "@/tiles/TerminalTile";
+import ViewerTile from "@/tiles/ViewerTile";
+import BrowserTile from "@/tiles/BrowserTile";
 import { TileManager, Tile, TileType } from "@/tiles/TileManager";
 import { useTranslation, SupportedLocale } from "@/settings/translations";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 const tileManager = new TileManager();
+
+const TILE_LABELS: Record<TileType, string> = {
+  terminal: "+ Terminal",
+  viewer: "+ File",
+  browser: "+ Browser",
+  graph: "+ Graph",
+  "agent-chat": "+ Agent",
+};
 
 export default function App() {
   const [tiles, setTiles] = useState<Tile[]>([]);
@@ -41,10 +51,10 @@ export default function App() {
           if (tiles.length > 0) removeTile(tiles[tiles.length - 1].id);
           break;
         case "toggle-files":
-          // TODO: toggle sidebar
+          addTile("viewer");
           break;
         case "toggle-agent":
-          // TODO: toggle agent panel
+          addTile("agent-chat");
           break;
       }
     });
@@ -109,18 +119,26 @@ export default function App() {
   const emptyColor = theme === "light"
     ? "#9ca3af"
     : "#6b7280";
+  const btnStyle = (active: boolean) => ({
+    borderRadius: "4px",
+    padding: "4px 10px",
+    fontSize: "13px",
+    backgroundColor: active ? "#2563eb" : (theme === "light" ? "#d1d5db" : "#374151"),
+    color: active ? "#fff" : bgStyle.color,
+  });
+
   if (showSettings) {
-    const settingsBg = theme === "light"
+    const settingsBgStyle = theme === "light"
       ? { backgroundColor: "#f3f4f6", color: "#111827" }
       : { backgroundColor: "#111827", color: "#ffffff" };
-    const settingsHeader = theme === "light" ? "#d1d5db" : "#374151";
+    const settingsHeaderBorder = theme === "light" ? "#d1d5db" : "#374151";
 
     return (
-      <div style={{ ...settingsBg, height: "100vh", width: "100vw", display: "flex", flexDirection: "column" }}>
-        <header style={{ display: "flex", alignItems: "center", gap: "8px", borderBottom: `1px solid ${settingsHeader}`, padding: "8px 16px" }}>
+      <div style={{ ...settingsBgStyle, height: "100vh", width: "100vw", display: "flex", flexDirection: "column" }}>
+        <header style={{ display: "flex", alignItems: "center", gap: "8px", borderBottom: `1px solid ${settingsHeaderBorder}`, padding: "8px 16px" }}>
           <button
             onClick={() => setShowSettings(false)}
-            style={{ borderRadius: "4px", padding: "4px 12px", fontSize: "14px", backgroundColor: theme === "light" ? "#d1d5db" : "#374151", color: settingsBg.color }}
+            style={{ borderRadius: "4px", padding: "4px 12px", fontSize: "14px", backgroundColor: theme === "light" ? "#d1d5db" : "#374151", color: settingsBgStyle.color }}
           >
             &larr; {t("settings")}
           </button>
@@ -171,16 +189,19 @@ export default function App() {
 
   return (
     <div style={{ ...bgStyle, height: "100vh", width: "100vw", display: "flex", flexDirection: "column" }}>
-      <header style={{ display: "flex", alignItems: "center", gap: "8px", borderBottom: `1px solid ${headerBorder}`, padding: "8px 16px" }}>
-        <button
-          onClick={() => addTile("terminal")}
-          className="rounded bg-blue-600 px-3 py-1 text-sm hover:bg-blue-700"
-        >
-          + Terminal
-        </button>
+      <header style={{ display: "flex", alignItems: "center", gap: "6px", borderBottom: `1px solid ${headerBorder}`, padding: "6px 16px" }}>
+        {(["terminal", "viewer", "browser", "agent-chat"] as TileType[]).map((type) => (
+          <button
+            key={type}
+            onClick={() => addTile(type)}
+            style={btnStyle(false)}
+          >
+            {TILE_LABELS[type]}
+          </button>
+        ))}
         <button
           onClick={() => setShowSettings(true)}
-          style={{ marginLeft: "auto", borderRadius: "4px", padding: "4px 12px", fontSize: "14px", backgroundColor: theme === "light" ? "#d1d5db" : "#374151", color: bgStyle.color }}
+          style={{ marginLeft: "auto", ...btnStyle(false) }}
         >
           {t("settings")}
         </button>
@@ -189,7 +210,7 @@ export default function App() {
         {tiles.map((tile) => (
           <div
             key={tile.id}
-            style={{ position: "relative", flex: "1", minWidth: "0", borderRadius: "4px", border: `1px solid ${tileBorder}` }}
+            style={{ position: "relative", flex: "1", minWidth: "0", borderRadius: "4px", border: `1px solid ${tileBorder}`, overflow: "hidden" }}
           >
             <button
               onClick={() => removeTile(tile.id)}
@@ -200,11 +221,27 @@ export default function App() {
             {tile.type === "terminal" && (
               <TerminalTile tileId={tile.id} cwd={tile.cwd} />
             )}
+            {tile.type === "viewer" && (
+              <ViewerTile tileId={tile.id} filePath={tile.filePath} />
+            )}
+            {tile.type === "browser" && (
+              <BrowserTile tileId={tile.id} url={tile.url} />
+            )}
+            {tile.type === "agent-chat" && (
+              <div className="flex h-full items-center justify-center text-sm opacity-50">
+                Agent chat — coming soon
+              </div>
+            )}
+            {tile.type === "graph" && (
+              <div className="flex h-full items-center justify-center text-sm opacity-50">
+                Graph tile — coming soon
+              </div>
+            )}
           </div>
         ))}
         {tiles.length === 0 && (
           <div style={{ display: "flex", flex: "1", alignItems: "center", justifyContent: "center", color: emptyColor }}>
-            <p>No tiles open. Click &quot;+ Terminal&quot; to start.</p>
+            <p>No tiles open. Click a button above to start.</p>
           </div>
         )}
       </main>

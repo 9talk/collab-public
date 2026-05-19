@@ -9,7 +9,20 @@
     "core:window:allow-maximize",
     "core:window:allow-unmaximize",
     "core:window:allow-set-size",
+    "core:window:allow-set-position",
     "core:window:allow-get-all-windows",
-    "shell:allow-open"
+    "core:window:allow-outer-position",
+    "core:window:allow-inner-size",
+    "core:window:allow-set-theme",
+    "shell:allow-open",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-read-dir",
+    "fs:allow-exists",
+    "http:default",
+    "http:allow-fetch",
+    "updater:default"
   ]
 }
