@@ -96,18 +96,36 @@ export default function App() {
     }
   };
 
+  // Compute theme-aware styles
+  const bgStyle = theme === "light"
+    ? { backgroundColor: "#f3f4f6", color: "#111827" }
+    : { backgroundColor: "#111827", color: "#ffffff" };
+  const headerBorder = theme === "light"
+    ? "#d1d5db"
+    : "#374151";
+  const tileBorder = theme === "light"
+    ? "#d1d5db"
+    : "#374151";
+  const emptyColor = theme === "light"
+    ? "#9ca3af"
+    : "#6b7280";
   if (showSettings) {
+    const settingsBg = theme === "light"
+      ? { backgroundColor: "#f3f4f6", color: "#111827" }
+      : { backgroundColor: "#111827", color: "#ffffff" };
+    const settingsHeader = theme === "light" ? "#d1d5db" : "#374151";
+
     return (
-      <div className="flex h-screen w-screen flex-col bg-gray-900 text-white">
-        <header className="flex items-center gap-2 border-b border-gray-700 px-4 py-2">
+      <div style={{ ...settingsBg, height: "100vh", width: "100vw", display: "flex", flexDirection: "column" }}>
+        <header style={{ display: "flex", alignItems: "center", gap: "8px", borderBottom: `1px solid ${settingsHeader}`, padding: "8px 16px" }}>
           <button
             onClick={() => setShowSettings(false)}
-            className="rounded bg-gray-700 px-3 py-1 text-sm hover:bg-gray-600"
+            style={{ borderRadius: "4px", padding: "4px 12px", fontSize: "14px", backgroundColor: theme === "light" ? "#d1d5db" : "#374151", color: settingsBg.color }}
           >
             &larr; {t("settings")}
           </button>
         </header>
-        <main className="flex-1 p-6">
+        <main style={{ flex: "1", padding: "24px" }}>
           <section className="space-y-6">
             <div>
               <h2 className="text-lg font-semibold">{t("appearance")}</h2>
@@ -118,9 +136,15 @@ export default function App() {
                     <button
                       key={th}
                       onClick={() => handleThemeChange(th)}
-                      className={`rounded px-3 py-1 text-sm ${
-                        theme === th ? "bg-blue-600" : "bg-gray-700"
-                      }`}
+                      style={{
+                        borderRadius: "4px",
+                        padding: "4px 12px",
+                        fontSize: "14px",
+                        backgroundColor: theme === th
+                          ? (th === "light" ? "#e5e7eb" : "#2563eb")
+                          : "#374151",
+                        color: theme === th && th === "light" ? "#111827" : "#ffffff",
+                      }}
                     >
                       {t(th as keyof typeof t)}
                     </button>
@@ -146,8 +170,8 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-gray-900 text-white">
-      <header className="flex items-center gap-2 border-b border-gray-700 px-4 py-2">
+    <div style={{ ...bgStyle, height: "100vh", width: "100vw", display: "flex", flexDirection: "column" }}>
+      <header style={{ display: "flex", alignItems: "center", gap: "8px", borderBottom: `1px solid ${headerBorder}`, padding: "8px 16px" }}>
         <button
           onClick={() => addTile("terminal")}
           className="rounded bg-blue-600 px-3 py-1 text-sm hover:bg-blue-700"
@@ -156,20 +180,20 @@ export default function App() {
         </button>
         <button
           onClick={() => setShowSettings(true)}
-          className="ml-auto rounded bg-gray-700 px-3 py-1 text-sm hover:bg-gray-600"
+          style={{ marginLeft: "auto", borderRadius: "4px", padding: "4px 12px", fontSize: "14px", backgroundColor: theme === "light" ? "#d1d5db" : "#374151", color: bgStyle.color }}
         >
           {t("settings")}
         </button>
       </header>
-      <main className="flex flex-1 gap-2 p-2 overflow-hidden">
+      <main style={{ display: "flex", flex: "1", gap: "8px", padding: "8px", overflow: "hidden" }}>
         {tiles.map((tile) => (
           <div
             key={tile.id}
-            className="relative flex-1 min-w-0 rounded border border-gray-700"
+            style={{ position: "relative", flex: "1", minWidth: "0", borderRadius: "4px", border: `1px solid ${tileBorder}` }}
           >
             <button
               onClick={() => removeTile(tile.id)}
-              className="absolute right-2 top-2 z-10 rounded bg-gray-700 px-2 py-1 text-xs hover:bg-gray-600"
+              style={{ position: "absolute", right: "8px", top: "8px", zIndex: "10", borderRadius: "4px", padding: "2px 8px", fontSize: "12px", backgroundColor: theme === "light" ? "#d1d5db" : "#374151", color: bgStyle.color }}
             >
               x
             </button>
@@ -179,7 +203,7 @@ export default function App() {
           </div>
         ))}
         {tiles.length === 0 && (
-          <div className="flex flex-1 items-center justify-center text-gray-500">
+          <div style={{ display: "flex", flex: "1", alignItems: "center", justifyContent: "center", color: emptyColor }}>
             <p>No tiles open. Click &quot;+ Terminal&quot; to start.</p>
           </div>
         )}
