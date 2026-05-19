@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import TerminalTile from "@/tiles/TerminalTile";
 import { TileManager, Tile, TileType } from "@/tiles/TileManager";
 import { useTranslation, SupportedLocale } from "@/settings/translations";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 const tileManager = new TileManager();
 
@@ -11,6 +13,45 @@ export default function App() {
   const [locale, setLocale] = useState<SupportedLocale>("en");
   const [theme, setTheme] = useState<string>("system");
   const { t } = useTranslation(locale);
+
+  // Listen for menu actions
+  useEffect(() => {
+    const unlisten = listen("menu:action", (event) => {
+      const action = event.payload as string;
+      switch (action) {
+        case "new-tile":
+          addTile("terminal");
+          break;
+        case "close-tile":
+          if (tiles.length > 0) removeTile(tiles[tiles.length - 1].id);
+          break;
+        case "toggle-files":
+          // TODO: toggle sidebar
+          break;
+        case "toggle-agent":
+          // TODO: toggle agent panel
+          break;
+      }
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [tiles]);
+
+  // Listen for preference changes
+  useEffect(() => {
+    const unlisten = listen("pref:changed", (event) => {
+      const payload = event.payload as { key: string; value: unknown };
+      if (payload.key === "theme" && typeof payload.value === "string") {
+        setTheme(payload.value);
+      } else if (payload.key === "locale" && typeof payload.value === "string") {
+        setLocale(payload.value as SupportedLocale);
+      }
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
 
   const addTile = (type: TileType) => {
     const tile = tileManager.create(type);
@@ -22,6 +63,16 @@ export default function App() {
     setTiles((prev) => prev.filter((t) => t.id !== id));
   };
 
+  const handleThemeChange = (newTheme: string) => {
+    setTheme(newTheme);
+    invoke("pref_set", { key: "theme", value: newTheme });
+  };
+
+  const handleLocaleChange = (newLocale: SupportedLocale) => {
+    setLocale(newLocale);
+    invoke("pref_set", { key: "locale", value: newLocale });
+  };
+
   if (showSettings) {
     return (
       <div className="flex h-screen w-screen flex-col bg-gray-900 text-white">
@@ -30,9 +81,8 @@ export default function App() {
             onClick={() => setShowSettings(false)}
             className="rounded bg-gray-700 px-3 py-1 text-sm hover:bg-gray-600"
           >
-            &larr; Back
+            &larr; {t("settings")}
           </button>
-          <h1 className="text-lg font-bold">{t("settings")}</h1>
         </header>
         <main className="flex-1 p-6">
           <section className="space-y-6">
@@ -41,15 +91,15 @@ export default function App() {
               <div className="mt-2 space-y-2">
                 <label className="text-sm">{t("theme")}</label>
                 <div className="flex gap-2">
-                  {["light", "dark", "system"].map((t) => (
+                  {["light", "dark", "system"].map((th) => (
                     <button
-                      key={t}
-                      onClick={() => setTheme(t)}
+                      key={th}
+                      onClick={() => handleThemeChange(th)}
                       className={`rounded px-3 py-1 text-sm ${
-                        theme === t ? "bg-blue-600" : "bg-gray-700"
+                        theme === th ? "bg-blue-600" : "bg-gray-700"
                       }`}
                     >
-                      {t}
+                      {t(th as keyof typeof t)}
                     </button>
                   ))}
                 </div>
@@ -58,7 +108,7 @@ export default function App() {
                 <label className="text-sm">{t("language")}</label>
                 <select
                   value={locale}
-                  onChange={(e) => setLocale(e.target.value as SupportedLocale)}
+                  onChange={(e) => handleLocaleChange(e.target.value as SupportedLocale)}
                   className="rounded bg-gray-700 px-3 py-1 text-sm"
                 >
                   <option value="en">English</option>

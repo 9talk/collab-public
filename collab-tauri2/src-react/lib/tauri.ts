@@ -1,5 +1,9 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, InvokeArgs } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+
+// Re-export for direct use
+export { invoke };
+export type { InvokeArgs };
 
 // PTY
 export async function ptyCreate(params: {
