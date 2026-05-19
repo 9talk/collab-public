@@ -236,7 +236,6 @@ function TerminalTab({
 
 		let dataBuffer: Uint8Array[] = [];
 		let flushTimer: number | undefined;
-		let firstData = true;
 
 		const flushData = () => {
 			if (dataBuffer.length === 0) {
@@ -246,12 +245,6 @@ function TerminalTab({
 			const chunks = dataBuffer;
 			dataBuffer = [];
 			flushTimer = undefined;
-			if (firstData) {
-				firstData = false;
-				if (!restored) {
-					term.reset();
-				}
-			}
 			for (const chunk of chunks) {
 				term.write(chunk);
 			}
