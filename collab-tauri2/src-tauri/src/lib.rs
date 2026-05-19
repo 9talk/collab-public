@@ -1,14 +1,21 @@
 pub mod acp_agent;
+pub mod agent_activity;
 pub mod analytics;
 pub mod cli;
+pub mod colorize_urls;
 pub mod config;
 pub mod crash_handler;
+pub mod dialog;
+pub mod file_filter;
 pub mod fs;
 pub mod image;
+pub mod import;
 pub mod integrations;
 pub mod menu;
 pub mod pty;
+pub mod session_meta;
 pub mod updater;
 pub mod watcher;
+pub mod workspace;
 
 pub use config::{Config, load_config, save_config, config_path};

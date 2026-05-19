@@ -1,17 +1,24 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use collaborator_lib::acp_agent;
+use collaborator_lib::agent_activity::AgentActivityState;
 use collaborator_lib::analytics;
 use collaborator_lib::cli;
+use collaborator_lib::colorize_urls;
 use collaborator_lib::config;
 use collaborator_lib::crash_handler;
+use collaborator_lib::dialog;
+use collaborator_lib::file_filter;
 use collaborator_lib::fs;
 use collaborator_lib::image;
+use collaborator_lib::import;
 use collaborator_lib::integrations;
 use collaborator_lib::menu;
 use collaborator_lib::pty;
+use collaborator_lib::session_meta;
 use collaborator_lib::updater;
 use collaborator_lib::watcher;
+use collaborator_lib::workspace;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tauri::{Emitter, Manager};
@@ -58,6 +65,32 @@ fn main() {
             acp_agent::agent_start,
             acp_agent::agent_stop,
             acp_agent::agent_running,
+            // Dialog
+            dialog::open_folder_dialog,
+            dialog::open_file_dialog,
+            dialog::open_image_dialog,
+            dialog::show_notification,
+            // Session metadata
+            session_meta::session_meta_read,
+            session_meta::session_meta_write,
+            session_meta::session_meta_list,
+            // File filter
+            file_filter::file_should_ignore,
+            file_filter::file_is_image,
+            file_filter::file_is_pdf,
+            // Colorize URLs
+            colorize_urls::colorize_urls,
+            // Import
+            import::import_web_article,
+            // Workspace
+            workspace::workspace_list,
+            workspace::workspace_add,
+            workspace::workspace_remove,
+            // Agent activity
+            collaborator_lib::agent_activity::agent_session_start,
+            collaborator_lib::agent_activity::agent_session_end,
+            collaborator_lib::agent_activity::agent_record_interaction,
+            collaborator_lib::agent_activity::agent_get_sessions,
         ])
         .setup(|app| {
             let app_menu = menu::build_menu(app)?;
@@ -88,7 +121,7 @@ fn main() {
 
             let config_state = Arc::new(Mutex::new(cfg));
             app.manage(config_state);
-            app.manage(config_path);
+            app.manage(config_path.clone());
 
             let analytics_state = Arc::new(Mutex::new(
                 collaborator_lib::analytics::Analytics::new("", "unknown-device"),
@@ -97,6 +130,34 @@ fn main() {
 
             let agent_state = Arc::new(Mutex::new(None::<collaborator_lib::acp_agent::AgentProcess>));
             app.manage(agent_state);
+
+            let agent_activity_state = Arc::new(Mutex::new(AgentActivityState::new()));
+            app.manage(agent_activity_state);
+
+            // Save window state on close
+            let config_path_clone = config_path.clone();
+            let app_handle = app.handle().clone();
+            window.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    let _ = api;
+                    let app = app_handle.clone();
+                    let path = config_path_clone.clone();
+                    std::thread::spawn(move || {
+                        if let Some(win) = app.get_webview_window("main") {
+                            if let Ok(bounds) = win.outer_position() {
+                                if let Ok(size) = win.inner_size() {
+                                    let mut cfg = config::load_config(&path).unwrap_or_default();
+                                    cfg.window_x = bounds.x;
+                                    cfg.window_y = bounds.y;
+                                    cfg.window_width = size.width;
+                                    cfg.window_height = size.height;
+                                    let _ = config::save_config(&path, &cfg);
+                                }
+                            }
+                        }
+                    });
+                }
+            });
 
             Ok(())
         })

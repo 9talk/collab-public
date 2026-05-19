@@ -32,3 +32,5 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
 url = "2"
 mime_guess = "2"
+regex = "1"
+scraper = "0.22"
