@@ -14,6 +14,21 @@ export default function App() {
   const [theme, setTheme] = useState<string>("system");
   const { t } = useTranslation(locale);
 
+  // Load saved preferences on startup
+  useEffect(() => {
+    Promise.all([
+      invoke("pref_get", { key: "locale" }),
+      invoke("pref_get", { key: "theme" }),
+    ]).then(([savedLocale, savedTheme]) => {
+      if (savedLocale && typeof savedLocale === "string") {
+        setLocale(savedLocale as SupportedLocale);
+      }
+      if (savedTheme && typeof savedTheme === "string") {
+        setTheme(savedTheme);
+      }
+    }).catch((e) => console.error("[App] Failed to load prefs:", e));
+  }, []);
+
   // Listen for menu actions
   useEffect(() => {
     const unlisten = listen("menu:action", (event) => {
@@ -63,14 +78,22 @@ export default function App() {
     setTiles((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const handleThemeChange = (newTheme: string) => {
+  const handleThemeChange = async (newTheme: string) => {
     setTheme(newTheme);
-    invoke("pref_set", { key: "theme", value: newTheme });
+    try {
+      await invoke("pref_set", { key: "theme", value: newTheme });
+    } catch (e) {
+      console.error("[App] Failed to save theme:", e);
+    }
   };
 
-  const handleLocaleChange = (newLocale: SupportedLocale) => {
+  const handleLocaleChange = async (newLocale: SupportedLocale) => {
     setLocale(newLocale);
-    invoke("pref_set", { key: "locale", value: newLocale });
+    try {
+      await invoke("pref_set", { key: "locale", value: newLocale });
+    } catch (e) {
+      console.error("[App] Failed to save locale:", e);
+    }
   };
 
   if (showSettings) {

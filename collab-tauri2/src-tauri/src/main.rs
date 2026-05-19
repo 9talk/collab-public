@@ -6,31 +6,47 @@ use collaborator_lib::fs;
 use collaborator_lib::menu;
 use collaborator_lib::pty;
 use collaborator_lib::watcher;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tauri::{Emitter, Manager};
 use tauri::menu::MenuEvent;
 
 fn main() {
-    let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init());
-
-    let builder = pty::register_pty_commands(builder);
-    let builder = fs::register_fs_commands(builder);
-    let builder = config::register_config_commands(builder);
-    let builder = watcher::register_watcher_commands(builder);
-    let builder = analytics::register_analytics_commands(builder);
-
-    builder
+    tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .invoke_handler(tauri::generate_handler![
+            // PTY
+            pty::pty_create,
+            pty::pty_write,
+            pty::pty_resize,
+            pty::pty_kill,
+            pty::pty_discover,
+            // File system
+            fs::read_file,
+            fs::write_file,
+            fs::list_dir,
+            fs::get_home_dir,
+            fs::exists,
+            // Config
+            config::pref_get,
+            config::pref_set,
+            // Watcher
+            watcher::watch_start,
+            // Analytics
+            analytics::analytics_track,
+        ])
         .setup(|app| {
             // Set application menu
             let app_menu = menu::build_menu(app)?;
             app.set_menu(app_menu).ok();
 
-            // Load and apply config
+            // Load config
             let config_path = config::config_path();
-            let cfg = config::load_config(&config_path)?;
+            let cfg = config::load_config(&config_path).unwrap_or_default();
 
             let window = app.get_webview_window("main").unwrap();
             window.set_title("Collaborator").ok();
+
             window.set_size(
                 tauri::Size::Physical(tauri::PhysicalSize {
                     width: cfg.window_width,
@@ -41,13 +57,12 @@ fn main() {
             // Apply theme preference
             apply_theme(&window, &cfg.theme);
 
-            // Store config and config_path in Tauri state
-            app.manage(cfg);
+            // Store config as Arc<Mutex<Config>> for mutable state
+            let config_state = Arc::new(Mutex::new(cfg));
+            app.manage(config_state);
             app.manage(config_path);
 
             // Initialize analytics state
-            use std::sync::Arc;
-            use tokio::sync::Mutex;
             let analytics_state = Arc::new(Mutex::new(
                 collaborator_lib::analytics::Analytics::new("", "unknown-device"),
             ));

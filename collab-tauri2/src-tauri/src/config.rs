@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use tauri::{Emitter, State};
+use std::sync::Arc;
+use tauri::Emitter;
+use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -65,29 +67,32 @@ pub fn save_config(path: &PathBuf, config: &Config) -> Result<(), Box<dyn std::e
 
 #[tauri::command]
 pub fn pref_get(
-    state: State<Config>,
+    state: tauri::State<'_, Arc<Mutex<Config>>>,
     key: String,
 ) -> serde_json::Value {
-    match key.as_str() {
-        "theme" => serde_json::json!(state.theme),
-        "locale" => serde_json::json!(state.locale),
-        _ => state
+    let cfg = state.inner().blocking_lock();
+    let result = match key.as_str() {
+        "theme" => serde_json::json!(cfg.theme),
+        "locale" => serde_json::json!(cfg.locale),
+        _ => cfg
             .prefs
             .get(&key)
             .cloned()
             .unwrap_or(serde_json::Value::Null),
-    }
+    };
+    result
 }
 
 #[tauri::command]
 pub fn pref_set(
-    state: State<Config>,
-    config_path: State<PathBuf>,
+    state: tauri::State<'_, Arc<Mutex<Config>>>,
+    config_path: tauri::State<'_, PathBuf>,
     app: tauri::AppHandle,
     key: String,
     value: serde_json::Value,
-) {
-    let mut cfg = state.inner().clone();
+) -> Result<(), String> {
+    let mut cfg = state.inner().blocking_lock();
+
     match key.as_str() {
         "theme" => cfg.theme = value.as_str().unwrap_or("system").to_string(),
         "locale" => cfg.locale = value.as_str().unwrap_or("en").to_string(),
@@ -98,15 +103,18 @@ pub fn pref_set(
         }
     }
 
-    if let Err(e) = save_config(&config_path.inner(), &cfg) {
-        eprintln!("Failed to save config: {}", e);
-    }
+    let path = config_path.inner().clone();
+
+    save_config(&path, &cfg)
+        .map_err(|e| format!("Failed to save config: {}", e))?;
 
     // Notify all windows of the change
     app.emit("pref:changed", serde_json::json!({
         "key": key,
         "value": value,
     })).ok();
+
+    Ok(())
 }
 
 pub fn register_config_commands(
