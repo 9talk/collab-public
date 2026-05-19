@@ -104,6 +104,11 @@ async function init() {
 	let lastTerminalSize = prefLastTerminalSize || null;
 
 	function getTerminalCwd() {
+		const focusedId = tileManager.getFocusedTileId();
+		const focusedTile = tileManager.getTile(focusedId);
+		if (focusedTile?.type === "term" && focusedTile.cwd) {
+			return focusedTile.cwd;
+		}
 		return lastTerminalCwd || workspaceData.workspaces[0];
 	}
 

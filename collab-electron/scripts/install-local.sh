@@ -1,8 +1,17 @@
 #!/bin/bash
 # Local development installer — builds and installs Collaborator from source.
-# Usage: ./scripts/install-local.sh
+# Usage:
+#   ./scripts/install-local.sh            # default: removes old app, cleans dist
+#   ./scripts/install-local.sh --keep     # keeps old app and dist
 
 set -euo pipefail
+
+KEEP=false
+for arg in "$@"; do
+  case "$arg" in
+    --keep) KEEP=true ;;
+  esac
+done
 
 # Resolve project root (one level up from scripts/)
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,12 +23,16 @@ ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" \
 
 # Give file system a moment to settle, then replace the installed app
 sleep 1
-rm -rf /Applications/Collaborator.app
+if [ "$KEEP" = false ]; then
+  rm -rf /Applications/Collaborator.app
+fi
 cp -R "$PROJECT_DIR/dist/mac-arm64/Collaborator.app" /Applications/Collaborator.app
 
-# Step 2: Clean up build artifacts
-echo "Cleaning up dist/..."
-rm -rf "$PROJECT_DIR/dist"
+# Step 2: Clean up build artifacts (unless --keep)
+if [ "$KEEP" = false ]; then
+  echo "Cleaning up dist/..."
+  rm -rf "$PROJECT_DIR/dist"
+fi
 
 # Step 3: Kill any running instance before launching the new one
 echo "Installing to /Applications..."

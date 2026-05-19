@@ -1,17 +1,17 @@
 # Collaborator Canvas
 
-Control Collaborator's spatial canvas from the terminal using the `collab-canvas` CLI.
+Control Collaborator's spatial canvas from the terminal using the `collab-canvas` CLI.\
 The canvas is a pannable, zoomable surface where tiles display terminals, files, images, and graphs.
 
 ## Coordinate System
 
-All positions and sizes use **grid units**. One grid unit = 20 pixels.
+All positions and sizes use **grid units**. One grid unit = 20 pixels.\
 Origin (0,0) is the top-left corner. X increases rightward, Y increases downward.
 
 ## Tile Types
 
 | Type    | Use for                          | Default size (w x h) |
-|---------|----------------------------------|-----------------------|
+| ------- | -------------------------------- | -------------------- |
 | `term`  | Terminal / shell session         | 20 x 25              |
 | `note`  | Markdown files (.md)             | 22 x 27              |
 | `code`  | Source code files                | 22 x 27              |
@@ -19,11 +19,16 @@ Origin (0,0) is the top-left corner. X increases rightward, Y increases downward
 | `graph` | .graph.json or folder graphs     | 30 x 25              |
 
 Type is inferred from the file when `--file` is used:
-- `.md`, `.txt` -> `note`
-- `.graph.json` -> `graph`
-- `.png`, `.jpg`, `.gif`, `.svg`, `.webp` -> `image`
-- Directories -> `graph`
-- Everything else -> `code`
+
+* `.md`, `.txt` -> `note`
+
+* `.graph.json` -> `graph`
+
+* `.png`, `.jpg`, `.gif`, `.svg`, `.webp` -> `image`
+
+* Directories -> `graph`
+
+* Everything else -> `code`
 
 ## Commands
 
@@ -43,14 +48,18 @@ Create a new tile on the canvas.
 collab-canvas tile create <type> [--file <path>] [--pos x,y] [--size w,h]
 ```
 
-- `<type>`: term, note, code, image, or graph
-- `--file <path>`: file to display (required for note, code, image, graph; omit for term)
-- `--pos x,y`: position in grid units (default: viewport center)
-- `--size w,h`: size in grid units (default: per-type default above)
+* `<type>`: term, note, code, image, or graph
+
+* `--file <path>`: file to display (required for note, code, image, graph; omit for term)
+
+* `--pos x,y`: position in grid units (default: viewport center)
+
+* `--size w,h`: size in grid units (default: per-type default above)
 
 Returns the new tile's ID on stdout.
 
 **Examples:**
+
 ```bash
 # Open a terminal at position (5, 5)
 collab-canvas tile create term --pos 5,5
@@ -95,6 +104,7 @@ collab-canvas tile focus <id> [<id>...]
 ```
 
 **Examples:**
+
 ```bash
 # Focus a single tile
 collab-canvas tile focus tile-abc123
@@ -112,6 +122,7 @@ collab-canvas terminal write <id> <input>
 ```
 
 **Examples:**
+
 ```bash
 # Run a command in a terminal tile
 collab-canvas terminal write tile-abc123 $'ls -la\n'
@@ -128,7 +139,7 @@ Read recent output from a terminal tile. Returns raw terminal output from the PT
 collab-canvas terminal read <id> [--lines N]
 ```
 
-- `--lines N`: number of lines to capture (default: 50)
+* `--lines N`: number of lines to capture (default: 50)
 
 ## Composition Patterns
 
@@ -185,12 +196,18 @@ collab-canvas terminal read <id> --lines 100
 
 ## Conventions
 
-1. **Always `tile list` first** to see what's already on the canvas before creating tiles.
-2. **Use `tile focus` to frame** after arranging tiles so the user can see them.
+1. **Always&#x20;**`tile list`**&#x20;first** to see what's already on the canvas before creating tiles.
+
+2. **Use&#x20;**`tile focus`**&#x20;to frame** after arranging tiles so the user can see them.
+
 3. **Clean up when done**: remove tiles you created when they're no longer needed.
+
 4. **Leave 1 grid unit gap** between adjacent tiles for visual clarity.
+
 5. **File tiles auto-refresh**: when you write to a file that has a tile, the tile updates automatically. No need to close and reopen.
+
 6. **Graph tiles support incremental updates**: append nodes to a `.graph.json` file and the graph tile smoothly incorporates them.
+
 7. **Terminal tiles need time to initialize**: after `tile create term`, wait a few seconds before `terminal write` so the PTY session can start.
 
 ## Setup
@@ -205,8 +222,10 @@ Add this to `~/.zshrc` (macOS) or `~/.bashrc` (Linux) to persist across sessions
 
 ## Exit Codes
 
-| Code | Meaning                                    |
-|------|--------------------------------------------|
-| 0    | Success                                    |
-| 1    | RPC error (tile not found, invalid params) |
+| Code | Meaning                                       |
+| ---- | --------------------------------------------- |
+| 0    | Success                                       |
+| 1    | RPC error (tile not found, invalid params)    |
 | 2    | Connection failure (Collaborator not running) |
+
+⠀

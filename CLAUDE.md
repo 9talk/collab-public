@@ -38,10 +38,12 @@ bun run package:unsigned
 **File:** `collab-electron/scripts/install-local.sh`
 
 Builds the app from source, packages it, installs to `/Applications/Collaborator.app`, and launches it.
+By default it removes the existing app and cleans up `dist/`. Pass `--keep` to preserve both.
 
 ```bash
 cd /Users/dingxin/collab-public/collab-electron
-./scripts/install-local.sh
+./scripts/install-local.sh          # default: removes old app + dist
+./scripts/install-local.sh --keep   # keeps old app and dist
 ```
 
 This script handles:

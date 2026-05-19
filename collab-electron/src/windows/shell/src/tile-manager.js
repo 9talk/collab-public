@@ -821,6 +821,7 @@ export function createTileManager({
 		getCanvasStateForSave,
 		restoreCanvasState,
 		getTileDOMs: () => tileDOMs,
+		getTile,
 		getFocusedTileId: () => focusedTileId,
 		setFocusedTileId: (id) => { focusedTileId = id; },
 		renameTile,
