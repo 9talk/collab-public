@@ -6,7 +6,8 @@ use collaborator_lib::fs;
 use collaborator_lib::menu;
 use collaborator_lib::pty;
 use collaborator_lib::watcher;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+use tauri::menu::MenuEvent;
 
 fn main() {
     let builder = tauri::Builder::default()
@@ -14,6 +15,7 @@ fn main() {
 
     let builder = pty::register_pty_commands(builder);
     let builder = fs::register_fs_commands(builder);
+    let builder = config::register_config_commands(builder);
     let builder = watcher::register_watcher_commands(builder);
     let builder = analytics::register_analytics_commands(builder);
 
@@ -36,6 +38,10 @@ fn main() {
                 })
             ).ok();
 
+            // Apply theme preference
+            apply_theme(&window, &cfg.theme);
+
+            // Store config and config_path in Tauri state
             app.manage(cfg);
             app.manage(config_path);
 
@@ -49,6 +55,33 @@ fn main() {
 
             Ok(())
         })
+        .on_menu_event(handle_menu_event)
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+fn handle_menu_event(app: &tauri::AppHandle, event: MenuEvent) {
+    let menu_id = event.id().as_ref();
+    let _ = match menu_id {
+        "new-tile" => app.emit("menu:action", "new-tile"),
+        "close-tile" => app.emit("menu:action", "close-tile"),
+        "open-workspace" => app.emit("menu:action", "open-workspace"),
+        "toggle-files" => app.emit("menu:action", "toggle-files"),
+        "toggle-agent" => app.emit("menu:action", "toggle-agent"),
+        _ => Ok(()),
+    };
+}
+
+fn apply_theme(window: &tauri::WebviewWindow, theme: &str) {
+    match theme {
+        "dark" => {
+            let _ = window.set_theme(Some(tauri::Theme::Dark));
+        }
+        "light" => {
+            let _ = window.set_theme(Some(tauri::Theme::Light));
+        }
+        _ => {
+            let _ = window.set_theme(None);
+        }
+    }
 }

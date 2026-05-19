@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use tauri::{Emitter, State};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -60,6 +61,61 @@ pub fn save_config(path: &PathBuf, config: &Config) -> Result<(), Box<dyn std::e
     let content = serde_json::to_string_pretty(config)?;
     fs::write(path, content)?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn pref_get(
+    state: State<Config>,
+    key: String,
+) -> serde_json::Value {
+    match key.as_str() {
+        "theme" => serde_json::json!(state.theme),
+        "locale" => serde_json::json!(state.locale),
+        _ => state
+            .prefs
+            .get(&key)
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    }
+}
+
+#[tauri::command]
+pub fn pref_set(
+    state: State<Config>,
+    config_path: State<PathBuf>,
+    app: tauri::AppHandle,
+    key: String,
+    value: serde_json::Value,
+) {
+    let mut cfg = state.inner().clone();
+    match key.as_str() {
+        "theme" => cfg.theme = value.as_str().unwrap_or("system").to_string(),
+        "locale" => cfg.locale = value.as_str().unwrap_or("en").to_string(),
+        _ => {
+            if let Some(prefs) = cfg.prefs.as_object_mut() {
+                prefs.insert(key.clone(), value.clone());
+            }
+        }
+    }
+
+    if let Err(e) = save_config(&config_path.inner(), &cfg) {
+        eprintln!("Failed to save config: {}", e);
+    }
+
+    // Notify all windows of the change
+    app.emit("pref:changed", serde_json::json!({
+        "key": key,
+        "value": value,
+    })).ok();
+}
+
+pub fn register_config_commands(
+    builder: tauri::Builder<tauri::Wry>,
+) -> tauri::Builder<tauri::Wry> {
+    builder.invoke_handler(tauri::generate_handler![
+        pref_get,
+        pref_set,
+    ])
 }
 
 #[cfg(test)]
