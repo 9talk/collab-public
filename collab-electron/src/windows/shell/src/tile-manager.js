@@ -172,6 +172,7 @@ export function createTileManager({
 				blurCanvasTileGuest(focusedTileId);
 			}
 			focusedTileId = id;
+			window.shellApi.navigationPush(id);
 			if (onTileFocused) {
 				onTileFocused(tile);
 			}

@@ -1,6 +1,7 @@
 import { ipcMain, type BrowserWindow } from "electron";
 import { randomUUID } from "node:crypto";
 import { registerMethod } from "./json-rpc-server";
+import { pushToHistory, goBack, goForward } from "./navigation-history";
 
 type PendingRequest = {
   resolve: (value: unknown) => void;
@@ -289,4 +290,12 @@ export function registerCanvasRpc(win: BrowserWindow): void {
       params: { tileId: "ID of the browser tile" },
     },
   );
+
+  // Navigation history IPC
+  ipcMain.on("navigation:push", (_event, tileId: string) => {
+    pushToHistory(tileId);
+  });
+
+  ipcMain.handle("navigation:go-back", () => goBack());
+  ipcMain.handle("navigation:go-forward", () => goForward());
 }

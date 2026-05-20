@@ -371,4 +371,12 @@ contextBridge.exposeInMainWorld("shellApi", {
     canGoBack: boolean; canGoForward: boolean;
   }> =>
     ipcRenderer.invoke("browser:info", { webContentsId }),
+
+  // Navigation history
+  navigationPush: (tileId: string) =>
+    ipcRenderer.send("navigation:push", tileId),
+  navigationGoBack: (): Promise<string | null> =>
+    ipcRenderer.invoke("navigation:go-back"),
+  navigationGoForward: (): Promise<string | null> =>
+    ipcRenderer.invoke("navigation:go-forward"),
 });
