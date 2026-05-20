@@ -180,6 +180,8 @@ const ctrlOnly = (input: Electron.Input): boolean =>
   input.control && !input.meta;
 const altOnly = (input: Electron.Input): boolean =>
   input.alt && !input.meta && !input.control && !input.shift;
+const optCmd = (input: Electron.Input): boolean =>
+  input.alt && input.meta && !input.control;
 
 interface ShortcutEntry {
   modifier: (input: Electron.Input) => boolean;
@@ -197,8 +199,14 @@ const TOGGLE_SHORTCUTS: Record<string, ShortcutEntry[]> = {
   KeyK: [{ modifier: cmdOrCtrl, action: "focus-file-search" }],
   KeyN: [{ modifier: cmdOrCtrl, action: "new-tile" }],
   KeyW: [{ modifier: cmdOrCtrl, action: "close-tile" }],
-  ArrowRight: [{ modifier: altOnly, action: "focus-tile-right" }],
-  ArrowLeft: [{ modifier: altOnly, action: "focus-tile-left" }],
+  ArrowRight: [
+    { modifier: optCmd, action: "nav-history-forward" },
+    { modifier: altOnly, action: "focus-tile-right" },
+  ],
+  ArrowLeft: [
+    { modifier: optCmd, action: "nav-history-back" },
+    { modifier: altOnly, action: "focus-tile-left" },
+  ],
   ArrowUp: [{ modifier: altOnly, action: "focus-tile-up" }],
   ArrowDown: [{ modifier: altOnly, action: "focus-tile-down" }],
 };
@@ -410,6 +418,19 @@ function buildAppMenu(): void {
           label: "Actual Size",
           accelerator: "CommandOrControl+0",
           click: () => applyZoomToAll(0),
+        },
+        { type: "separator" },
+        {
+          label: "Navigate Back",
+          accelerator: "Alt+Cmd+Left",
+          registerAccelerator: false,
+          click: () => sendShortcut("nav-history-back"),
+        },
+        {
+          label: "Navigate Forward",
+          accelerator: "Alt+Cmd+Right",
+          registerAccelerator: false,
+          click: () => sendShortcut("nav-history-forward"),
         },
         { type: "separator" },
         { role: "toggleDevTools" },

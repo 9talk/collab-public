@@ -1123,6 +1123,30 @@ async function init() {
 				tileManager.focusCanvasTile(target.id, null);
 				edgeIndicators.panToTile(target);
 			}
+		} else if (action === "nav-history-back") {
+			(async () => {
+				let tileId = await window.shellApi.navigationGoBack();
+				while (tileId && !getTile(tileId)) {
+					tileId = await window.shellApi.navigationGoBack();
+				}
+				if (tileId) {
+					tileManager.focusCanvasTile(tileId, null);
+					const tile = getTile(tileId);
+					if (tile) edgeIndicators.panToTile(tile);
+				}
+			})();
+		} else if (action === "nav-history-forward") {
+			(async () => {
+				let tileId = await window.shellApi.navigationGoForward();
+				while (tileId && !getTile(tileId)) {
+					tileId = await window.shellApi.navigationGoForward();
+				}
+				if (tileId) {
+					tileManager.focusCanvasTile(tileId, null);
+					const tile = getTile(tileId);
+					if (tile) edgeIndicators.panToTile(tile);
+				}
+			})();
 		}
 	}
 
