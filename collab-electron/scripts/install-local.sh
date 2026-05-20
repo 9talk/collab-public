@@ -36,7 +36,7 @@ fi
 
 # Step 3: Kill any running instance before launching the new one
 echo "Installing to /Applications..."
-kill $(pgrep -f "Collaborator.app/Contents/MacOS/Collaborator") 2>/dev/null || true
+kill $(pgrep -f "Collaborator") 2>/dev/null || true
 
 # Step 4: Launch the freshly installed app
 echo "Done. Opening Collaborator..."
