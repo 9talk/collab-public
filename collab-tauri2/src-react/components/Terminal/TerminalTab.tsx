@@ -41,7 +41,7 @@ function TerminalTab({
 
 		const term = new Terminal({
 			theme: getTheme(),
-			fontFamily: 'Menlo, Monaco, "PingFang SC", "Courier New", monospace',
+			fontFamily: '"JetBrains Mono", Menlo, Monaco, "PingFang SC", "Courier New", monospace',
 			fontSize: 12,
 			fontWeight: "400",
 			fontWeightBold: "500",
@@ -103,6 +103,12 @@ function TerminalTab({
 		// or programmatic webview.focus() calls.
 		const onWindowFocus = () => term.focus();
 		window.addEventListener("focus", onWindowFocus);
+
+		if (!restored) {
+			term.write(
+				`\x1b[38;2;100;100;100mStarting...\x1b[0m`,
+			);
+		}
 
 		if (restored && scrollbackData) {
 			term.write(scrollbackData);
@@ -230,6 +236,7 @@ function TerminalTab({
 
 		let dataBuffer: Uint8Array[] = [];
 		let flushTimer: number | undefined;
+		let firstData = true;
 
 		const flushData = () => {
 			if (dataBuffer.length === 0) {
@@ -239,6 +246,12 @@ function TerminalTab({
 			const chunks = dataBuffer;
 			dataBuffer = [];
 			flushTimer = undefined;
+			if (firstData) {
+				firstData = false;
+				if (!restored) {
+					term.reset();
+				}
+			}
 			for (const chunk of chunks) {
 				term.write(chunk);
 			}

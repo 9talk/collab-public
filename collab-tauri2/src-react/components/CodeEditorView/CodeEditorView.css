@@ -1,0 +1,51 @@
+.code-editor-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.code-editor-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Extend the sticky scroll shadow further down */
+.code-editor-view .sticky-widget {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+
+.code-editor-dirty-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--foreground);
+  background-color: color-mix(in srgb, var(--border) 30%, transparent);
+  flex-shrink: 0;
+}
+
+.code-editor-dirty-banner-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.code-editor-dirty-banner button {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  color: var(--foreground);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.code-editor-dirty-banner button:hover {
+  background-color: color-mix(in srgb, var(--border) 50%, transparent);
+}

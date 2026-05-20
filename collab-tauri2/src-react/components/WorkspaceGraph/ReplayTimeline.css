@@ -1,0 +1,296 @@
+/* === Container: floating overlay === */
+.replay-timeline {
+	position: absolute;
+	bottom: 16px;
+	right: 16px;
+	height: 44px;
+	border-radius: 22px;
+	background: rgba(0, 0, 0, 0.55);
+	backdrop-filter: blur(20px);
+	-webkit-backdrop-filter: blur(20px);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	/* padding: 0 6px 0 8px; */
+	padding: 0 6px;
+	user-select: none;
+	z-index: 10;
+	transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+		padding 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Collapsed: circle */
+.replay-timeline--collapsed {
+	width: 44px;
+	cursor: pointer !important;
+	overflow: hidden;
+	padding: 0;
+}
+
+.replay-timeline--collapsed:not(.replay-timeline--loading):hover .replay-timeline-trigger svg {
+	stroke: rgba(255, 255, 255, 1);
+}
+
+.replay-timeline--loading {
+	cursor: default !important;
+}
+
+/* Expanded: full-width pill */
+.replay-timeline--expanded {
+	width: calc(100% - 44px);
+}
+
+/* === Trigger button (collapsed state) === */
+.replay-timeline-trigger {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	background: transparent;
+	cursor: pointer !important;
+	padding: 0;
+	transition: opacity 0.2s ease;
+}
+
+.replay-timeline--expanded .replay-timeline-trigger {
+	opacity: 0;
+	pointer-events: none;
+}
+
+.replay-timeline-trigger svg {
+	width: 18px;
+	height: 18px;
+	stroke: rgba(255, 255, 255, 0.45);
+	fill: none;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	transition: stroke 0.15s;
+}
+
+/* === Loading ring === */
+.replay-timeline-loading-ring {
+	position: absolute;
+	inset: 0;
+	width: 44px;
+	height: 44px;
+	transform: rotate(-90deg);
+	pointer-events: none;
+}
+
+.replay-timeline-loading-ring circle {
+	fill: none;
+	stroke: rgba(255, 255, 255, 0.25);
+	stroke-width: 1.5;
+	stroke-linecap: round;
+	transition: stroke-dashoffset 0.3s ease;
+}
+
+/* === Pill contents (expanded state) === */
+.replay-timeline-contents {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	min-width: 0;
+	opacity: 0;
+	transition: opacity 0.25s ease 0.15s;
+	pointer-events: none;
+}
+
+.replay-timeline--expanded .replay-timeline-contents {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+/* === Pill buttons (play/pause, close) === */
+.replay-timeline-pill-btn {
+	width: 28px;
+	height: 28px;
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.08);
+	color: rgba(255, 255, 255, 0.85);
+	cursor: pointer !important;
+	padding: 0;
+	transition: background 0.15s;
+}
+
+.replay-timeline-pill-btn:hover:not(:disabled) {
+	background: rgba(255, 255, 255, 0.15);
+}
+
+.replay-timeline-pill-btn:disabled {
+	opacity: 0.4;
+	cursor: not-allowed !important;
+}
+
+.replay-timeline-pill-btn svg {
+	width: 12px;
+	height: 12px;
+	fill: currentColor;
+}
+
+.replay-timeline-close-btn {
+	background: transparent;
+}
+
+.replay-timeline-close-btn:hover {
+	background: transparent;
+}
+
+.replay-timeline-close-btn svg {
+	fill: none;
+	stroke: rgba(255, 255, 255, 0.6);
+	stroke-width: 2;
+	stroke-linecap: round;
+	transition: stroke 0.15s;
+}
+
+.replay-timeline-close-btn:hover svg {
+	stroke: rgba(255, 255, 255, 1);
+}
+
+/* === Track area === */
+.replay-timeline-track-area {
+	flex: 1;
+	position: relative;
+	min-width: 0;
+	cursor: pointer !important;
+	align-self: stretch;
+}
+
+.replay-timeline-track {
+	position: absolute;
+	top: 50%;
+	left: 0;
+	right: 0;
+	height: 18px;
+	transform: translateY(-50%);
+}
+
+.replay-timeline-rail {
+	position: absolute;
+	top: 50%;
+	left: 0;
+	right: 0;
+	height: 2px;
+	background: rgba(255, 255, 255, 0.12);
+	transform: translateY(-50%);
+	border-radius: 1px;
+}
+
+.replay-timeline-rail-fill {
+	position: absolute;
+	top: 50%;
+	left: 0;
+	height: 2px;
+	background: rgba(255, 255, 255, 0.45);
+	transform: translateY(-50%);
+	border-radius: 1px;
+	z-index: 1;
+}
+
+.replay-timeline-tick {
+	position: absolute;
+	top: 3px;
+	bottom: 3px;
+	width: 1px;
+	background: rgba(255, 255, 255, 0.3);
+}
+
+.replay-timeline-tick--unplayed {
+	background: rgba(255, 255, 255, 0.1);
+}
+
+.replay-timeline-playhead {
+	position: absolute;
+	top: 1px;
+	bottom: 1px;
+	width: 2px;
+	background: rgba(255, 255, 255, 0.9);
+	transform: translateX(-1px);
+	z-index: 2;
+	border-radius: 1px;
+}
+
+/* === Date labels === */
+.replay-timeline-labels {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 6px;
+	/* height: 100px; */
+}
+
+.replay-timeline-label {
+	position: absolute;
+	font-family: var(--font-mono);
+	font-size: 8px;
+	color: rgba(255, 255, 255, 0.3);
+	white-space: nowrap;
+	transform: translateX(-50%);
+	line-height: 10px;
+}
+
+.replay-timeline-label-now {
+	transform: translateX(-100%);
+}
+
+/* === Tooltip === */
+.replay-timeline-tooltip {
+	position: absolute;
+	z-index: 10;
+	pointer-events: none;
+	background: rgba(0, 0, 0, 0.85);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	color: rgba(255, 255, 255, 0.85);
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	border-radius: 6px;
+	padding: 6px 10px;
+	font-family: var(--font-sans);
+	font-size: 11px;
+	line-height: 1.4;
+	white-space: nowrap;
+	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.replay-timeline-tooltip-hash {
+	font-family: var(--font-mono);
+	font-size: 10px;
+	color: rgba(255, 255, 255, 0.45);
+}
+
+.replay-timeline-tooltip-subject {
+	max-width: 280px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: rgba(255, 255, 255, 0.8);
+}
+
+.replay-timeline-tooltip-meta {
+	font-size: 9px;
+	color: rgba(255, 255, 255, 0.4);
+}
+
+/* === Loading progress === */
+.replay-timeline-progress {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	height: 2px;
+	background: rgba(255, 255, 255, 0.3);
+	opacity: 0.4;
+	border-radius: 1px;
+	transition: width 0.3s ease;
+}
