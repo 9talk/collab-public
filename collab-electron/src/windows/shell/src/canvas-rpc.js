@@ -383,6 +383,8 @@ export function createCanvasRpc({
 						}
 						focusTiles.push(t);
 					}
+					// Set focus on the first tile (like keyboard shortcuts do)
+					tileManager.focusCanvasTile(focusTiles[0].id, null);
 					edgeIndicators.panToTiles(focusTiles);
 					result = {};
 					break;
