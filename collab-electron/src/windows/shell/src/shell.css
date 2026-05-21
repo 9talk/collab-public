@@ -284,7 +284,7 @@ body.platform-win {
 	position: absolute;
 	top: 10px;
 	right: 10px;
-	z-index: 100;
+	z-index: 110;
 	-webkit-app-region: no-drag;
 	display: flex;
 	align-items: center;
@@ -313,7 +313,7 @@ body.platform-win {
 	position: absolute;
 	top: 10px;
 	right: 46px;
-	z-index: 100;
+	z-index: 110;
 	-webkit-app-region: no-drag;
 	display: flex;
 	align-items: center;

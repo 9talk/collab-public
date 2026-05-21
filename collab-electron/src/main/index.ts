@@ -889,10 +889,19 @@ app.whenReady().then(async () => {
   }
 });
 
-app.on("before-quit", (event) => {
+app.on("before-quit", async (event) => {
   if (!shuttingDown) {
     event.preventDefault();
-    shutdownBackgroundServices().then(() => app.quit());
+
+    // Rely on the renderer's beforeunload handler to save canvas state
+    // via IPC (canvas:save-state). That IPC message is queued on the
+    // main-process side, so the save completes even if the renderer
+    // closes before the invoke promise resolves.
+    // Using executeJavaScript here is unreliable — the renderer's
+    // webContents may already be in the process of being destroyed.
+
+    await shutdownBackgroundServices();
+    app.quit();
   }
 });
 

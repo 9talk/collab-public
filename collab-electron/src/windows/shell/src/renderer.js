@@ -3,7 +3,8 @@ import "./tooltip.js";
 import {
 	tiles, getTile, defaultSize, inferTileType, tileAtPoint,
 	selectTile, clearSelection, getSelectedTiles, getNearestTileInDirection,
-	findAutoPlacementForTerminal, computeTerminalLayout,
+	findAutoPlacementForTerminal, findNearestAdjacentTile,
+	computeTerminalLayout, TERM_GAP,
 } from "./canvas-state.js";
 import { attachMarquee } from "./tile-interactions.js";
 import { initDarkMode, applyCanvasOpacity } from "./dark-mode.js";
@@ -632,6 +633,12 @@ async function init() {
 		},
 	});
 
+	// Expose canvas state getter for main process to use during quit
+	window.__getCanvasStateForSave = function () {
+		const state = tileManager.getCanvasStateForSave();
+		return toCenterPointState(state);
+	};
+
 	// -- Edge indicators --
 
 	const edgeIndicators = createEdgeIndicators({
@@ -838,9 +845,29 @@ async function init() {
 			e.target !== tileLayer
 		) return;
 
-		const cwd = getTerminalCwd();
+		// Convert screen coords to canvas coords
+		const rect = canvasEl.getBoundingClientRect();
+		const screenX = e.clientX - rect.left;
+		const screenY = e.clientY - rect.top;
+		const canvasX = (screenX - viewportState.panX) / viewportState.zoom;
+		const canvasY = (screenY - viewportState.panY) / viewportState.zoom;
+
+		// Try to find an adjacent tile to inherit cwd from
+		const adjacent = findNearestAdjacentTile(canvasX, canvasY);
 		const size = getTerminalSize();
+
+		let cwd;
+		if (adjacent) {
+			cwd = adjacent.tile.type === "term"
+				? (adjacent.tile.cwd || getTerminalCwd())
+				: getTerminalCwd();
+		} else {
+			cwd = getTerminalCwd();
+		}
+
+		// Placement is driven by cwd grouping, not click direction
 		const pos = findAutoPlacementForTerminal(cwd, size);
+
 		const tile = tileManager.createCanvasTile(
 			"term", pos.x, pos.y, { cwd, ...size },
 		);
@@ -1718,7 +1745,13 @@ async function init() {
 	// -- beforeunload save --
 
 	window.addEventListener("beforeunload", () => {
-		tileManager.saveCanvasImmediate();
+		// Use fire-and-forget IPC so the save message is queued
+		// on the main-process side immediately, even if the renderer
+		// closes before the invoke promise resolves.
+		const state = tileManager.getCanvasStateForSave();
+		window.shellApi.canvasSaveStateSync(
+			toCenterPointState(state),
+		);
 	});
 }
 

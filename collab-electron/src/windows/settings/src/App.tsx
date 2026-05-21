@@ -181,6 +181,7 @@ function AppearancePane({ t }: { t: (key: TranslationKey) => string }) {
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [canvasOpacity, setCanvasOpacity] = useState(0);
   const [locale, setLocale] = useState<SupportedLocale>("en");
+  const [saveLayoutOnQuit, setSaveLayoutOnQuit] = useState(true);
 
   useEffect(() => {
     api.getPref("theme")
@@ -197,6 +198,11 @@ function AppearancePane({ t }: { t: (key: TranslationKey) => string }) {
     api.getPref("locale")
       .then((v) => {
         if (v === "en" || v === "zh") setLocale(v);
+      })
+      .catch(() => { });
+    api.getPref("saveLayoutOnQuit")
+      .then((v) => {
+        if (typeof v === "boolean") setSaveLayoutOnQuit(v);
       })
       .catch(() => { });
   }, []);
@@ -259,6 +265,29 @@ function AppearancePane({ t }: { t: (key: TranslationKey) => string }) {
           value={canvasOpacity}
           onChange={(v) => { void handleOpacityChange(v); }}
         />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{t("appearance.saveLayoutOnQuit")}</p>
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input
+            type="checkbox"
+            checked={saveLayoutOnQuit}
+            onChange={(e) => {
+              setSaveLayoutOnQuit(e.target.checked);
+              void api.setPref("saveLayoutOnQuit", e.target.checked);
+            }}
+            className="sr-only peer"
+          />
+          <div
+            className="w-9 h-5 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:w-4 after:h-4 after:transition-all"
+            style={{
+              backgroundColor: saveLayoutOnQuit
+                ? "var(--color-accent)"
+                : "color-mix(in srgb, var(--foreground) 20%, transparent)",
+            }}
+          />
+        </label>
       </div>
     </div>
   );

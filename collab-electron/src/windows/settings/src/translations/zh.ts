@@ -17,6 +17,7 @@ export const zh: Record<TranslationKey, string> = {
   "appearance.description": "自定义 Collaborator 的显示效果。",
   "appearance.theme": "主题",
   "appearance.canvasOpacity": "画布不透明度",
+  "appearance.saveLayoutOnQuit": "退出时保存布局",
 
   // Terminal pane
   "terminal.title": "终端",

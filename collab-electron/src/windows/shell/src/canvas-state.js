@@ -164,6 +164,51 @@ export function getNearestTileInDirection(fromId, direction, originX = 0, origin
 	return candidates[0].tile;
 }
 
+/**
+ * Given a point (canvas coordinates) outside all tiles, find the closest
+ * adjacent tile and the direction it sits relative to that point.
+ * Returns { tile, direction } or null if no tiles exist.
+ */
+export function findNearestAdjacentTile(canvasX, canvasY) {
+	const INFLUENCE = 60; // px perpendicular tolerance beyond tile edge
+	let best = null;
+	let bestDist = Infinity;
+
+	for (const tile of tiles) {
+		const checks = [
+			// tile is to the LEFT of click → direction = "right" (place to right of tile)
+			canvasX > tile.x + tile.width &&
+			canvasY >= tile.y - INFLUENCE && canvasY <= tile.y + tile.height + INFLUENCE
+				? { dir: "right", dist: canvasX - (tile.x + tile.width) }
+				: null,
+			// tile is to the RIGHT of click → direction = "left"
+			canvasX < tile.x &&
+			canvasY >= tile.y - INFLUENCE && canvasY <= tile.y + tile.height + INFLUENCE
+				? { dir: "left", dist: tile.x - canvasX }
+				: null,
+			// tile is ABOVE the click → direction = "down"
+			canvasY > tile.y + tile.height &&
+			canvasX >= tile.x - INFLUENCE && canvasX <= tile.x + tile.width + INFLUENCE
+				? { dir: "down", dist: canvasY - (tile.y + tile.height) }
+				: null,
+			// tile is BELOW the click → direction = "up"
+			canvasY < tile.y &&
+			canvasX >= tile.x - INFLUENCE && canvasX <= tile.x + tile.width + INFLUENCE
+				? { dir: "up", dist: tile.y - canvasY }
+				: null,
+		];
+
+		for (const c of checks) {
+			if (c && c.dist < bestDist) {
+				bestDist = c.dist;
+				best = { tile, direction: c.dir };
+			}
+		}
+	}
+
+	return best;
+}
+
 /** @returns {Tile | null} */
 export function tileAtPoint(cx, cy) {
 	const sorted = [...tiles].sort((a, b) => b.zIndex - a.zIndex);
@@ -188,7 +233,7 @@ export function inferTileType(filePath) {
 
 // ── Auto-placement for terminals ──
 
-const TERM_GAP = 40;
+export const TERM_GAP = 40;
 
 /**
  * Group terminal tiles by their exact cwd.

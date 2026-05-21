@@ -152,6 +152,9 @@ contextBridge.exposeInMainWorld("shellApi", {
   canvasLoadState: () => ipcRenderer.invoke("canvas:load-state"),
   canvasSaveState: (state: unknown) =>
     ipcRenderer.invoke("canvas:save-state", state),
+  // Fire-and-forget save for use during shutdown (beforeunload)
+  canvasSaveStateSync: (state: unknown) =>
+    ipcRenderer.send("canvas:save-state-now", state),
 
   getDragPaths: () => ipcRenderer.invoke("drag:get-paths"),
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),

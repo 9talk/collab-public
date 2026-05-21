@@ -331,3 +331,52 @@ describe("selection", () => {
     expect(getSelectedTiles()).toHaveLength(0);
   });
 });
+
+import {
+  findNearestAdjacentTile,
+} from "./canvas-state.js";
+
+describe("findNearestAdjacentTile", () => {
+  beforeEach(() => {
+    while (tiles.length > 0) removeTile(tiles[0].id);
+  });
+
+  test("returns null when no tiles exist", () => {
+    expect(findNearestAdjacentTile(100, 100)).toBeNull();
+  });
+
+  test("finds tile to the left when clicking to its right", () => {
+    addTile({ id: "t1", type: "term", x: 0, y: 0, width: 400, height: 500, cwd: "/project", zIndex: 1 });
+    // click at x=450 (40px right of tile, within 60px influence), y=250 (vertically aligned)
+    const result = findNearestAdjacentTile(450, 250);
+    expect(result).not.toBeNull();
+    expect(result!.tile.id).toBe("t1");
+    expect(result!.direction).toBe("right");
+  });
+
+  test("finds tile above when clicking below it", () => {
+    addTile({ id: "t1", type: "term", x: 0, y: 0, width: 400, height: 500, cwd: "/project", zIndex: 1 });
+    // click at x=200 (horizontally aligned), y=550 (below tile)
+    const result = findNearestAdjacentTile(200, 550);
+    expect(result).not.toBeNull();
+    expect(result!.tile.id).toBe("t1");
+    expect(result!.direction).toBe("down");
+  });
+
+  test("picks closest tile when multiple are adjacent", () => {
+    addTile({ id: "t1", type: "term", x: 0, y: 0, width: 400, height: 500, cwd: "/a", zIndex: 1 });
+    addTile({ id: "t2", type: "term", x: 500, y: 0, width: 400, height: 500, cwd: "/b", zIndex: 1 });
+    // click between them, closer to t1
+    const result = findNearestAdjacentTile(420, 250);
+    expect(result).not.toBeNull();
+    expect(result!.tile.id).toBe("t1");
+    expect(result!.direction).toBe("right");
+  });
+
+  test("respects perpendicular influence tolerance", () => {
+    addTile({ id: "t1", type: "term", x: 0, y: 0, width: 400, height: 500, cwd: "/project", zIndex: 1 });
+    // click to the right AND far above — outside both influence axes
+    const result = findNearestAdjacentTile(500, -70);
+    expect(result).toBeNull();
+  });
+});
