@@ -34,6 +34,7 @@ function TerminalTab({
 	useEffect(() => {
 		const container = containerRef.current;
 		if (!container) return;
+		console.log("[TerminalTab] useEffect mounted, sessionId:", sessionId);
 
 		const prefersDark = window.matchMedia(
 			"(prefers-color-scheme: dark)",
@@ -224,7 +225,62 @@ function TerminalTab({
 			return true;
 		});
 
+		// Registered slash commands for tab-completion and handling
+		const SLASH_COMMANDS = ["/clear"] as const;
+
+		/**
+		 * Read user input before cursor on the current line.
+		 * Returns null if the line doesn't contain a recognized prompt,
+		 * so callers can skip slash-command logic in that case.
+		 */
+		const readUserInputBeforeCursor = (): string | null => {
+			const buf = term.buffer.active;
+			const lineIdx = buf.baseY + buf.cursorY;
+			const line = buf.getLine(lineIdx);
+			if (!line) return null;
+			const full = line.translateToString(false);
+			const text = full.slice(0, buf.cursorX);
+			// Strict prompt check: ❯ is Claude Code's unique prompt character.
+			// Only enable slash-command logic when we're at a Claude prompt.
+			const promptIdx = text.lastIndexOf("❯");
+			if (promptIdx < 0) return null;
+			return text.slice(promptIdx + 1).trimStart();
+		};
+
 		term.onData((data: string) => {
+			console.log("[terminal onData]", JSON.stringify(data));
+
+			// Tab: attempt slash-command completion
+			if (data === "\t") {
+				const current = readUserInputBeforeCursor();
+				if (current && current.startsWith("/")) {
+					const matches = SLASH_COMMANDS.filter((cmd) =>
+						cmd.startsWith(current),
+					);
+					if (matches.length === 1) {
+						const match = matches[0]!;
+						const completion = match.slice(current.length);
+						term.write(completion);
+						return; // consumed — completed the command
+					}
+					if (matches.length > 1) {
+						return; // consumed — ambiguous, don't send Tab to PTY
+					}
+					// no matches — let Tab through to PTY for normal completion
+				}
+				// non-slash line: pass Tab to PTY for normal shell completion
+			}
+
+			// On Enter: check for slash commands
+			if (data === "\r" || data === "\n") {
+				const current = readUserInputBeforeCursor();
+				console.log("[terminal input] line:", JSON.stringify(current));
+				if (current === "/clear") {
+					console.log("[terminal clear]");
+					term.clear();
+				}
+			}
+
 			window.api.ptyWrite(sessionId, data);
 		});
 

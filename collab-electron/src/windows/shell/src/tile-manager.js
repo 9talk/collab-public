@@ -251,8 +251,15 @@ export function createTileManager({
 				}
 			}
 		});
-	}
 
+		// TEMP: forward console messages to shell DevTools
+		wv.addEventListener("console-message", (event) => {
+			console.log(
+				`[terminal-tile:${tile.id}]`,
+				event.message,
+			);
+		});
+	}
 	function spawnGraphWebview(tile) {
 		const dom = tileDOMs.get(tile.id);
 		if (!dom) return;
