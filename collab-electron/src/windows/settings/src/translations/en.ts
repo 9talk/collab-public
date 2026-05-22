@@ -13,7 +13,6 @@ export const en = {
   "appearance.description": "Customize how Collaborator looks.",
   "appearance.theme": "Theme",
   "appearance.canvasOpacity": "Canvas opacity",
-  "appearance.saveLayoutOnQuit": "Save layout on quit",
 
   // Terminal pane
   "terminal.title": "Terminal",

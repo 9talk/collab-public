@@ -26,16 +26,6 @@ export function registerCanvasHandlers(
     async (_event, state) => canvasPersistence.saveState(state),
   );
 
-  // Fire-and-forget save (for use during renderer shutdown)
-  ipcMain.on(
-    "canvas:save-state-now",
-    (_event, state) => {
-      canvasPersistence.saveState(state).catch((err) => {
-        console.error("canvas:save-state-now failed:", err);
-      });
-    },
-  );
-
   // Request current canvas state from renderer (used during quit)
   ipcMain.handle(
     "canvas:get-state-for-save",

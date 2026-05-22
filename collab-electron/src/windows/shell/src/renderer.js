@@ -1335,6 +1335,10 @@ async function init() {
 	// -- PTY lifecycle forwarding --
 
 	window.shellApi.onPtyExit((payload) => {
+		// During app shutdown, ignore PTY exit events — the canvas
+		// state has already been saved with terminal tiles intact,
+		// and removing tiles here would overwrite the saved state.
+		if (window.__canvasShuttingDown) return;
 		for (const [id] of tileManager.getTileDOMs()) {
 			const tile = getTile(id);
 			if (
@@ -1741,18 +1745,6 @@ async function init() {
 	);
 
 	panelManager.applyVisibility();
-
-	// -- beforeunload save --
-
-	window.addEventListener("beforeunload", () => {
-		// Use fire-and-forget IPC so the save message is queued
-		// on the main-process side immediately, even if the renderer
-		// closes before the invoke promise resolves.
-		const state = tileManager.getCanvasStateForSave();
-		window.shellApi.canvasSaveStateSync(
-			toCenterPointState(state),
-		);
-	});
 }
 
 async function checkFirstLaunchDialog() {

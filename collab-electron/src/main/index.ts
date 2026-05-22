@@ -52,6 +52,7 @@ import { listTerminalTargets } from "./terminal-target";
 import { readSessionMeta } from "./session-meta";
 import { registerBrowserIpc } from "./ipc-browser";
 import { registerAgentIpc } from "./acp-agent";
+import * as canvasPersistence from "./canvas-persistence";
 
 // macOS apps launched from Finder don't inherit the user's shell
 // LANG, so child processes default to ASCII.
@@ -893,12 +894,28 @@ app.on("before-quit", async (event) => {
   if (!shuttingDown) {
     event.preventDefault();
 
-    // Rely on the renderer's beforeunload handler to save canvas state
-    // via IPC (canvas:save-state). That IPC message is queued on the
-    // main-process side, so the save completes even if the renderer
-    // closes before the invoke promise resolves.
-    // Using executeJavaScript here is unreliable — the renderer's
-    // webContents may already be in the process of being destroyed.
+    // Save canvas state BEFORE killing PTY sessions, so terminal tiles
+    // are persisted before their exit events would trigger tile removal.
+    // Also set a shutdown flag so the renderer ignores pty:exit during
+    // shutdown and doesn't overwrite the saved state.
+    try {
+      const win = mainWindow;
+      if (win && !win.isDestroyed()) {
+        const state = await win.webContents.executeJavaScript(
+          "window.__getCanvasStateForSave()",
+        );
+        if (state) {
+          await canvasPersistence.saveState(state);
+        }
+        // Set shutdown flag before killing PTY — renderer will ignore
+        // pty:exit tile removal while this flag is set.
+        await win.webContents.executeJavaScript(
+          "window.__canvasShuttingDown = true;",
+        );
+      }
+    } catch {
+      // Renderer may already be shutting down — skip save.
+    }
 
     await shutdownBackgroundServices();
     app.quit();
