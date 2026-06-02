@@ -3,7 +3,7 @@ import {
 	generateId, defaultSize, inferTileType, snapToGrid,
 	selectTile, deselectTile, toggleTileSelection,
 	clearSelection, isSelected, getSelectedTiles,
-	findAutoPlacementForTerminal,
+	findAutoPlacementForTerminal, getFirstTerminalIds,
 } from "./canvas-state.js";
 import {
 	createTileDOM, positionTile, updateTileTitle, getTileLabel,
@@ -51,10 +51,14 @@ export function createTileManager({
 
 	// -- Canvas persistence --
 
-	function getCanvasStateForSave() {
+	function getCanvasStateForSave({ dedupeTerminals = false } = {}) {
+		const firstTermIds = dedupeTerminals ? getFirstTerminalIds() : null;
+		const tilesToSave = dedupeTerminals
+			? tiles.filter((t) => t.type !== "term" || firstTermIds.has(t.id))
+			: tiles;
 		return {
 			version: 1,
-			tiles: tiles.map((t) => ({
+			tiles: tilesToSave.map((t) => ({
 				id: t.id,
 				type: t.type,
 				x: safeCoord(t.x),
