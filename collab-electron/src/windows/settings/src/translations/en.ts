@@ -7,6 +7,7 @@ export const en = {
   "nav.terminal": "Terminal",
   "nav.integrations": "Integrations",
   "nav.controls": "Controls",
+  "nav.updates": "Updates",
 
   // Appearance pane
   "appearance.title": "Appearance",
@@ -60,6 +61,11 @@ export const en = {
   "mouse.scrollHorizontally": "Scroll Canvas Horizontally",
   "mouse.scroll": "Scroll",
   "mouse.zoom": "Zoom",
+
+  // Updates pane
+  "updates.title": "Updates",
+  "updates.description": "Manage how Collaborator checks for and installs updates.",
+  "updates.autoCheck": "Check for updates automatically",
 
   // Language selector
   "language.label": "Language",

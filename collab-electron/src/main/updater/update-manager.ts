@@ -52,6 +52,7 @@ class UpdateManager {
   private errorResetTimeout: NodeJS.Timeout | null = null;
   private checkInterval: NodeJS.Timeout | null = null;
   private onBeforeQuit: (() => Promise<void>) | null = null;
+  private autoCheckEnabled = false;
 
   private shouldIgnoreMissingReleaseMetadataError(message: string): boolean {
     if (!isMissingReleaseMetadataError(message)) {
@@ -61,9 +62,10 @@ class UpdateManager {
     return true;
   }
 
-  init(opts?: { onBeforeQuit?: () => Promise<void> }): void {
+  init(opts?: { onBeforeQuit?: () => Promise<void>; autoCheckEnabled?: boolean }): void {
     if (this.initialized) return;
     this.onBeforeQuit = opts?.onBeforeQuit ?? null;
+    this.autoCheckEnabled = opts?.autoCheckEnabled ?? false;
 
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
@@ -151,7 +153,7 @@ class UpdateManager {
       this.handleError(err.message);
     });
 
-    if (app.isPackaged) {
+    if (app.isPackaged && this.autoCheckEnabled) {
       setTimeout(() => this.checkForUpdates(), INITIAL_CHECK_DELAY_MS);
       this.checkInterval = setInterval(
         () => this.checkForUpdates(),
@@ -216,6 +218,29 @@ class UpdateManager {
     return { ...this.state };
   }
 
+  setAutoCheckEnabled(enabled: boolean): void {
+    if (this.autoCheckEnabled === enabled) return;
+    this.autoCheckEnabled = enabled;
+
+    if (!app.isPackaged) return;
+
+    if (enabled) {
+      setTimeout(() => this.checkForUpdates(), INITIAL_CHECK_DELAY_MS);
+      this.checkInterval = setInterval(
+        () => this.checkForUpdates(),
+        CHECK_INTERVAL_MS,
+      );
+      powerMonitor.on("resume", () => this.checkForUpdates());
+    } else {
+      if (this.checkInterval) {
+        clearInterval(this.checkInterval);
+        this.checkInterval = null;
+      }
+      // powerMonitor listeners can't be removed easily; they are harmless no-ops
+      // when checkForUpdates returns early due to idle/available state.
+    }
+  }
+
   destroy(): void {
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
@@ -277,5 +302,9 @@ export function setupUpdateIPC(): void {
 
   ipcMain.on("update:install", async () => {
     await updateManager.install();
+  });
+
+  ipcMain.handle("update:setAutoCheck", (_event, enabled: boolean) => {
+    updateManager.setAutoCheckEnabled(enabled);
   });
 }

@@ -8,6 +8,7 @@ import {
   Moon,
   Monitor,
   Terminal,
+  ArrowClockwise,
 } from "@phosphor-icons/react";
 import { useTranslation } from "./translations";
 import type { SupportedLocale, TranslationKey } from "./translations";
@@ -261,6 +262,36 @@ function AppearancePane({ t }: { t: (key: TranslationKey) => string }) {
         />
       </div>
     </div>
+  );
+}
+
+function ToggleSwitch({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150"
+      style={{
+        backgroundColor: checked
+          ? "#22c55e"
+          : "color-mix(in srgb, var(--foreground) 20%, transparent)",
+      }}
+    >
+      <span
+        className="pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform duration-150"
+        style={{
+          transform: checked ? "translateX(16px)" : "translateX(0)",
+        }}
+      />
+    </button>
   );
 }
 
@@ -567,7 +598,43 @@ function IntegrationsPane({ t }: { t: (key: TranslationKey) => string }) {
   );
 }
 
-type Pane = "appearance" | "terminal" | "integrations" | "controls";
+type Pane = "appearance" | "terminal" | "integrations" | "controls" | "updates";
+
+function UpdatesPane({ t }: { t: (key: TranslationKey) => string }) {
+  const [autoCheck, setAutoCheck] = useState(false);
+
+  useEffect(() => {
+    api.getPref("autoCheckUpdates")
+      .then((v) => {
+        if (typeof v === "boolean") setAutoCheck(v);
+      })
+      .catch(() => { });
+  }, []);
+
+  async function handleAutoCheckChange(checked: boolean) {
+    setAutoCheck(checked);
+    await api.setPref("autoCheckUpdates", checked);
+  }
+
+  return (
+    <div className="space-y-6 p-6">
+      <div className="space-y-1">
+        <h2 className="text-base font-semibold">{t("updates.title")}</h2>
+        <p className="text-sm text-muted-foreground">
+          {t("updates.description")}
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{t("updates.autoCheck")}</p>
+        <ToggleSwitch
+          checked={autoCheck}
+          onChange={(v) => { void handleAutoCheckChange(v); }}
+        />
+      </div>
+    </div>
+  );
+}
 
 function CloseButton({ onClick }: { onClick: () => void }) {
   return (
@@ -642,6 +709,7 @@ export default function App() {
     { id: "terminal", label: t("nav.terminal"), icon: Terminal },
     { id: "integrations", label: t("nav.integrations"), icon: PuzzlePiece },
     { id: "controls", label: t("nav.controls"), icon: Keyboard },
+    { id: "updates", label: t("nav.updates"), icon: ArrowClockwise },
   ];
 
   return (
@@ -699,6 +767,7 @@ export default function App() {
         {activePane === "terminal" && <TerminalPane t={t} />}
         {activePane === "integrations" && <IntegrationsPane t={t} />}
         {activePane === "controls" && <ControlsPane t={t} />}
+        {activePane === "updates" && <UpdatesPane t={t} />}
       </div>
     </div>
   );

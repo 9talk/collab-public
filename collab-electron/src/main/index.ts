@@ -579,6 +579,9 @@ ipcMain.handle(
   "pref:set",
   (_event, key: string, value: unknown) => {
     setPref(config, key, value);
+    if (key === "autoCheckUpdates" && typeof value === "boolean") {
+      updateManager.setAutoCheckEnabled(value);
+    }
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("pref:changed", key, value);
     }
@@ -848,8 +851,10 @@ app.whenReady().then(async () => {
   registerBrowserIpc();
   registerIntegrationsIpc();
   setupUpdateIPC();
+  const autoCheckUpdates = getPref(config, "autoCheckUpdates") as boolean | null;
   updateManager.init({
     onBeforeQuit: () => shutdownBackgroundServices(),
+    autoCheckEnabled: autoCheckUpdates ?? false,
   });
 
   try {

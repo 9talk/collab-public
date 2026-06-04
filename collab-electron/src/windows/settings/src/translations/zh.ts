@@ -11,6 +11,7 @@ export const zh: Record<TranslationKey, string> = {
   "nav.terminal": "终端",
   "nav.integrations": "集成",
   "nav.controls": "控制",
+  "nav.updates": "更新",
 
   // Appearance pane
   "appearance.title": "外观",
@@ -35,6 +36,11 @@ export const zh: Record<TranslationKey, string> = {
   "integrations.uninstall": "卸载",
   "integrations.detected": "已检测到",
   "integrations.notFound": "未找到",
+
+  // Updates pane
+  "updates.title": "更新",
+  "updates.description": "管理 Collaborator 如何检查和安装更新。",
+  "updates.autoCheck": "自动检查更新",
 
   // Controls pane
   "controls.shortcuts": "键盘快捷键",
