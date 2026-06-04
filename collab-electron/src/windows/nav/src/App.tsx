@@ -29,6 +29,7 @@ import {
 	isSubpath,
 	parentPath,
 } from '@collab/shared/path-utils';
+import { isExternalAppFile } from '@collab/shared/external-app';
 
 const PLATFORM = window.api.getPlatform();
 
@@ -664,6 +665,10 @@ export default function App() {
 	const selectFile = useCallback(
 		(path: string | null) => {
 			setSelectedPath(path);
+			if (path && isExternalAppFile(path)) {
+				window.api.openPath(path);
+				return;
+			}
 			window.api.selectFile(path);
 		},
 		[],

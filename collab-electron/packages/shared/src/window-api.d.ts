@@ -291,6 +291,8 @@ export interface CollabApi {
   // Settings
   openFolder: () => Promise<string | null>;
   close: () => void;
+  openExternal: (url: string) => void;
+  openPath: (path: string) => void;
 
   // Context menu
   showContextMenu: (

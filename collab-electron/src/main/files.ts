@@ -12,7 +12,7 @@ import {
 } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { isSubpath } from "@collab/shared/path-utils";
-import { type FileFilter, isImageFile, isPdfFile } from "./file-filter";
+import { type FileFilter } from "./file-filter";
 
 export interface DirEntry {
   name: string;
@@ -64,12 +64,9 @@ export async function shouldIncludeEntryWithContent(
     return true;
   }
 
-  const fullPath = join(dirPath, entry.name);
-  if (isImageFile(entry.name) || isPdfFile(entry.name)) {
-    return true;
-  }
-
-  return !(await filter.isBinaryFile(fullPath));
+  // 所有文件都显示在文件树中，不再根据二进制内容过滤
+  // 不支持的文件类型点击时会通过系统应用打开
+  return true;
 }
 
 export async function countTreeFiles(

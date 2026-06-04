@@ -365,6 +365,8 @@ contextBridge.exposeInMainWorld("api", {
 
   openExternal: (url: string) =>
     ipcRenderer.send("shell:open-external", url),
+  openPath: (path: string) =>
+    ipcRenderer.send("shell:open-path", path),
 
   // Integrations
   getAgents: () =>

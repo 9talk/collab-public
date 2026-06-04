@@ -19,6 +19,7 @@ const DEFAULT_PATTERNS: string[] = [
   "__pycache__",
   ".DS_Store",
   "Thumbs.db",
+  "~*",
   "*.min.js",
   "*.min.css",
   "*.map",

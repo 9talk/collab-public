@@ -211,6 +211,7 @@ contextBridge.exposeInMainWorld("shellApi", {
   ) => ipcRenderer.invoke("context-menu:show", items),
 
   openExternal: (url: string) => ipcRenderer.send("shell:open-external", url),
+  openPath: (path: string) => ipcRenderer.send("shell:open-path", path),
 
   trackEvent: (name: string, properties?: Record<string, unknown>) => {
     ipcRenderer.send("analytics:track-event", name, properties);

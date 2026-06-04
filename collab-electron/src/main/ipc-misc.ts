@@ -140,6 +140,14 @@ export function registerMiscHandlers(
     },
   );
 
+  // Open file with system default application
+  ipcMain.on(
+    "shell:open-path",
+    (_event, path: string) => {
+      shell.openPath(path);
+    },
+  );
+
   // Git replay
   if (!DISABLE_GIT_REPLAY) {
     gitReplay.setNotifyFn((msg) => {
