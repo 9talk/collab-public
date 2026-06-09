@@ -19,7 +19,7 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # Step 1: Build + package with China-friendly electron mirror
 echo "Building and packaging..."
 ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" \
-  bun run --cwd "$PROJECT_DIR" package:unsigned
+  bun run --cwd "$PROJECT_DIR" package:unsigned -- --arch arm64
 
 # Give file system a moment to settle, then replace the installed app
 sleep 1

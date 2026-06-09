@@ -184,6 +184,20 @@ function forwardPtyData(
   const safeLen = tail > 0 ? full.length - tail : full.length;
   const text = full.subarray(0, safeLen).toString("utf-8");
 
+  // Diagnostic: detect U+FFFD indicating invalid UTF-8 bytes
+  if (text.includes("�")) {
+    const idx = text.indexOf("�");
+    const ctxStart = Math.max(0, idx - 20);
+    const ctx = text.substring(ctxStart, idx + 20);
+    const rawStart = Math.max(0, safeLen - 30);
+    const rawBytes = Array.from(full.subarray(rawStart, Math.min(full.length, safeLen + 10)))
+      .map(b => b.toString(16).padStart(2, "0")).join(" ");
+    console.error(
+      "[pty:utf8] session=" + sessionId + " U+FFFD at char " + idx +
+      " ctx=\"" + ctx + "\" rawBytes=" + rawBytes,
+    );
+  }
+
   if (!shouldBatchWindowsPowerShellOutput(sessionId)) {
     sendToSender(senderWebContentsId, "pty:data", {
       sessionId,

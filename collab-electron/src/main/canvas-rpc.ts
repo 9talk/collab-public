@@ -159,6 +159,21 @@ export function registerCanvasRpc(win: BrowserWindow): void {
   );
 
   registerMethod(
+    "canvas.tileNotify",
+    (params) => sendToShell("canvas.tileNotify", params),
+    {
+      description:
+        "Show a macOS-style notification for a tile in the " +
+        "top-right corner. Clicking the notification pans to " +
+        "and focuses the tile.",
+      params: {
+        tileId: "ID of the tile to notify about",
+        message: "(optional) Extra message text shown below the title",
+      },
+    },
+  );
+
+  registerMethod(
     "canvas.viewportGet",
     (params) => sendToShell("canvas.viewportGet", params),
     {

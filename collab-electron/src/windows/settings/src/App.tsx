@@ -351,10 +351,11 @@ function ControlsPane({ t }: { t: (key: TranslationKey) => string }) {
       label: t("shortcut.toggleFullScreen"),
       keys: IS_MAC ? "⌃ ⌘ F" : "F11",
     },
-    { label: t("shortcut.focusTileLeft"), keys: `${ALT} ←` },
-    { label: t("shortcut.focusTileRight"), keys: `${ALT} →` },
-    { label: t("shortcut.focusTileUp"), keys: `${ALT} ↑` },
-    { label: t("shortcut.focusTileDown"), keys: `${ALT} ↓` },
+    { label: t("shortcut.focusTileLeft"), keys: `${MOD} ←` },
+    { label: t("shortcut.focusTileRight"), keys: `${MOD} →` },
+    { label: t("shortcut.focusTileUp"), keys: `${MOD} ↑` },
+    { label: t("shortcut.focusTileDown"), keys: `${MOD} ↓` },
+    { label: t("shortcut.dismissNotification"), keys: "F1" },
   ];
 
   const mouseInputs: { label: string; keys: string }[] = [

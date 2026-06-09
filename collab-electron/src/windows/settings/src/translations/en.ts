@@ -51,6 +51,7 @@ export const en = {
   "shortcut.focusTileRight": "Focus Tile Right",
   "shortcut.focusTileUp": "Focus Tile Up",
   "shortcut.focusTileDown": "Focus Tile Down",
+  "shortcut.dismissNotification": "Dismiss Notification",
 
   // Mouse control labels
   "mouse.panCanvas": "Pan Canvas",

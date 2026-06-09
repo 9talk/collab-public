@@ -15,6 +15,7 @@ import { createMinimap } from "./canvas-minimap.js";
 import { createPanel } from "./panel-manager.js";
 import { createWorkspaceManager } from "./workspace-manager.js";
 import { createCanvasRpc } from "./canvas-rpc.js";
+import { createCanvasNotifications } from "./canvas-notification.tsx";
 import { createTileManager } from "./tile-manager.js";
 import { updateTileTitle, getTileLabel } from "./tile-renderer.js";
 
@@ -654,6 +655,15 @@ async function init() {
 		},
 	});
 
+	// -- Notifications --
+
+	const notifications = createCanvasNotifications({
+		getTile,
+		edgeIndicators,
+		tileManager,
+		getTileLabel,
+	});
+
 	// -- Minimap --
 
 	const minimap = createMinimap({
@@ -668,7 +678,7 @@ async function init() {
 	// -- Canvas RPC --
 
 	const handleCanvasRpc = createCanvasRpc({
-		tileManager, viewportState, viewport, edgeIndicators,
+		tileManager, viewportState, viewport, edgeIndicators, notifications,
 	});
 
 	// -- Wire viewport updates --
@@ -1176,6 +1186,8 @@ async function init() {
 					if (tile) edgeIndicators.panToTile(tile);
 				}
 			})();
+		} else if (action === "dismiss-notification") {
+			notifications.dismissFirst();
 		}
 	}
 

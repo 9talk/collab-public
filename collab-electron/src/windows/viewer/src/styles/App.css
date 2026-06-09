@@ -163,10 +163,9 @@ ITEM DISPLAY
 ============================================================================ */
 
 .item-card {
-	gap: 48px;
 	flex: 1;
-	padding: 96px 32px;
-	max-width: 650px;
+	padding: 48px 32px 32px;
+	max-width: 80%;
 	margin: 0 auto;
 	width: 100%;
 	display: flex;
@@ -226,12 +225,18 @@ textarea.item-title-input,
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
-	margin: 16px 0;
+	margin-bottom: 16px;
 }
 
 .item-body {
 	/* Item body content container */
 	display: block;
+}
+
+.item-source-editor {
+	flex: 1;
+	min-height: 0;
+	margin-top: 16px;
 }
 
 .content-copy-button {
@@ -304,6 +309,43 @@ html:not(.dark) .filepath-parent {
 	font-size: 0.75rem;
 	color: var(--color-text-secondary);
 	line-height: 1;
+}
+
+.metadata-title-row {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	grid-column: 1 / -1;
+}
+
+.item-metadata-title {
+	font-size: inherit;
+	font-weight: 400;
+}
+
+.item-metadata-title-input {
+	flex: 1;
+	min-width: 80px;
+	border: none;
+	background: transparent;
+	color: #000;
+	padding: 0;
+	border-radius: 0;
+	font-family: inherit;
+	font-size: inherit;
+	resize: none;
+	overflow: hidden;
+	white-space: nowrap;
+	box-sizing: border-box;
+}
+
+.item-metadata-title-input:focus {
+	outline: none;
+	box-shadow: none;
+}
+
+html.dark .item-metadata-title-input {
+	color: #fff;
 }
 
 .metadata-group-start {
@@ -1266,7 +1308,6 @@ html:not(.dark) .image-view-banner-key {
 
 .item-card.canvas-tile-embed {
 	padding: 24px;
-	gap: 12px;
 }
 
 .canvas-tile-embed .item-title {

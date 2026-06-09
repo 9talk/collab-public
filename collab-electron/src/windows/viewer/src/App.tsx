@@ -104,6 +104,27 @@ export default function App() {
 		() => new URLSearchParams(window.location.search).has("tilePath"),
 	);
 
+	const [showSource, setShowSource] = useState(false);
+
+	// Source mode keyboard shortcut: Cmd+/ or Ctrl+/
+	// Use capture phase to fire before Monaco editor intercepts the event
+	useEffect(() => {
+		const onKeyDown = (e: KeyboardEvent) => {
+			if ((e.metaKey || e.ctrlKey) && e.key === "/") {
+				e.preventDefault();
+				e.stopPropagation();
+				setShowSource((v) => !v);
+			}
+		};
+		window.addEventListener("keydown", onKeyDown, { capture: true });
+		return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
+	}, []);
+
+	// Reset source mode when file changes
+	useEffect(() => {
+		setShowSource(false);
+	}, [selectedPath]);
+
 	// Tile mode: load file directly from query params
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search);
@@ -584,17 +605,44 @@ export default function App() {
 						</div>
 					</>
 				)}
-				{hasMarkdownFile && (
-					<>
-						<ItemDetailView
-							item={viewerItem}
-							onTextChange={saveViewerText}
-							onTitleChange={handleRename}
-							theme={theme}
-							editingDisabled={editingDisabled}
-							className={isTileMode ? "canvas-tile-embed" : undefined}
-						/>
-					</>
+				{hasMarkdownFile && displayedPath && showSource && (
+					<div className={`item-card${isTileMode ? " canvas-tile-embed" : ""}`}>
+						<div className="item-metadata">
+							<div className="metadata-title-row">
+								<div className="item-type-badge">{viewerItem.type}</div>
+								<span className="metadata-value item-metadata-title">{viewerItem.title}</span>
+							</div>
+							<div className="metadata-item metadata-group-start">
+								<div className="metadata-label">Created</div>
+								<div className="metadata-value">{new Date(viewerItem.createdAt).toLocaleDateString()}</div>
+							</div>
+							{viewerItem.isEditable && (
+								<div className="metadata-item">
+									<div className="metadata-label">Modified</div>
+									<div className="metadata-value">{new Date(viewerItem.modifiedAt).toLocaleDateString()}</div>
+								</div>
+							)}
+						</div>
+						<div className="item-source-editor">
+							<CodeEditorView
+								filePath={displayedPath}
+								content={fileContent}
+								onContentChange={saveCodeContent}
+								theme={theme}
+								editingDisabled={editingDisabled}
+							/>
+						</div>
+					</div>
+				)}
+				{hasMarkdownFile && !showSource && (
+					<ItemDetailView
+						item={viewerItem}
+						onTextChange={saveViewerText}
+						onTitleChange={handleRename}
+						theme={theme}
+						editingDisabled={editingDisabled}
+						className={isTileMode ? "canvas-tile-embed" : undefined}
+					/>
 				)}
 				{hasCodeFile && displayedPath && (
 					<>

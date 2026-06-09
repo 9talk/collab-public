@@ -296,6 +296,16 @@ function TerminalTab({
 			dataBuffer = [];
 			flushTimer = undefined;
 			for (const chunk of chunks) {
+				// Diagnostic: detect U+FFFD in data sent to xterm
+				const str = typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk);
+				if (str.includes("�")) {
+					const idx = str.indexOf("�");
+					console.error(
+						"[term:utf8] session=" + sessionId + " U+FFFD at char " + idx +
+						" ctx=\"" + str.substring(Math.max(0, idx - 20), idx + 20) + "\" " +
+						"type=" + typeof chunk,
+					);
+				}
 				term.write(chunk);
 			}
 		};

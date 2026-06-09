@@ -222,6 +222,14 @@ async function cmdTileFocus(args) {
   console.log(`focused ${args.join(" ")}`);
 }
 
+async function cmdTileNotify(args) {
+  if (args.length === 0) die("tile notify requires a tile id");
+  const tileId = args.shift();
+  const message = args.length > 0 ? args.join(" ") : undefined;
+  await rpcCall("canvas.tileNotify", { tileId, message });
+  console.log(`notified ${tileId}`);
+}
+
 async function cmdTerminalWrite(args) {
   if (args.length < 2) die("terminal write requires <id> <input>");
   const tileId = args[0];
@@ -378,6 +386,7 @@ COMMANDS
   tile move <id> --pos x,y           Move a tile
   tile resize <id> --size w,h        Resize a tile
   tile focus <id> [<id>...]          Bring tiles into view
+  tile notify <id>                   Show notification for a tile
   terminal write <id> <input>        Send input to a terminal tile
   terminal read <id> [--lines N]     Read output from a terminal tile
   browser navigate <id> <url>        Navigate browser tile to URL
@@ -443,7 +452,7 @@ try {
       break;
     case "tile": {
       if (argv.length < 2) {
-        die("tile requires a subcommand (list, create, rm, move, resize, focus)");
+        die("tile requires a subcommand (list, create, rm, move, resize, focus, notify)");
       }
       const sub = argv[1];
       const rest = argv.slice(2);
@@ -454,6 +463,7 @@ try {
         case "move":   await cmdTileMove(rest); break;
         case "resize": await cmdTileResize(rest); break;
         case "focus":  await cmdTileFocus(rest); break;
+        case "notify": await cmdTileNotify(rest); break;
         default: die(`unknown tile subcommand: ${sub}`);
       }
       break;

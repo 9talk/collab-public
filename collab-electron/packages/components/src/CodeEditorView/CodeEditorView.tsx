@@ -205,6 +205,30 @@ function languageFromPath(filePath: string): string {
     r: "r",
     dockerfile: "dockerfile",
     makefile: "plaintext",
+    md: "markdown",
+    markdown: "markdown",
+    mdx: "markdown",
+    md: "markdown",
+    markdown: "markdown",
+    mdx: "markdown",
+    md: "markdown",
+    markdown: "markdown",
+    mdx: "markdown",
+    md: "markdown",
+    markdown: "markdown",
+    mdx: "markdown",
+    md: "markdown",
+    markdown: "markdown",
+    mdx: "markdown",
+    md: "markdown",
+    markdown: "markdown",
+    mdx: "markdown",
+    md: "markdown",
+    markdown: "markdown",
+    mdx: "markdown",
+    md: "markdown",
+    markdown: "markdown",
+    mdx: "markdown",
   };
   return map[ext] ?? "plaintext";
 }
@@ -237,6 +261,7 @@ interface CodeEditorViewProps {
   theme: "light" | "dark";
   editingDisabled?: boolean;
   className?: string;
+  onFlush?: () => void;
 }
 
 export function CodeEditorView({
@@ -246,6 +271,7 @@ export function CodeEditorView({
   theme,
   editingDisabled = false,
   className,
+  onFlush,
 }: CodeEditorViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
@@ -256,6 +282,7 @@ export function CodeEditorView({
   const [showDirtyBanner, setShowDirtyBanner] = useState(false);
   const activeFilePathRef = useRef(filePath);
   const activeOnContentChangeRef = useRef(onContentChange);
+  const activeOnFlushRef = useRef(onFlush);
   const suppressChangeRef = useRef(false);
 
   // Create editor on mount
@@ -378,6 +405,7 @@ export function CodeEditorView({
 
     activeFilePathRef.current = filePath;
     activeOnContentChangeRef.current = onContentChange;
+    activeOnFlushRef.current = onFlush;
     diskContentRef.current = content;
     setShowDirtyBanner(false);
   }, [content, filePath, onContentChange]);
@@ -433,6 +461,13 @@ export function CodeEditorView({
       debounceRef.current = null;
     }
   }, [content]);
+
+  // Expose flush capability to parent
+  useEffect(() => {
+    if (onFlush) {
+      onFlush();
+    }
+  }, [onFlush]);
 
   const handleOverwrite = useCallback(() => {
     const editor = editorRef.current;

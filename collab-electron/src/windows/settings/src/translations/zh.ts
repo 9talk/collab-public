@@ -60,6 +60,7 @@ export const zh: Record<TranslationKey, string> = {
   "shortcut.focusTileRight": "聚焦右侧面板",
   "shortcut.focusTileUp": "聚焦上方面板",
   "shortcut.focusTileDown": "聚焦下方面板",
+  "shortcut.dismissNotification": "关闭通知",
 
   // Mouse control labels
   "mouse.panCanvas": "平移画布",

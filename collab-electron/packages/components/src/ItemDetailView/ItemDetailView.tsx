@@ -84,7 +84,7 @@ export function ItemDetailView({
 	theme,
 	editingDisabled = false,
 	className,
-}: ItemDetailViewProps) {
+	}: ItemDetailViewProps) {
 	const [editableTitle, setEditableTitle] = useState(item.title ?? "");
 	const [showRawContext, setShowRawContext] = useState(false);
 	const [backlinks, setBacklinks] = useState<BacklinkEntry[]>([]);
@@ -178,8 +178,28 @@ export function ItemDetailView({
 		<div className={`item-card${className ? ` ${className}` : ""}`} data-item-type={item.type.toLowerCase()}>
 			{/* Metadata */}
 			<div className="item-metadata">
-				<div className={`item-type-badge ${getItemTypeClass(item.type)}`}>
-					{item.type}
+				<div className="metadata-title-row">
+					<div className={`item-type-badge ${getItemTypeClass(item.type)}`}>
+						{item.type}
+					</div>
+					{isTitleEditable ? (
+						<textarea
+							ref={titleTextareaRef}
+							className="item-metadata-title-input"
+							value={editableTitle}
+							onChange={(e) => setEditableTitle(e.target.value)}
+							onBlur={handleTitleBlur}
+							onKeyDown={(e) => {
+								if (e.key === "Escape") e.currentTarget.blur();
+							}}
+							aria-label="Item title"
+							readOnly={editingDisabled}
+							spellCheck={false}
+							rows={1}
+						/>
+					) : (
+						<span className="metadata-value item-metadata-title">{item.title}</span>
+					)}
 				</div>
 
 				<div className="metadata-item metadata-group-start">
@@ -249,25 +269,6 @@ export function ItemDetailView({
         </div> */}
 
 				<div className="item-content">
-					{isTitleEditable ? (
-						<textarea
-							ref={titleTextareaRef}
-							className="item-title item-title-input"
-							value={editableTitle}
-							onChange={(e) => setEditableTitle(e.target.value)}
-							onBlur={handleTitleBlur}
-							onKeyDown={(e) => {
-								if (e.key === "Escape") e.currentTarget.blur();
-							}}
-							aria-label="Item title"
-							readOnly={editingDisabled}
-							spellCheck={false}
-							rows={1}
-							style={{ resize: "none" }}
-						/>
-					) : (
-						<h2 className="item-title">{item.title}</h2>
-					)}
 
 					{item.summary && (
 						<div className="item-summary">

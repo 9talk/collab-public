@@ -34,13 +34,13 @@ export function findAutoPlacement(existingTiles, width, height) {
  *
  * Methods: tileList, tileCreate, tileRemove, tileMove, tileResize,
  *          viewportGet, viewportSet, terminalWrite, terminalRead,
- *          tileFocus, browserNavigate, browserScreenshot,
+ *          tileFocus, tileNotify, browserNavigate, browserScreenshot,
  *          browserSnapshot, browserClick, browserType,
  *          browserScroll, browserEvaluate, browserWait,
  *          browserInfo.
  */
 export function createCanvasRpc({
-	tileManager, viewportState, viewport, edgeIndicators,
+	tileManager, viewportState, viewport, edgeIndicators, notifications,
 }) {
 	function respond(requestId, result) {
 		window.shellApi.canvasRpcResponse({ requestId, result });
@@ -386,6 +386,27 @@ export function createCanvasRpc({
 					// Set focus on the first tile (like keyboard shortcuts do)
 					tileManager.focusCanvasTile(focusTiles[0].id, null);
 					edgeIndicators.panToTiles(focusTiles);
+					result = {};
+					break;
+				}
+				case "tileNotify": {
+					if (!params.tileId) {
+						respondError(
+							requestId, 4,
+							"tileId is required",
+						);
+						return;
+					}
+					if (!getTile(params.tileId)) {
+						respondError(
+							requestId, 3,
+							`Tile not found: ${params.tileId}`,
+						);
+						return;
+					}
+					if (notifications) {
+						notifications.show(params.tileId, params.message);
+					}
 					result = {};
 					break;
 				}

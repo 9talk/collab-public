@@ -183,6 +183,8 @@ const altOnly = (input: Electron.Input): boolean =>
   input.alt && !input.meta && !input.control && !input.shift;
 const optCmd = (input: Electron.Input): boolean =>
   input.alt && input.meta && !input.control;
+const cmdNoAlt = (input: Electron.Input): boolean =>
+  (input.meta || input.control) && !input.alt;
 
 interface ShortcutEntry {
   modifier: (input: Electron.Input) => boolean;
@@ -202,14 +204,18 @@ const TOGGLE_SHORTCUTS: Record<string, ShortcutEntry[]> = {
   KeyW: [{ modifier: cmdOrCtrl, action: "close-tile" }],
   ArrowRight: [
     { modifier: optCmd, action: "nav-history-forward" },
-    { modifier: altOnly, action: "focus-tile-right" },
+    { modifier: cmdNoAlt, action: "focus-tile-right" },
   ],
   ArrowLeft: [
     { modifier: optCmd, action: "nav-history-back" },
-    { modifier: altOnly, action: "focus-tile-left" },
+    { modifier: cmdNoAlt, action: "focus-tile-left" },
   ],
-  ArrowUp: [{ modifier: altOnly, action: "focus-tile-up" }],
-  ArrowDown: [{ modifier: altOnly, action: "focus-tile-down" }],
+  ArrowUp: [{ modifier: cmdNoAlt, action: "focus-tile-up" }],
+  ArrowDown: [{ modifier: cmdNoAlt, action: "focus-tile-down" }],
+  F1: [{
+    modifier: (input) => !input.meta && !input.control && !input.alt && !input.shift,
+    action: "dismiss-notification",
+  }],
 };
 
 const TOGGLE_SHORTCUT_KEYS: Record<string, ShortcutEntry[]> = {
