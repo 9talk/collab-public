@@ -84,5 +84,16 @@ export function createCanvasNotifications({ getTile, edgeIndicators, tileManager
     return true;
   }
 
-  return { show, dismissFirst };
+  function dismissByTileId(tileId: string) {
+    for (const [toastId, tid] of toastTileMap) {
+      if (tid === tileId) {
+        toast.dismiss(toastId);
+        toastTileMap.delete(toastId);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  return { show, dismissFirst, dismissByTileId };
 }

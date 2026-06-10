@@ -1161,6 +1161,7 @@ async function init() {
 			if (target) {
 				tileManager.focusCanvasTile(target.id, null);
 				edgeIndicators.panToTile(target);
+				notifications.dismissByTileId(target.id);
 			}
 		} else if (action === "nav-history-back") {
 			(async () => {

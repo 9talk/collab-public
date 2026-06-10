@@ -3,6 +3,7 @@ import {
   app,
   BrowserWindow,
   dialog,
+  globalShortcut,
   ipcMain,
   Menu,
   nativeTheme,
@@ -212,10 +213,6 @@ const TOGGLE_SHORTCUTS: Record<string, ShortcutEntry[]> = {
   ],
   ArrowUp: [{ modifier: cmdNoAlt, action: "focus-tile-up" }],
   ArrowDown: [{ modifier: cmdNoAlt, action: "focus-tile-down" }],
-  F1: [{
-    modifier: (input) => !input.meta && !input.control && !input.alt && !input.shift,
-    action: "dismiss-notification",
-  }],
 };
 
 const TOGGLE_SHORTCUT_KEYS: Record<string, ShortcutEntry[]> = {
@@ -762,6 +759,7 @@ function sendLoadingDone(): void {
 async function shutdownBackgroundServices(): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
+  globalShortcut.unregisterAll();
   pty.setShuttingDown(true);
   await pty.killAllAndWait();
   await pty.shutdownSidecarIfIdle();
@@ -873,6 +871,27 @@ app.whenReady().then(async () => {
   createWindow();
   registerAgentIpc(mainWindow!, config);
   registerToggleShortcuts(mainWindow!);
+
+  // Register F1 as a global shortcut: bring app to front when in background,
+  // dismiss the first notification when already focused.
+  const f1Registered = globalShortcut.register("F1", () => {
+    const win = mainWindow;
+    if (!win) return;
+    if (!win.isFocused()) {
+      win.show();
+      win.focus();
+      return;
+    }
+    sendShortcut("dismiss-notification");
+  });
+  if (!f1Registered) {
+    dialog.showMessageBox({
+      type: "warning",
+      title: "全局快捷键注册失败",
+      message: "F1 全局快捷键注册失败，可能被其他应用占用或缺少辅助功能权限。\n\n请前往 系统设置 > 隐私与安全性 > 辅助功能 中授予 Collaborator 权限。",
+      buttons: ["确定"],
+    });
+  }
 
   initMainAnalytics();
   trackEvent("app_launched");
