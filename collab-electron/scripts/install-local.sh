@@ -16,28 +16,29 @@ done
 # Resolve project root (one level up from scripts/)
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Step 1: Build + package with China-friendly electron mirror
+BUILD_TIME="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+echo "Build time: $BUILD_TIME"
+
+# Step 1: Clean build artifacts to avoid stale files
+echo "Cleaning build artifacts..."
+rm -rf "$PROJECT_DIR/out" "$PROJECT_DIR/dist"
+
+# Step 2: Build + package with China-friendly electron mirror
 echo "Building and packaging..."
 ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" \
   bun run --cwd "$PROJECT_DIR" package:unsigned -- --arch arm64
 
-# Give file system a moment to settle, then replace the installed app
-sleep 1
-if [ "$KEEP" = false ]; then
-  rm -rf /Applications/Collaborator.app
-fi
+# Step 3: Replace the installed app
+echo "Installing to /Applications..."
+rm -rf /Applications/Collaborator.app
 cp -R "$PROJECT_DIR/dist/mac-arm64/Collaborator.app" /Applications/Collaborator.app
 
-# Step 2: Clean up build artifacts (unless --keep)
+# Step 4: Clean up build artifacts (unless --keep)
 if [ "$KEEP" = false ]; then
   echo "Cleaning up dist/..."
   rm -rf "$PROJECT_DIR/dist"
 fi
 
-# Step 3: Kill any running instance before launching the new one
-echo "Installing to /Applications..."
-kill $(pgrep -f "Collaborator") 2>/dev/null || true
-
-# Step 4: Launch the freshly installed app
+# Step 5: Launch the freshly installed app
 echo "Done. Opening Collaborator..."
 open /Applications/Collaborator.app

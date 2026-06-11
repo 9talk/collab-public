@@ -9,11 +9,13 @@ const outDir = "out";
 const gitCommitSha = execSync("git rev-parse HEAD", {
   encoding: "utf8",
 }).trim();
+const buildTime = new Date().toISOString();
 
 export default defineConfig({
   main: {
     define: {
       __GIT_COMMIT_SHA__: JSON.stringify(gitCommitSha),
+      __BUILD_TIME__: JSON.stringify(buildTime),
     },
     resolve: {
       alias: {

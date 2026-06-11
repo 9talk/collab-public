@@ -295,19 +295,50 @@ function TerminalTab({
 			const chunks = dataBuffer;
 			dataBuffer = [];
 			flushTimer = undefined;
-			for (const chunk of chunks) {
-				// Diagnostic: detect U+FFFD in data sent to xterm
-				const str = typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk);
-				if (str.includes("�")) {
-					const idx = str.indexOf("�");
-					console.error(
-						"[term:utf8] session=" + sessionId + " U+FFFD at char " + idx +
-						" ctx=\"" + str.substring(Math.max(0, idx - 20), idx + 20) + "\" " +
-						"type=" + typeof chunk,
-					);
+			// Merge all chunks into a single term.write() to avoid
+			// triggering multiple WebGL frames, which can cause
+			// ghosting when the renderer can't keep up.
+			let merged: string;
+			if (chunks.length === 1) {
+				merged = typeof chunks[0] === "string"
+					? chunks[0]
+					: new TextDecoder().decode(chunks[0]);
+			} else {
+				// Build a single Uint8Array and decode once. Handles
+				// both Uint8Array and string chunks (IPC sends strings
+				// but the type says Uint8Array for API stability).
+				const encoder = new TextEncoder();
+				let totalLen = 0;
+				for (const c of chunks) {
+					totalLen += typeof c === "string"
+						? encoder.encode(c).length
+						: c.length;
 				}
-				term.write(chunk);
+				const buf = new Uint8Array(totalLen);
+				let off = 0;
+				for (const c of chunks) {
+					if (typeof c === "string") {
+						const encoded = encoder.encode(c);
+						buf.set(encoded, off);
+						off += encoded.length;
+					} else {
+						buf.set(c, off);
+						off += c.length;
+					}
+				}
+				merged = new TextDecoder().decode(buf);
 			}
+
+			// Diagnostic: detect U+FFFD in data sent to xterm
+			if (merged.includes("�")) {
+				const idx = merged.indexOf("�");
+				console.error(
+					"[term:utf8] session=" + sessionId + " U+FFFD at char " + idx +
+					" ctx=\"" + merged.substring(Math.max(0, idx - 20), idx + 20) + "\"",
+				);
+			}
+
+			term.write(merged);
 		};
 
 		const handleData = (payload: {

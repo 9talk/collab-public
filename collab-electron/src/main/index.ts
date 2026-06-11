@@ -323,6 +323,13 @@ function buildAppMenu(): void {
   const isMac = process.platform === "darwin";
   const fullScreenAccelerator = isMac ? "Ctrl+Cmd+F" : "F11";
 
+  app.setAboutPanelOptions({
+    applicationName: app.name,
+    applicationVersion: app.getVersion(),
+    version: __BUILD_TIME__,
+    credits: `Commit: ${__GIT_COMMIT_SHA__.slice(0, 7)}`,
+  });
+
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac
       ? [
