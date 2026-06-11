@@ -39,6 +39,5 @@ if [ "$KEEP" = false ]; then
   rm -rf "$PROJECT_DIR/dist"
 fi
 
-# Step 5: Launch the freshly installed app
-echo "Done. Opening Collaborator..."
-open /Applications/Collaborator.app
+# Step 5: Notify completion
+echo "Done. App installed at /Applications/Collaborator.app"

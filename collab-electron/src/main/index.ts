@@ -326,8 +326,8 @@ function buildAppMenu(): void {
   app.setAboutPanelOptions({
     applicationName: app.name,
     applicationVersion: app.getVersion(),
-    version: __BUILD_TIME__,
-    credits: `Commit: ${__GIT_COMMIT_SHA__.slice(0, 7)}`,
+    version: "",
+    credits: `Build Time: ${__BUILD_TIME__}`,
   });
 
   const template: Electron.MenuItemConstructorOptions[] = [
