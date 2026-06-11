@@ -42,7 +42,7 @@ function TerminalTab({
 
 		const term = new Terminal({
 			theme: getTheme(),
-			fontFamily: 'Menlo, Monaco, "PingFang SC", "Courier New", monospace',
+			fontFamily: 'Menlo, Monaco, "Courier New", monospace',
 			fontSize: 12,
 			fontWeight: "400",
 			fontWeightBold: "500",
