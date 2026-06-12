@@ -993,7 +993,7 @@ body.platform-win {
 	opacity: 1;
 }
 
-.tile-refresh-btn.spinning svg {
+.tile-refresh-btn.spinning {
 	animation: tile-refresh-spin 0.8s linear infinite;
 }
 
