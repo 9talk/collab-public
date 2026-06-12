@@ -119,6 +119,13 @@ ipcRenderer.on("shell-blur", () => {
   for (const cb of shellBlurListeners) cb();
 });
 
+type TerminalRefreshCb = () => void;
+const terminalRefreshListeners = new Set<TerminalRefreshCb>();
+
+ipcRenderer.on("terminal:refresh", () => {
+  for (const cb of terminalRefreshListeners) cb();
+});
+
 ipcRenderer.on("replay:data", (_event, msg) => {
   for (const cb of replayDataListeners) cb(msg);
 });
@@ -546,6 +553,13 @@ contextBridge.exposeInMainWorld("api", {
     shellBlurListeners.add(cb);
     return () => {
       shellBlurListeners.delete(cb);
+    };
+  },
+
+  onTerminalRefresh: (cb: () => void) => {
+    terminalRefreshListeners.add(cb);
+    return () => {
+      terminalRefreshListeners.delete(cb);
     };
   },
 

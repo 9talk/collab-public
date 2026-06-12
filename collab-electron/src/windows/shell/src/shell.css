@@ -984,6 +984,15 @@ body.platform-win {
 	opacity: 1;
 }
 
+.tile-refresh-btn {
+	font-size: 13px;
+}
+
+.tile-refresh-btn:hover {
+	color: #4a9eff;
+	opacity: 1;
+}
+
 .tile-content {
 	flex: 1;
 	overflow: hidden;

@@ -487,6 +487,25 @@ function TerminalTab({
 		}
 	}, [visible]);
 
+	useEffect(() => {
+		const unsub = window.api.onTerminalRefresh(() => {
+			// Dispose and re-create the WebGL renderer to fully
+			// release any corrupted texture atlas memory, then
+			// force a full redraw.
+			if (flushTimer !== undefined) {
+				clearTimeout(flushTimer);
+				flushTimer = undefined;
+			}
+			dataBuffer = [];
+			term.clear();
+			const webgl = new WebglAddon();
+			webgl.onContextLoss(() => webgl.dispose());
+			term.loadAddon(webgl);
+			requestAnimationFrame(() => fitRef.current?.fit());
+		});
+		return unsub;
+	}, [sessionId]);
+
 	return (
 		<div
 			ref={containerRef}

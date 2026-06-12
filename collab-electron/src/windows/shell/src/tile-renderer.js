@@ -30,6 +30,7 @@ function resolveInput(raw) {
  * @param {((id: string, url: string) => void)|null} [callbacks.onNavigate]
  * @param {((id: string) => void)|null} [callbacks.onRename]
  * @param {((id: string) => void)|null} [callbacks.onDuplicate]
+ * @param {((id: string) => void)|null} [callbacks.onRefresh]
  */
 export function createTileDOM(tile, callbacks) {
   const container = document.createElement("div");
@@ -165,6 +166,25 @@ export function createTileDOM(tile, callbacks) {
       callbacks.onOpenInViewer(tile.id);
     });
     btnGroup.appendChild(viewBtn);
+  }
+
+  if (tile.type === "term" && callbacks.onRefresh) {
+    const refreshBtn = document.createElement("button");
+    refreshBtn.className = "tile-action-btn tile-refresh-btn";
+    refreshBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 0-1.5 3.5"/><path d="M13 3v4h-4"/></svg>`;
+    refreshBtn.title = "Refresh terminal";
+    refreshBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+    refreshBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      refreshBtn.style.transform = "rotate(360deg)";
+      refreshBtn.style.transition = "transform 0.5s ease";
+      setTimeout(() => {
+        refreshBtn.style.transform = "";
+        refreshBtn.style.transition = "";
+      }, 500);
+      callbacks.onRefresh(tile.id);
+    });
+    btnGroup.appendChild(refreshBtn);
   }
 
   const closeBtn = document.createElement("button");

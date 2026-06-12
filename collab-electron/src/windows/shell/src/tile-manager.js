@@ -523,6 +523,12 @@ export function createTileManager({
 					saveCanvasImmediate();
 				});
 			},
+			onRefresh: (id) => {
+				const d = tileDOMs.get(id);
+				if (d?.webview) {
+					d.webview.send("terminal:refresh");
+				}
+			},
 		});
 
 		// Double-click title bar → center tile in viewport
