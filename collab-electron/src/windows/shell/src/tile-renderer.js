@@ -176,12 +176,9 @@ export function createTileDOM(tile, callbacks) {
     refreshBtn.addEventListener("mousedown", (e) => e.stopPropagation());
     refreshBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      refreshBtn.style.transform = "rotate(360deg)";
-      refreshBtn.style.transition = "transform 0.5s ease";
-      setTimeout(() => {
-        refreshBtn.style.transform = "";
-        refreshBtn.style.transition = "";
-      }, 500);
+      if (refreshBtn.classList.contains("spinning")) return;
+      refreshBtn.classList.add("spinning");
+      setTimeout(() => refreshBtn.classList.remove("spinning"), 1500);
       callbacks.onRefresh(tile.id);
     });
     btnGroup.appendChild(refreshBtn);
