@@ -50,7 +50,7 @@ function sortFiles(
 	if (sortMode.startsWith('alpha')) {
 		const isDesc = sortMode === 'alpha-desc';
 		return [...files].sort((a, b) => {
-			const cmp = a.name.localeCompare(b.name);
+			const cmp = a.name.localeCompare(b.name, undefined, { numeric: true });
 			return isDesc ? -cmp : cmp;
 		});
 	}

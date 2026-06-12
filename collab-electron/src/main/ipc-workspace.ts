@@ -215,8 +215,8 @@ async function readTreeRecursive(
     }
   }
 
-  folders.sort((a, b) => a.name.localeCompare(b.name));
-  files.sort((a, b) => a.name.localeCompare(b.name));
+  folders.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   return [...folders, ...files];
 }
 

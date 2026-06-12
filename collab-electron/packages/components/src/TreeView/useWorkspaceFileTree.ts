@@ -106,6 +106,8 @@ export function useWorkspaceFileTree(
 								if (aIsDir)
 									return a.name.localeCompare(
 										b.name,
+										undefined,
+										{ numeric: true },
 									);
 								return 0;
 							},
