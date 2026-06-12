@@ -1002,7 +1002,7 @@ body.platform-win {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	background: rgba(0, 0, 0, 0.15);
+	background: var(--bg);
 	pointer-events: none;
 	opacity: 0;
 	transition: opacity 0.25s ease;
@@ -1015,13 +1015,13 @@ body.platform-win {
 .tile-refresh-overlay svg {
 	width: 48px;
 	height: 48px;
-	color: rgba(255, 255, 255, 0.9);
+	color: var(--fg);
 	stroke: currentColor;
 	animation: tile-refresh-spin 0.8s linear infinite;
 }
 
-.dark .tile-refresh-overlay {
-	background: rgba(255, 255, 255, 0.08);
+.dark .tile-refresh-overlay svg {
+	color: rgba(255, 255, 255, 0.5);
 }
 
 @keyframes tile-refresh-spin {
