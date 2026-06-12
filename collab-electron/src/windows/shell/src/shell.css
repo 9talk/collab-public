@@ -993,8 +993,35 @@ body.platform-win {
 	opacity: 1;
 }
 
-.tile-refresh-btn.spinning {
+/* ── Refresh overlay ── */
+
+.tile-refresh-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 10;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.15);
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 0.25s ease;
+}
+
+.tile-refresh-overlay.visible {
+	opacity: 1;
+}
+
+.tile-refresh-overlay svg {
+	width: 48px;
+	height: 48px;
+	color: rgba(255, 255, 255, 0.9);
+	stroke: currentColor;
 	animation: tile-refresh-spin 0.8s linear infinite;
+}
+
+.dark .tile-refresh-overlay {
+	background: rgba(255, 255, 255, 0.08);
 }
 
 @keyframes tile-refresh-spin {
