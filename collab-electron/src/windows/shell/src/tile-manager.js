@@ -7,11 +7,11 @@ import {
 } from "./canvas-state.js";
 import {
 	createTileDOM, positionTile, updateTileTitle, getTileLabel,
-	startInlineRename,
+	startInlineRename, updateLockButton,
 } from "./tile-renderer.js";
 import { toCollabFileUrl } from "@collab/shared/collab-file-url";
 import { workspaceRootMatch } from "@collab/shared/path-utils";
-import { attachDrag, attachResize } from "./tile-interactions.js";
+import { attachDrag, attachResize, updateResizeHandles } from "./tile-interactions.js";
 import { findAutoPlacement } from "./canvas-rpc.js";
 
 /**
@@ -458,6 +458,7 @@ export function createTileManager({
 			y: cy,
 			width: extra.width || size.width,
 			height: extra.height || size.height,
+			locked: true,
 			...extra,
 		});
 		snapToGrid(tile);
@@ -529,6 +530,15 @@ export function createTileManager({
 					d.webview.send("terminal:refresh");
 				}
 			},
+			onToggleLock: (id) => {
+				const t = getTile(id);
+				const d = tileDOMs.get(id);
+				if (!t || !d) return;
+				t.locked = !t.locked;
+				updateLockButton(d.lockBtn, t.locked);
+				updateResizeHandles(d.container, t.locked);
+				saveCanvasImmediate();
+			},
 		});
 
 		// Double-click title bar → center tile in viewport
@@ -584,6 +594,10 @@ export function createTileManager({
 				}
 			},
 		);
+
+		if (tile.locked !== false) {
+			updateResizeHandles(dom.container, true);
+		}
 
 		tileLayer.appendChild(dom.container);
 		tileDOMs.set(tile.id, dom);

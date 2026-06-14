@@ -16,6 +16,7 @@
  * @property {string} [userTitle] - Manual title override set by user
  * @property {string} [autoTitle] - Auto-computed title from terminal session
  * @property {number} zIndex - Stacking order
+ * @property {boolean} [locked] - Whether tile resize is locked (default true)
  */
 
 /** @type {Tile[]} */
@@ -24,13 +25,13 @@ export const tiles = [];
 let nextZIndex = 1;
 
 const DEFAULT_TILE_SIZES = {
-	term: { width: 400, height: 500 },
-	note: { width: 440, height: 540 },
-	code: { width: 440, height: 540 },
-	image: { width: 280, height: 280 },
-	graph: { width: 600, height: 500 },
-	browser: { width: 800, height: 650 },
-	pdf: { width: 600, height: 800 },
+	term: { width: 1180, height: 700 },
+	note: { width: 1180, height: 700 },
+	code: { width: 1180, height: 700 },
+	image: { width: 1180, height: 700 },
+	graph: { width: 1180, height: 700 },
+	browser: { width: 1180, height: 700 },
+	pdf: { width: 1180, height: 700 },
 };
 
 /** @param {TileType} type */

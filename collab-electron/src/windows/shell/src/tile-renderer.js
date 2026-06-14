@@ -31,6 +31,7 @@ function resolveInput(raw) {
  * @param {((id: string) => void)|null} [callbacks.onRename]
  * @param {((id: string) => void)|null} [callbacks.onDuplicate]
  * @param {((id: string) => void)|null} [callbacks.onRefresh]
+ * @param {((id: string) => void)|null} [callbacks.onToggleLock]
  */
 export function createTileDOM(tile, callbacks) {
   const container = document.createElement("div");
@@ -197,6 +198,19 @@ export function createTileDOM(tile, callbacks) {
     btnGroup.appendChild(refreshBtn);
   }
 
+  const lockBtn = document.createElement("button");
+  lockBtn.className = "tile-action-btn tile-lock-btn";
+  const lockedIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="9" height="7" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>`;
+  const unlockedIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="9" height="7" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/><line x1="8.5" y1="11" x2="8.5" y2="13"/></svg>`;
+  lockBtn.innerHTML = tile.locked !== false ? lockedIcon : unlockedIcon;
+  lockBtn.title = tile.locked !== false ? "Unlock resize" : "Lock resize";
+  lockBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+  lockBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (callbacks.onToggleLock) callbacks.onToggleLock(tile.id);
+  });
+  btnGroup.appendChild(lockBtn);
+
   const closeBtn = document.createElement("button");
   closeBtn.className = "tile-action-btn tile-close-btn";
   closeBtn.innerHTML = "&times;";
@@ -239,7 +253,14 @@ export function createTileDOM(tile, callbacks) {
   container.appendChild(contentArea);
   contentArea.appendChild(contentOverlay);
 
-  return { container, titleBar, titleText, contentArea, contentOverlay, closeBtn, urlInput, navBack, navForward, navReload };
+  return { container, titleBar, titleText, contentArea, contentOverlay, closeBtn, lockBtn, urlInput, navBack, navForward, navReload };
+}
+
+export function updateLockButton(lockBtn, locked) {
+  const lockedIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="9" height="7" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>`;
+  const unlockedIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="9" height="7" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/><line x1="8.5" y1="11" x2="8.5" y2="13"/></svg>`;
+  lockBtn.innerHTML = locked ? lockedIcon : unlockedIcon;
+  lockBtn.title = locked ? "Unlock resize" : "Lock resize";
 }
 
 export function getTileLabel(tile) {

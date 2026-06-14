@@ -301,6 +301,7 @@ export function attachResize(
 
     handle.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
+      if (tile.locked !== false) return;
       e.preventDefault();
       e.stopPropagation();
 
@@ -372,5 +373,17 @@ export function attachResize(
     });
 
     container.appendChild(handle);
+  }
+}
+
+/**
+ * Show or hide resize handles based on lock state.
+ * @param {HTMLElement} container
+ * @param {boolean} locked
+ */
+export function updateResizeHandles(container, locked) {
+  const handles = container.querySelectorAll(".tile-resize-handle");
+  for (const h of handles) {
+    h.style.display = locked ? "none" : "";
   }
 }

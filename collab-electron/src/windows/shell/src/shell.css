@@ -993,6 +993,15 @@ body.platform-win {
 	opacity: 1;
 }
 
+.tile-lock-btn {
+	font-size: 12px;
+}
+
+.tile-lock-btn:hover {
+	color: #ff9800;
+	opacity: 1;
+}
+
 /* ── Refresh overlay ── */
 
 .tile-refresh-overlay {

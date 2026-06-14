@@ -88,7 +88,6 @@ async function init() {
 		prefAgentWidth, prefAgentMode,
 		prefAgentPty, prefSidebarAgentGui,
 		prefLastTerminalCwd,
-		prefLastTerminalSize,
 	] = await Promise.all([
 		window.shellApi.getViewConfig(),
 		window.shellApi.workspaceList(),
@@ -99,11 +98,9 @@ async function init() {
 		window.shellApi.getPref("agent-pty-session"),
 		window.shellApi.getPref("sidebar-agent-gui"),
 		window.shellApi.getPref("lastTerminalCwd"),
-		window.shellApi.getPref("lastTerminalSize"),
 	]);
 
 	let lastTerminalCwd = prefLastTerminalCwd || null;
-	let lastTerminalSize = prefLastTerminalSize || null;
 
 	function getTerminalCwd() {
 		const focusedId = tileManager.getFocusedTileId();
@@ -117,16 +114,6 @@ async function init() {
 	function setLastTerminalCwd(cwd) {
 		lastTerminalCwd = cwd;
 		window.shellApi.setPref("lastTerminalCwd", cwd);
-	}
-
-	function getTerminalSize() {
-		if (lastTerminalSize) return { ...lastTerminalSize };
-		return defaultSize("term");
-	}
-
-	function setLastTerminalSize(width, height) {
-		lastTerminalSize = { width, height };
-		window.shellApi.setPref("lastTerminalSize", lastTerminalSize);
 	}
 
 	// DOM elements
@@ -618,9 +605,7 @@ async function init() {
 		onTerminalCwdChanged(cwd) {
 			setLastTerminalCwd(cwd);
 		},
-		onTerminalTileResized(width, height) {
-			setLastTerminalSize(width, height);
-		},
+		onTerminalTileResized() {},
 		onTerminalTileClosed() {
 			syncTileList();
 		},
@@ -866,7 +851,7 @@ async function init() {
 
 		// Try to find an adjacent tile to inherit cwd from
 		const adjacent = findNearestAdjacentTile(canvasX, canvasY);
-		const size = getTerminalSize();
+		const size = defaultSize("term");
 
 		let cwd;
 		if (adjacent) {
@@ -905,7 +890,7 @@ async function init() {
 
 		if (selected === "new-terminal") {
 			const cwd = getTerminalCwd();
-			const size = getTerminalSize();
+			const size = defaultSize("term");
 			const pos = findAutoPlacementForTerminal(cwd, size);
 			const tile = tileManager.createCanvasTile(
 				"term", pos.x, pos.y, { cwd, ...size },
@@ -1125,7 +1110,7 @@ async function init() {
 			window.shellApi.workspaceAdd();
 		} else if (action === "new-tile") {
 			const cwd = getTerminalCwd();
-			const size = getTerminalSize();
+			const size = defaultSize("term");
 			const pos = findAutoPlacementForTerminal(cwd, size);
 			const tile = tileManager.createCanvasTile(
 				"term", pos.x, pos.y, { cwd, ...size },
@@ -1276,7 +1261,7 @@ async function init() {
 					const cwd = args[0];
 					console.log(`[open-terminal] cwd="${cwd}"`);
 					setLastTerminalCwd(cwd);
-					const size = getTerminalSize();
+					const size = defaultSize("term");
 					const pos = findAutoPlacementForTerminal(cwd, size);
 					const tile = tileManager.createCanvasTile(
 						"term", pos.x, pos.y, { cwd, ...size },
