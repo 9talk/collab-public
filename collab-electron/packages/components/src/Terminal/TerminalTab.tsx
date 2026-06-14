@@ -30,6 +30,9 @@ function TerminalTab({
 }: TerminalTabProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const fitRef = useRef<FitAddon | null>(null);
+	const termRef = useRef<Terminal | null>(null);
+	const dataBufferRef = useRef<Uint8Array[]>([]);
+	const flushTimerRef = useRef<number | undefined>(undefined);
 
 	useEffect(() => {
 		const container = containerRef.current;
@@ -53,6 +56,7 @@ function TerminalTab({
 			macOptionIsMeta: false,
 			overviewRuler: { width: 8 },
 		});
+		termRef.current = term;
 
 		const fit = new FitAddon();
 		term.loadAddon(fit);
@@ -284,17 +288,15 @@ function TerminalTab({
 			window.api.ptyWrite(sessionId, data);
 		});
 
-		let dataBuffer: Uint8Array[] = [];
-		let flushTimer: number | undefined;
 
 		const flushData = () => {
-			if (dataBuffer.length === 0) {
-				flushTimer = undefined;
+			if (dataBufferRef.current.length === 0) {
+				flushTimerRef.current = undefined;
 				return;
 			}
-			const chunks = dataBuffer;
-			dataBuffer = [];
-			flushTimer = undefined;
+			const chunks = dataBufferRef.current;
+			dataBufferRef.current = [];
+			flushTimerRef.current = undefined;
 			// Merge all chunks into a single term.write() to avoid
 			// triggering multiple WebGL frames, which can cause
 			// ghosting when the renderer can't keep up.
@@ -346,9 +348,9 @@ function TerminalTab({
 			data: Uint8Array;
 		}) => {
 			if (payload.sessionId !== sessionId) return;
-			dataBuffer.push(payload.data);
-			if (flushTimer === undefined) {
-				flushTimer = window.setTimeout(
+			dataBufferRef.current.push(payload.data);
+			if (flushTimerRef.current === undefined) {
+				flushTimerRef.current = window.setTimeout(
 					flushData,
 					DATA_BUFFER_FLUSH_MS,
 				);
@@ -462,8 +464,8 @@ function TerminalTab({
 		mediaQuery.addEventListener("change", onThemeChange);
 
 		return () => {
-			if (flushTimer !== undefined) {
-				clearTimeout(flushTimer);
+			if (flushTimerRef.current !== undefined) {
+				clearTimeout(flushTimerRef.current);
 				flushData();
 			}
 			cancelAnimationFrame(rafId);
@@ -477,6 +479,7 @@ function TerminalTab({
 			window.api.offPtyData(sessionId, handleData);
 			offShellBlur();
 			term.dispose();
+			termRef.current = null;
 			fitRef.current = null;
 		};
 	}, [sessionId]);
@@ -492,15 +495,15 @@ function TerminalTab({
 			// Dispose and re-create the WebGL renderer to fully
 			// release any corrupted texture atlas memory, then
 			// force a full redraw.
-			if (flushTimer !== undefined) {
-				clearTimeout(flushTimer);
-				flushTimer = undefined;
+			const t = termRef.current;
+			if (!t) return;
+			if (flushTimerRef.current !== undefined) {
+				clearTimeout(flushTimerRef.current);
+				flushTimerRef.current = undefined;
 			}
-			dataBuffer = [];
-			term.clear();
-			const webgl = new WebglAddon();
-			webgl.onContextLoss(() => webgl.dispose());
-			term.loadAddon(webgl);
+			dataBufferRef.current = [];
+			t.clear();
+			t.loadAddon(new WebglAddon());
 			requestAnimationFrame(() => fitRef.current?.fit());
 		});
 		return unsub;
