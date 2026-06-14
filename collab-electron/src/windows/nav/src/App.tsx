@@ -196,13 +196,32 @@ export default function App() {
 		});
 	}, []);
 
+	const [workspaceAliases, setWorkspaceAliases] = useState<Record<string, string>>({});
+
+	// Load workspace aliases
+	useEffect(() => {
+		const loadAliases = async () => {
+			const result = await window.api.getPref("workspace_aliases");
+			if (result && typeof result === "object") {
+				setWorkspaceAliases(result as Record<string, string>);
+			}
+		};
+		loadAliases();
+	}, [workspacePaths]);
+
+	const saveAliases = useCallback((aliases: Record<string, string>) => {
+		setWorkspaceAliases(aliases);
+		window.api.setPref("workspace_aliases", aliases);
+	}, []);
+
 	const workspaces = useMemo(
 		() =>
 			workspacePaths.map((p) => ({
 				path: p,
-				name: displayBasename(p),
+				name: workspaceAliases[p] || displayBasename(p),
+				alias: workspaceAliases[p] || undefined,
 			})),
-		[workspacePaths],
+		[workspacePaths, workspaceAliases],
 	);
 	const sortedWorkspaces = useMemo(
 		() =>
@@ -812,6 +831,11 @@ export default function App() {
 						label: 'Import Web Article',
 					},
 					{ id: 'separator', label: '' },
+					{
+						id: 'set-alias',
+						label: workspaceAliases[item.path] ? 'Edit Alias' : 'Set Alias',
+					},
+					{ id: 'separator', label: '' },
 					...(ENABLE_GRAPH_TILES
 						? [
 								{
@@ -862,6 +886,10 @@ export default function App() {
 									label: '',
 								},
 								{
+									id: 'set-alias',
+									label: item.alias ? 'Edit Alias' : 'Set Alias',
+								},
+								{
 									id: 'rename',
 									label: 'Rename',
 								},
@@ -902,6 +930,10 @@ export default function App() {
 					{
 						id: 'delete',
 						label: 'Delete',
+					},
+					{
+						id: 'set-alias',
+						label: item.alias ? 'Edit Alias' : 'Set Alias',
 					},
 					{ id: 'separator', label: '' },
 					{
@@ -1009,7 +1041,23 @@ export default function App() {
 									),
 						);
 					break;
-				case 'remove-workspace':
+				case 'set-alias':
+						if (item) {
+							const currentAlias = workspaceAliases[item.path] || displayBasename(item.path);
+							const newAlias = prompt('Set alias for ' + displayBasename(item.path), currentAlias);
+							if (newAlias !== null) {
+								const trimmed = newAlias.trim();
+								const next = { ...workspaceAliases };
+								if (trimmed && trimmed !== displayBasename(item.path)) {
+									next[item.path] = trimmed;
+								} else {
+									delete next[item.path];
+								}
+								saveAliases(next);
+							}
+						}
+						break;
+					case 'remove-workspace':
 					if (
 						item &&
 						item.kind === 'workspace'

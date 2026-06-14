@@ -171,12 +171,25 @@ export const FolderRow = React.memo(function FolderRow({
 				/>
 			) : isWorkspace ? (
 				<div className="workspace-label">
-					<span className="workspace-parent">
-						{splitDisplayPath(item.path).parent}
-					</span>
-					<span className="workspace-name">
-						{item.name}
-					</span>
+					{item.alias ? (
+						<>
+							<span className="workspace-alias-icon" title="Click to show full path" onClick={(e) => {
+								e.stopPropagation();
+								e.currentTarget.closest(".workspace-label")?.classList.toggle("show-path");
+							}}>@</span>
+							<span className="workspace-alias-name">{item.alias}</span>
+							<span className="workspace-alias-path">{item.path}</span>
+						</>
+					) : (
+						<>
+							<span className="workspace-parent">
+								{splitDisplayPath(item.path).parent}
+							</span>
+							<span className="workspace-name workspace-name-real">
+								{item.name}
+							</span>
+						</>
+					)}
 				</div>
 			) : (
 				<span className="collection-tree-name">

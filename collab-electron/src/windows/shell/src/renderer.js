@@ -88,7 +88,8 @@ async function init() {
 		prefAgentWidth, prefAgentMode,
 		prefAgentPty, prefSidebarAgentGui,
 		prefLastTerminalCwd,
-	] = await Promise.all([
+			prefWorkspaceAliases,
+		] = await Promise.all([
 		window.shellApi.getViewConfig(),
 		window.shellApi.workspaceList(),
 		window.shellApi.getPref("panel-width-nav"),
@@ -98,9 +99,14 @@ async function init() {
 		window.shellApi.getPref("agent-pty-session"),
 		window.shellApi.getPref("sidebar-agent-gui"),
 		window.shellApi.getPref("lastTerminalCwd"),
+		window.shellApi.getPref("workspace_aliases"),
 	]);
 
 	let lastTerminalCwd = prefLastTerminalCwd || null;
+	let workspaceAliases =
+		prefWorkspaceAliases && typeof prefWorkspaceAliases === "object"
+			? prefWorkspaceAliases
+			: {};
 
 	function getTerminalCwd() {
 		const focusedId = tileManager.getFocusedTileId();

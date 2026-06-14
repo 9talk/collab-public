@@ -19,7 +19,7 @@ import { TreeView } from './TreeView';
 import { FolderRow } from './TreeView';
 
 export interface WorkspaceTreeProps {
-	workspace: { path: string; name: string };
+	workspace: { path: string; name: string; alias?: string };
 	isExpanded: boolean;
 	onToggleExpand: (
 		path: string,
@@ -318,8 +318,9 @@ export const WorkspaceTree = forwardRef<
 			name: workspace.name,
 			path: workspace.path,
 			isExpanded,
+			alias: workspace.alias,
 		}),
-		[workspace.path, workspace.name, isExpanded],
+		[workspace.path, workspace.name, workspace.alias, isExpanded],
 	);
 
 	const handleToggleFolder = useCallback(

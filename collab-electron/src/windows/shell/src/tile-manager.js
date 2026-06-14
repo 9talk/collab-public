@@ -30,6 +30,7 @@ export function createTileManager({
 	onTileFocused,
 	onTileDblClick,
 	onReposition,
+	getAliases = () => ({}),
 }) {
 	/** @type {Map<string, {container: HTMLElement, contentArea: HTMLElement, titleText: HTMLElement, webview?: HTMLElement}>} */
 	const tileDOMs = new Map();

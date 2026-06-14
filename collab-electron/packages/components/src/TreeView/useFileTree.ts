@@ -10,6 +10,7 @@ export interface FlatItem {
 	level: number;
 	name: string;
 	path: string;
+	alias?: string;
 	isExpanded?: boolean;
 	ctime?: string;
 	mtime?: string;

@@ -241,6 +241,8 @@ export function registerWorkspaceHandlers(
         return config.expanded_dirs;
       if (params.key === "agent_skip_permissions")
         return config.agent_skip_permissions;
+      if (params.key === "alias")
+        return config.alias ?? null;
       return null;
     },
   );
@@ -264,14 +266,23 @@ export function registerWorkspaceHandlers(
       } else if (params.key === "agent_skip_permissions") {
         config.agent_skip_permissions =
           params.value === true;
+      } else if (params.key === "alias") {
+        config.alias = typeof params.value === "string" && params.value.length > 0
+          ? params.value
+          : undefined;
       }
       saveWorkspaceConfig(params.workspacePath, config);
     },
   );
 
-  ipcMain.handle("workspace:list", () => ({
-    workspaces: appConfig.workspaces,
-  }));
+  ipcMain.handle("workspace:list", () => {
+    const aliases: Record<string, string> = {};
+    for (const ws of appConfig.workspaces) {
+      const cfg = getWsConfig(ws);
+      if (cfg.alias) aliases[ws] = cfg.alias;
+    }
+    return { workspaces: appConfig.workspaces, aliases };
+  });
 
   ipcMain.handle("workspace:add", async () => {
     const win = ctx.mainWindow();

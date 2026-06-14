@@ -5,6 +5,7 @@ import { atomicWriteFileSync } from "./files";
 export interface WorkspaceConfig {
   expanded_dirs: string[];
   agent_skip_permissions: boolean;
+  alias?: string;
 }
 
 const DEFAULT_CONFIG: WorkspaceConfig = {

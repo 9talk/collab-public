@@ -263,11 +263,15 @@ export function updateLockButton(lockBtn, locked) {
   lockBtn.title = locked ? "Unlock resize" : "Lock resize";
 }
 
-export function getTileLabel(tile) {
+export function getTileLabel(tile, aliases) {
   if (tile.type === "term") {
     if (tile.userTitle) return { parent: "", name: tile.userTitle };
     if (tile.autoTitle) return splitFilepath(tile.autoTitle);
-    if (tile.cwd) return splitFilepath(tile.cwd);
+    if (tile.cwd) {
+      const alias = aliases?.[tile.cwd];
+      if (alias) return { parent: tile.cwd, name: `${alias}(${tile.cwd})` };
+      return splitFilepath(tile.cwd);
+    }
     return { parent: "", name: "Terminal" };
   }
   if (tile.type === "browser") {
