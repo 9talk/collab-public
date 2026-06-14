@@ -502,7 +502,7 @@ function TerminalTab({
 				flushTimerRef.current = undefined;
 			}
 			dataBufferRef.current = [];
-			t.clear();
+			// Replace WebGL renderer to force a full redraw.
 			t.loadAddon(new WebglAddon());
 			requestAnimationFrame(() => fitRef.current?.fit());
 		});
