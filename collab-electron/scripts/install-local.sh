@@ -30,8 +30,44 @@ ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" \
 
 # Step 3: Replace the installed app
 echo "Installing to /Applications..."
-rm -rf /Applications/Collaborator.app
-cp -R "$PROJECT_DIR/dist/mac-arm64/Collaborator.app" /Applications/Collaborator.app
+
+# 3a: 删除旧应用，确保删除干净（文件夹不存在）
+if [ -d /Applications/Collaborator.app ]; then
+  echo "Removing old Collaborator.app..."
+  rm -rf /Applications/Collaborator.app
+
+  # 循环检查直到确认删除成功
+  RETRY=0
+  MAX_RETRIES=10
+  while [ -d /Applications/Collaborator.app ] && [ $RETRY -lt $MAX_RETRIES ]; do
+    echo "  Old app still exists, retrying removal (attempt $((RETRY + 2)))..."
+    sleep 0.5
+    rm -rf /Applications/Collaborator.app
+    RETRY=$((RETRY + 1))
+  done
+
+  if [ -d /Applications/Collaborator.app ]; then
+    echo "ERROR: Failed to remove old Collaborator.app after $MAX_RETRIES attempts." >&2
+    exit 1
+  fi
+  echo "  Old app removed successfully."
+fi
+
+# 3b: 安装新应用
+SOURCE_APP="$PROJECT_DIR/dist/mac-arm64/Collaborator.app"
+DEST_APP="/Applications/Collaborator.app"
+
+cp -R "$SOURCE_APP" "$DEST_APP"
+
+# 3c: 验证安装结果 — 对比源目录和目标目录，确保是新构建的版本
+echo "Verifying installation..."
+DIFF_OUTPUT="$(diff -rq "$SOURCE_APP" "$DEST_APP" 2>&1)" || true
+if [ -n "$DIFF_OUTPUT" ]; then
+  echo "ERROR: Installed app does not match the built version:" >&2
+  echo "$DIFF_OUTPUT" >&2
+  exit 1
+fi
+echo "  Installation verified — installed app matches built version."
 
 # Step 4: Clean up build artifacts (unless --keep)
 if [ "$KEEP" = false ]; then

@@ -84,3 +84,16 @@ body {
 }
 
 .tile-empty { padding: 12px var(--nav-inset); color: var(--muted-foreground); font-size: 11px; }
+
+.tile-alias-icon {
+  cursor: pointer;
+  user-select: none;
+  margin-right: 1px;
+  color: var(--accent, #5c9bcf);
+}
+
+.tile-alias-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

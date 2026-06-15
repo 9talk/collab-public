@@ -31,6 +31,27 @@ function isTileEntry(value: unknown): value is TileEntry {
   );
 }
 
+/**
+ * Match the tile's description (cwd / folderPath) against workspace paths,
+ * and return the matched workspace path if it has an alias.
+ */
+function resolveAliasWorkspace(
+  entry: TileEntry,
+  aliases: Record<string, string>,
+  workspacePaths: string[],
+): { workspacePath: string; alias: string } | null {
+  const path = entry.description;
+  if (!path || path === "~" || workspacePaths.length === 0) return null;
+  const normalized = path.replace(/\\/g, "/");
+  const matched = workspacePaths.find((wp) => {
+    const w = wp.replace(/\\/g, "/");
+    return normalized === w || normalized.startsWith(w + "/");
+  });
+  if (!matched) return null;
+  const alias = aliases[matched];
+  return alias ? { workspacePath: matched, alias } : null;
+}
+
 const TYPE_ICONS: Record<TileType, { icon: Icon; color: string }> = {
   term: { icon: Terminal, color: "#7aab6e" },
   browser: { icon: Browser, color: "#5c9bcf" },
@@ -45,6 +66,7 @@ function TileEntryRow({
   focused,
   isRenaming,
   renameValue,
+  aliasWorkspace,
   onClick,
   onDoubleClick,
   onContextMenu,
@@ -56,6 +78,7 @@ function TileEntryRow({
   focused: boolean;
   isRenaming: boolean;
   renameValue: string;
+  aliasWorkspace: { workspacePath: string; alias: string } | null;
   onClick: () => void;
   onDoubleClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
@@ -64,6 +87,7 @@ function TileEntryRow({
   onRenameCancel: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [showPath, setShowPath] = useState(false);
 
   useEffect(() => {
     if (isRenaming) {
@@ -104,6 +128,22 @@ function TileEntryRow({
           onBlur={onRenameConfirm}
           onClick={(e) => e.stopPropagation()}
         />
+      ) : aliasWorkspace ? (
+        <div className="tile-title">
+          <span
+            className="tile-alias-icon"
+            title="Click to toggle full path"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowPath((v) => !v);
+            }}
+          >
+            @
+          </span>
+          <span className="tile-alias-name">
+            {showPath ? aliasWorkspace.workspacePath : aliasWorkspace.alias}
+          </span>
+        </div>
       ) : (
         <div className="tile-title">{entry.title}</div>
       )}
@@ -116,6 +156,25 @@ function App() {
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+
+  const [aliases, setAliases] = useState<Record<string, string>>({});
+  const [workspacePaths, setWorkspacePaths] = useState<string[]>([]);
+
+  // Load aliases and workspace paths once on mount
+  useEffect(() => {
+    (async () => {
+      const pref = await window.api.getPref("workspace_aliases");
+      if (pref && typeof pref === "object") {
+        setAliases(pref as Record<string, string>);
+      }
+      try {
+        const cfg = await window.api.getConfig();
+        if (cfg?.workspaces) {
+          setWorkspacePaths(cfg.workspaces);
+        }
+      } catch {}
+    })();
+  }, []);
 
   useEffect(() => {
     const cleanup = window.api.onTileListMessage(
@@ -221,6 +280,7 @@ function App() {
           focused={entry.id === focusedId}
           isRenaming={entry.id === renamingId}
           renameValue={entry.id === renamingId ? renameValue : ""}
+          aliasWorkspace={resolveAliasWorkspace(entry, aliases, workspacePaths)}
           onClick={() => handleClick(entry.id)}
           onDoubleClick={() => handleDoubleClick(entry.id)}
           onContextMenu={(e) => handleContextMenu(entry.id, e)}
