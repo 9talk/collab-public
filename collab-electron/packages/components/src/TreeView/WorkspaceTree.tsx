@@ -48,6 +48,12 @@ export interface WorkspaceTreeProps {
 	onRenameChange?: (value: string) => void;
 	onRenameConfirm?: () => void;
 	onRenameCancel?: () => void;
+	aliasingPath?: string | null;
+	aliasValue?: string;
+	aliasInputRef?: React.RefObject<HTMLInputElement | null>;
+	onAliasChange?: (value: string) => void;
+	onAliasConfirm?: () => void;
+	onAliasCancel?: () => void;
 	onDragStart?: (
 		e: React.DragEvent,
 		path: string,
@@ -122,6 +128,12 @@ export const WorkspaceTree = forwardRef<
 		onRenameChange,
 		onRenameConfirm,
 		onRenameCancel,
+		aliasingPath,
+		aliasValue,
+		aliasInputRef,
+		onAliasChange,
+		onAliasConfirm,
+		onAliasCancel,
 		onDragStart,
 		onDragOver,
 		onDragLeave,
@@ -340,12 +352,18 @@ export const WorkspaceTree = forwardRef<
 				onCreateFile={onCreateFile}
 				onPlusClick={onPlusClick}
 				rowHeight={0}
-				isRenaming={false}
-				renameValue=""
-				renameInputRef={{ current: null }}
-				onRenameChange={() => {}}
-				onRenameConfirm={() => {}}
-				onRenameCancel={() => {}}
+				isRenaming={renamingPath === workspace.path}
+				renameValue={renamingPath === workspace.path ? (renameValue ?? '') : ''}
+				renameInputRef={renamingPath === workspace.path ? (renameInputRef ?? { current: null }) : { current: null }}
+				onRenameChange={renamingPath === workspace.path ? (onRenameChange ?? (() => {})) : () => {}}
+				onRenameConfirm={renamingPath === workspace.path ? (onRenameConfirm ?? (() => {})) : () => {}}
+				onRenameCancel={renamingPath === workspace.path ? (onRenameCancel ?? (() => {})) : () => {}}
+				isAliasing={aliasingPath === workspace.path}
+				aliasValue={aliasValue ?? ''}
+				aliasInputRef={aliasInputRef ?? { current: null }}
+				onAliasChange={onAliasChange ?? (() => {})}
+				onAliasConfirm={onAliasConfirm ?? (() => {})}
+				onAliasCancel={onAliasCancel ?? (() => {})}
 				onContextMenu={onContextMenu}
 				isDropTarget={
 					dropTargetPath === workspace.path
@@ -381,6 +399,12 @@ export const WorkspaceTree = forwardRef<
 							onRenameChange={onRenameChange}
 							onRenameConfirm={onRenameConfirm}
 							onRenameCancel={onRenameCancel}
+							aliasingPath={aliasingPath}
+							aliasValue={aliasValue}
+							aliasInputRef={aliasInputRef}
+							onAliasChange={onAliasChange}
+							onAliasConfirm={onAliasConfirm}
+							onAliasCancel={onAliasCancel}
 							dropTargetPath={dropTargetPath}
 							onDragStart={onDragStart}
 							onDragOver={onDragOver}
@@ -414,6 +438,12 @@ export const WorkspaceTree = forwardRef<
 					onRenameChange={onRenameChange}
 					onRenameConfirm={onRenameConfirm}
 					onRenameCancel={onRenameCancel}
+					aliasingPath={aliasingPath}
+					aliasValue={aliasValue}
+					aliasInputRef={aliasInputRef}
+					onAliasChange={onAliasChange}
+					onAliasConfirm={onAliasConfirm}
+					onAliasCancel={onAliasCancel}
 					dropTargetPath={dropTargetPath}
 					onDragStart={onDragStart}
 					onDragOver={onDragOver}

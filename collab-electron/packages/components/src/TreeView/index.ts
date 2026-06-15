@@ -29,5 +29,6 @@ export {
 } from './Helpers';
 export { useMultiSelect } from './useMultiSelect';
 export { useInlineRename } from './useInlineRename';
+export { useInlineAlias } from './useInlineAlias';
 export { useDragDrop } from './useDragDrop';
 export { getFileIcon } from './fileIcons';

@@ -57,6 +57,14 @@ window.shellApi.onPrefChanged((key, value) => {
 		lastCanvasOpacity = value;
 		applyCanvasOpacity(value);
 		broadcastCanvasOpacity();
+	} else if (key === "workspace_aliases") {
+		if (value && typeof value === "object") {
+			window.__tileAliases = value;
+			// Refresh all existing tile titles
+			if (window.__refreshTileTitles) {
+				window.__refreshTileTitles();
+			}
+		}
 	}
 });
 
@@ -107,6 +115,13 @@ async function init() {
 		prefWorkspaceAliases && typeof prefWorkspaceAliases === "object"
 			? prefWorkspaceAliases
 			: {};
+	// Merge per-workspace config aliases as well
+	if (workspaceData?.aliases) {
+		workspaceAliases = { ...workspaceAliases, ...workspaceData.aliases };
+	}
+
+	// Store as module-level variable for tile-renderer access
+	window.__tileAliases = workspaceAliases;
 
 	function getTerminalCwd() {
 		const focusedId = tileManager.getFocusedTileId();
@@ -429,7 +444,7 @@ async function init() {
 		let status = null;
 
 		if (tile.type === "term") {
-			const label = getTileLabel(tile);
+			const label = getTileLabel(tile, window.__tileAliases);
 			title = label.parent
 				? label.parent + label.name
 				: label.name;
@@ -624,6 +639,15 @@ async function init() {
 			edgeIndicators.panToTile(tile);
 		},
 	});
+
+	// Allow onPrefChanged handler to refresh all tile titles when aliases change
+	window.__refreshTileTitles = function () {
+		const tileDOMs = tileManager.getTileDOMs();
+		for (const [id, dom] of tileDOMs) {
+			const tile = tileManager.getTile(id);
+			if (tile) updateTileTitle(dom, tile);
+		}
+	};
 
 	// Expose canvas state getter for main process to use during quit.
 	// On exit, dedupe terminal tiles by cwd group — only the first tile

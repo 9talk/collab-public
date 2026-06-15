@@ -210,7 +210,7 @@ export function createEdgeIndicators({
 		removeTooltip();
 		const tooltip = document.createElement("div");
 		tooltip.className = "edge-dot-tooltip";
-		const label = getTileLabel(tile);
+		const label = getTileLabel(tile, window.__tileAliases);
 		const typeStr = getTileTypeLabel(tile.type);
 		tooltip.textContent = `${typeStr}: ${label.name}`;
 		edgeIndicatorsEl.appendChild(tooltip);

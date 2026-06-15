@@ -9,6 +9,7 @@ import {
 	SearchSortControls,
 	useMultiSelect,
 	useInlineRename,
+	useInlineAlias,
 	useDragDrop,
 	sortModeOrder,
 	TREE_SORT_MODE_STORAGE_KEY,
@@ -198,19 +199,35 @@ export default function App() {
 
 	const [workspaceAliases, setWorkspaceAliases] = useState<Record<string, string>>({});
 
-	// Load workspace aliases
+	// Load workspace aliases — per-workspace config first, fallback to global pref
 	useEffect(() => {
 		const loadAliases = async () => {
-			const result = await window.api.getPref("workspace_aliases");
-			if (result && typeof result === "object") {
-				setWorkspaceAliases(result as Record<string, string>);
+			const aliases: Record<string, string> = {};
+			for (const p of workspacePaths) {
+				try {
+					const a = await window.api.getWorkspacePref("alias", p);
+					if (a && typeof a === "string") aliases[p] = a;
+				} catch {}
 			}
+			// fallback: if no per-workspace aliases, try global pref
+			if (Object.keys(aliases).length === 0) {
+				const result = await window.api.getPref("workspace_aliases");
+				if (result && typeof result === "object") {
+					Object.assign(aliases, result as Record<string, string>);
+				}
+			}
+			setWorkspaceAliases(aliases);
 		};
 		loadAliases();
 	}, [workspacePaths]);
 
 	const saveAliases = useCallback((aliases: Record<string, string>) => {
 		setWorkspaceAliases(aliases);
+		// Persist to per-workspace .collaborator/config.json (primary)
+		for (const [p, alias] of Object.entries(aliases)) {
+			window.api.setWorkspacePref("alias", alias, p);
+		}
+		// Also store in global pref for shell renderer compatibility
 		window.api.setPref("workspace_aliases", aliases);
 	}, []);
 
@@ -714,6 +731,25 @@ export default function App() {
 	const inlineRenameRef = useRef(inlineRename);
 	inlineRenameRef.current = inlineRename;
 
+	const workspaceAliasesRef = useRef(workspaceAliases);
+	workspaceAliasesRef.current = workspaceAliases;
+	const saveAliasesRef = useRef(saveAliases);
+	saveAliasesRef.current = saveAliases;
+
+	const inlineAlias = useInlineAlias(
+		useCallback((path: string, newAlias: string) => {
+			const next = { ...workspaceAliasesRef.current };
+			if (!newAlias) {
+				delete next[path];
+			} else {
+				next[path] = newAlias;
+			}
+			saveAliasesRef.current(next);
+		}, []),
+	);
+	const inlineAliasRef = useRef(inlineAlias);
+	inlineAliasRef.current = inlineAlias;
+
 	const dragDrop = useDragDrop(
 		async (
 			sourcePaths: string[],
@@ -886,10 +922,6 @@ export default function App() {
 									label: '',
 								},
 								{
-									id: 'set-alias',
-									label: item.alias ? 'Edit Alias' : 'Set Alias',
-								},
-								{
 									id: 'rename',
 									label: 'Rename',
 								},
@@ -930,10 +962,6 @@ export default function App() {
 					{
 						id: 'delete',
 						label: 'Delete',
-					},
-					{
-						id: 'set-alias',
-						label: item.alias ? 'Edit Alias' : 'Set Alias',
 					},
 					{ id: 'separator', label: '' },
 					{
@@ -1042,21 +1070,15 @@ export default function App() {
 						);
 					break;
 				case 'set-alias':
-						if (item) {
-							const currentAlias = workspaceAliases[item.path] || displayBasename(item.path);
-							const newAlias = prompt('Set alias for ' + displayBasename(item.path), currentAlias);
-							if (newAlias !== null) {
-								const trimmed = newAlias.trim();
-								const next = { ...workspaceAliases };
-								if (trimmed && trimmed !== displayBasename(item.path)) {
-									next[item.path] = trimmed;
-								} else {
-									delete next[item.path];
-								}
-								saveAliases(next);
-							}
-						}
-						break;
+					if (item) {
+						const currentAlias = workspaceAliasesRef.current[item.path];
+						inlineAliasRef.current.startAlias(
+							item.path,
+							currentAlias || displayBasename(item.path),
+							currentAlias,
+						);
+					}
+					break;
 					case 'remove-workspace':
 					if (
 						item &&
@@ -1348,7 +1370,11 @@ export default function App() {
 			}
 
 			if (e.key === 'Escape') {
-				if (ir.renamingPath) {
+				const ia = inlineAliasRef.current;
+				if (ia.aliasingPath) {
+					e.preventDefault();
+					ia.cancelAlias();
+				} else if (ir.renamingPath) {
 					e.preventDefault();
 					ir.cancelRename();
 				} else if (sel) {
@@ -1511,6 +1537,24 @@ export default function App() {
 												}
 												onRenameCancel={
 													inlineRename.cancelRename
+												}
+												aliasingPath={
+													inlineAlias.aliasingPath
+												}
+												aliasValue={
+													inlineAlias.aliasValue
+												}
+												aliasInputRef={
+													inlineAlias.inputRef
+												}
+												onAliasChange={
+													inlineAlias.setAliasValue
+												}
+												onAliasConfirm={
+													inlineAlias.confirmAlias
+												}
+												onAliasCancel={
+													inlineAlias.cancelAlias
 												}
 												dropTargetPath={
 													dragDrop.dropTargetPath

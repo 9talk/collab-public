@@ -44,6 +44,12 @@ interface FolderRowProps {
 	onRenameChange: (value: string) => void;
 	onRenameConfirm: () => void;
 	onRenameCancel: () => void;
+	isAliasing?: boolean;
+	aliasValue?: string;
+	aliasInputRef?: React.RefObject<HTMLInputElement | null>;
+	onAliasChange?: (value: string) => void;
+	onAliasConfirm?: () => void;
+	onAliasCancel?: () => void;
 	onContextMenu?: (
 		e: React.MouseEvent,
 		item: FlatItem | null,
@@ -70,6 +76,45 @@ interface FolderRowProps {
 	hideChevron?: boolean;
 }
 
+
+const WorkspaceLabel = React.memo(function WorkspaceLabel({
+	item,
+}: {
+	item: FlatItem;
+}) {
+	const [showPath, setShowPath] = useState(false);
+
+	if (item.alias) {
+		return (
+			<div className="workspace-label">
+				<span
+					className="workspace-alias-icon"
+					title="Click to toggle full path"
+					onClick={(e) => {
+						e.stopPropagation();
+						setShowPath((v) => !v);
+					}}
+				>
+					@
+				</span>
+				<span className="workspace-alias-name">
+					{showPath ? item.path : item.alias}
+				</span>
+			</div>
+		);
+	}
+	return (
+		<div className="workspace-label">
+			<span className="workspace-parent">
+				{splitDisplayPath(item.path).parent}
+			</span>
+			<span className="workspace-name workspace-name-real">
+				{item.name}
+			</span>
+		</div>
+	);
+});
+
 export const FolderRow = React.memo(function FolderRow({
 	item,
 	onToggle,
@@ -81,8 +126,14 @@ export const FolderRow = React.memo(function FolderRow({
 	renameInputRef,
 	onRenameChange,
 	onRenameConfirm,
-	onContextMenu,
 	onRenameCancel,
+	onContextMenu,
+	isAliasing = false,
+	aliasValue = '',
+	aliasInputRef,
+	onAliasChange,
+	onAliasConfirm,
+	onAliasCancel,
 	isDropTarget,
 	onDragStart,
 	onDragOver,
@@ -145,7 +196,25 @@ export const FolderRow = React.memo(function FolderRow({
 					/>
 				)}
 			</span>
-			{isRenaming && !isWorkspace ? (
+			{isAliasing ? (
+					<input
+						ref={aliasInputRef}
+						className="inline-rename-input"
+						value={aliasValue}
+						onChange={(e) => onAliasChange?.(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault();
+								onAliasConfirm?.();
+							} else if (e.key === 'Escape') {
+								e.preventDefault();
+								onAliasCancel?.();
+							}
+						}}
+						onBlur={() => onAliasConfirm?.()}
+						onClick={(e) => e.stopPropagation()}
+					/>
+				) : isRenaming && !isWorkspace ? (
 				<input
 					ref={renameInputRef}
 					className="inline-rename-input"
@@ -170,27 +239,7 @@ export const FolderRow = React.memo(function FolderRow({
 					}
 				/>
 			) : isWorkspace ? (
-				<div className="workspace-label">
-					{item.alias ? (
-						<>
-							<span className="workspace-alias-icon" title="Click to show full path" onClick={(e) => {
-								e.stopPropagation();
-								e.currentTarget.closest(".workspace-label")?.classList.toggle("show-path");
-							}}>@</span>
-							<span className="workspace-alias-name">{item.alias}</span>
-							<span className="workspace-alias-path">{item.path}</span>
-						</>
-					) : (
-						<>
-							<span className="workspace-parent">
-								{splitDisplayPath(item.path).parent}
-							</span>
-							<span className="workspace-name workspace-name-real">
-								{item.name}
-							</span>
-						</>
-					)}
-				</div>
+				<WorkspaceLabel item={item} />
 			) : (
 				<span className="collection-tree-name">
 					{item.name}
@@ -265,6 +314,12 @@ export interface FileRowProps {
 	onRenameChange?: (value: string) => void;
 	onRenameConfirm?: () => void;
 	onRenameCancel?: () => void;
+	isAliasing?: boolean;
+	aliasValue?: string;
+	aliasInputRef?: React.RefObject<HTMLInputElement | null>;
+	onAliasChange?: (value: string) => void;
+	onAliasConfirm?: () => void;
+	onAliasCancel?: () => void;
 	onContextMenu?: (
 		e: React.MouseEvent,
 		item: FlatItem | null,
@@ -293,6 +348,12 @@ export const FileRow = React.memo(
 		onRenameConfirm,
 		onContextMenu,
 		onRenameCancel,
+		isAliasing = false,
+		aliasValue = "",
+		aliasInputRef,
+		onAliasChange,
+		onAliasConfirm,
+		onAliasCancel,
 		onDragStart,
 		onDragEnd,
 		sortMode,
@@ -359,7 +420,25 @@ export const FileRow = React.memo(
 						);
 					})()}
 				</span>
-				{isRenaming ? (
+				{isAliasing ? (
+					<input
+						ref={aliasInputRef}
+						className="inline-rename-input"
+						value={aliasValue}
+						onChange={(e) => onAliasChange?.(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault();
+								onAliasConfirm?.();
+							} else if (e.key === 'Escape') {
+								e.preventDefault();
+								onAliasCancel?.();
+							}
+						}}
+						onBlur={() => onAliasConfirm?.()}
+						onClick={(e) => e.stopPropagation()}
+					/>
+				) : isRenaming ? (
 					<input
 						ref={renameInputRef}
 						className="inline-rename-input"
@@ -427,6 +506,11 @@ export const FileRow = React.memo(
 		prev.onDelete === next.onDelete &&
 		prev.isRenaming === next.isRenaming &&
 		prev.renameValue === next.renameValue &&
+		prev.isAliasing === next.isAliasing &&
+		prev.aliasValue === next.aliasValue &&
+		prev.onAliasChange === next.onAliasChange &&
+		prev.onAliasConfirm === next.onAliasConfirm &&
+		prev.onAliasCancel === next.onAliasCancel &&
 		prev.onContextMenu === next.onContextMenu &&
 		prev.onDragStart === next.onDragStart &&
 		prev.onDragEnd === next.onDragEnd &&
@@ -463,6 +547,12 @@ interface TreeViewProps {
 	onRenameChange?: (value: string) => void;
 	onRenameConfirm?: () => void;
 	onRenameCancel?: () => void;
+	aliasingPath?: string | null;
+	aliasValue?: string;
+	aliasInputRef?: React.RefObject<HTMLInputElement | null>;
+	onAliasChange?: (value: string) => void;
+	onAliasConfirm?: () => void;
+	onAliasCancel?: () => void;
 	dropTargetPath?: string | null;
 	onDragStart?: (
 		e: React.DragEvent,
@@ -502,6 +592,12 @@ export const TreeView: React.FC<
 	onRenameChange,
 	onRenameConfirm,
 	onRenameCancel,
+	aliasingPath,
+	aliasValue,
+	aliasInputRef,
+	onAliasChange,
+	onAliasConfirm,
+	onAliasCancel,
 	dropTargetPath,
 	onDragStart,
 	onDragOver,
@@ -629,6 +725,30 @@ export const TreeView: React.FC<
 									onRenameCancel ??
 									(() => { })
 								}
+							isAliasing={
+								aliasingPath ===
+								item.path
+							}
+							aliasValue={
+								aliasValue ?? ""
+							}
+							aliasInputRef={
+								aliasInputRef ?? {
+									current: null,
+								}
+							}
+							onAliasChange={
+								onAliasChange ??
+								(() => { })
+							}
+							onAliasConfirm={
+								onAliasConfirm ??
+								(() => { })
+							}
+							onAliasCancel={
+								onAliasCancel ??
+								(() => { })
+							}
 								onContextMenu={
 									onContextMenu
 								}
@@ -688,6 +808,30 @@ export const TreeView: React.FC<
 							}
 							onRenameCancel={
 								onRenameCancel ??
+								(() => { })
+							}
+							isAliasing={
+								aliasingPath ===
+								item.path
+							}
+							aliasValue={
+								aliasValue ?? ''
+							}
+							aliasInputRef={
+								aliasInputRef ?? {
+									current: null,
+								}
+							}
+							onAliasChange={
+								onAliasChange ??
+								(() => { })
+							}
+							onAliasConfirm={
+								onAliasConfirm ??
+								(() => { })
+							}
+							onAliasCancel={
+								onAliasCancel ??
 								(() => { })
 							}
 							onContextMenu={
@@ -753,6 +897,30 @@ export const TreeView: React.FC<
 							}
 							onRenameCancel={
 								onRenameCancel ??
+								(() => { })
+							}
+							isAliasing={
+								aliasingPath ===
+								item.path
+							}
+							aliasValue={
+								aliasValue ?? ''
+							}
+							aliasInputRef={
+								aliasInputRef ?? {
+									current: null,
+								}
+							}
+							onAliasChange={
+								onAliasChange ??
+								(() => { })
+							}
+							onAliasConfirm={
+								onAliasConfirm ??
+								(() => { })
+							}
+							onAliasCancel={
+								onAliasCancel ??
 								(() => { })
 							}
 							onContextMenu={

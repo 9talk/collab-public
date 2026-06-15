@@ -44,7 +44,7 @@ export function createTileDOM(tile, callbacks) {
 
   const titleText = document.createElement("span");
   titleText.className = "tile-title-text";
-  const label = getTileLabel(tile);
+  const label = getTileLabel(tile, window.__tileAliases);
   const parentSpan = document.createElement("span");
   parentSpan.className = "tile-title-parent";
   parentSpan.textContent = label.parent;
@@ -294,7 +294,7 @@ export function splitFilepath(path) {
 }
 
 export function updateTileTitle(dom, tile) {
-  const label = getTileLabel(tile);
+  const label = getTileLabel(tile, window.__tileAliases);
   const titleText = dom.titleText;
   titleText.textContent = "";
   const parentSpan = document.createElement("span");
@@ -312,7 +312,7 @@ export function startInlineRename(dom, tile, onCommit) {
   const existing = dom.titleText.parentNode.querySelector(".tile-rename-input");
   if (existing) return;
   const titleText = dom.titleText;
-  const currentLabel = getTileLabel(tile);
+  const currentLabel = getTileLabel(tile, window.__tileAliases);
   const currentName = currentLabel.parent
     ? currentLabel.parent + currentLabel.name
     : currentLabel.name;

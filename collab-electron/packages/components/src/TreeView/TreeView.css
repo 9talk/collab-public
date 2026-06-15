@@ -577,46 +577,10 @@
 	flex-shrink: 0;
 }
 
-.workspace-alias-path {
-	display: none;
-	font-family: var(--font-sans);
-	font-size: 0.8rem;
-	font-weight: 400;
-	color: var(--muted-foreground);
-	opacity: 0.6;
-	white-space: nowrap;
-	margin-left: 6px;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.workspace-label.show-path .workspace-alias-icon {
-	display: none;
-}
-
-.workspace-label.show-path .workspace-alias-name {
-	display: none;
-}
-
-.workspace-label.show-path .workspace-alias-path {
-	display: inline;
-}
-
 /* hide the original parent/name spans when alias is shown */
-.workspace-label:has(.workspace-alias-icon) .workspace-parent {
-	display: none;
-}
-
+.workspace-label:has(.workspace-alias-icon) .workspace-parent,
 .workspace-label:has(.workspace-alias-icon) .workspace-name-real {
 	display: none;
-}
-
-.workspace-label.show-path .workspace-parent {
-	display: inline;
-}
-
-.workspace-label.show-path .workspace-name-real {
-	display: inline;
 }
 
 .workspace-name {
