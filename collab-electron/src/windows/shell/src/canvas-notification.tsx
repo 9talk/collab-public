@@ -25,8 +25,14 @@ export function createCanvasNotifications({ getTile, edgeIndicators, tileManager
 
   const root = createRoot(wrapper);
   root.render(
-    <Toaster position="top-right" duration={Infinity} visibleToasts={999} />,
+    <Toaster position="top-right" duration={Infinity} visibleToasts={3} />,
   );
+
+  // Centralized dismiss — always keeps toastTileMap in sync
+  function _dismissToast(toastId: string | number) {
+    toast.dismiss(toastId);
+    toastTileMap.delete(toastId);
+  }
 
   function show(tileId: string, message?: string) {
     const tile = _getTile(tileId);
@@ -41,7 +47,7 @@ export function createCanvasNotifications({ getTile, edgeIndicators, tileManager
         label: "TODO",
         onClick: () => {
           _focusTile(tileId);
-          toast.dismiss(id);
+          _dismissToast(id);
         },
       },
     });
@@ -53,7 +59,7 @@ export function createCanvasNotifications({ getTile, edgeIndicators, tileManager
       el.addEventListener("click", (e) => {
         if ((e.target as HTMLElement).closest("[data-button]")) return;
         _focusTile(tileId);
-        toast.dismiss(id);
+        _dismissToast(id);
       });
     } else {
       // The DOM node isn't mounted yet — wait for it
@@ -64,7 +70,7 @@ export function createCanvasNotifications({ getTile, edgeIndicators, tileManager
           el2.addEventListener("click", (e) => {
             if ((e.target as HTMLElement).closest("[data-button]")) return;
             _focusTile(tileId);
-            toast.dismiss(id);
+            _dismissToast(id);
           });
         }
       });
@@ -77,22 +83,22 @@ export function createCanvasNotifications({ getTile, edgeIndicators, tileManager
   function dismissFirst() {
     const first = toastTileMap.entries().next();
     if (first.done) return false;
-    const [id, tileId] = first.value;
+    const [, tileId] = first.value;
+    // Dismiss ALL toasts for the same tileId, not just the first one
     _focusTile(tileId);
-    toast.dismiss(id);
-    toastTileMap.delete(id);
+    dismissByTileId(tileId);
     return true;
   }
 
   function dismissByTileId(tileId: string) {
+    let found = false;
     for (const [toastId, tid] of toastTileMap) {
       if (tid === tileId) {
-        toast.dismiss(toastId);
-        toastTileMap.delete(toastId);
-        return true;
+        _dismissToast(toastId);
+        found = true;
       }
     }
-    return false;
+    return found;
   }
 
   return { show, dismissFirst, dismissByTileId };
