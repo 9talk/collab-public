@@ -2,7 +2,18 @@
   "mcpServers": {
     "colorsandfonts": {
       "command": "npx",
-      "args": ["-y", "@colorsandfonts/mcp"]
+      "args": [
+        "-y",
+        "@colorsandfonts/mcp"
+      ]
+    },
+    "codegraph": {
+      "type": "stdio",
+      "command": "codegraph",
+      "args": [
+        "serve",
+        "--mcp"
+      ]
     }
   }
 }
