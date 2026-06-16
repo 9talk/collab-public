@@ -148,17 +148,25 @@ const builtArches = targetArchitectures();
 // Vite build is arch-independent — run once.
 run(process.execPath, [electronVite, "build"]);
 
-// Package all target architectures in a single electron-builder run.
-// The arch list in package.json's build.<platform>.target already tells
-// electron-builder which architectures to produce, so passing --<arch>
-// per-invocation just causes redundant full builds + notarizations.
+// When --arch is explicitly passed with a single value, restrict the
+// mac target to that arch only (local dev skips x64 cross-compile).
+// "zip" strips the arch list from the config; --<arch> adds it back
+// so electron-builder builds exactly one arch. Without --arch, CI
+// still reads all configured architectures from package.json.
+if (builtArches.length === 1) {
+  builderArgs.push("-c.mac.target=zip");
+  builderArgs.push("--" + builtArches[0]);
+}
 run(process.execPath, [electronBuilder, ...builderArgs]);
 
 // electron-builder's npmRebuild rewrites node-pty's native binary in-place
 // for the last target architecture. On a cross-compile (e.g. x64 pass on an
 // arm64 Mac) this leaves the wrong ABI in node_modules, breaking `bun run dev`.
 // Rebuild for the host arch to restore a working dev environment.
-if (process.platform !== "win32") {
+const rebuildNeeded = process.platform !== "win32" && (
+  builtArches.length !== 1 || builtArches[0] !== process.arch
+);
+if (rebuildNeeded) {
   console.log("• Restoring node-pty for host architecture…");
   run(
     join(cwd, "node_modules", ".bin", "electron-rebuild"),

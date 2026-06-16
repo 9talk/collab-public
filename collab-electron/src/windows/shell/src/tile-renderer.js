@@ -172,7 +172,7 @@ export function createTileDOM(tile, callbacks) {
   if (tile.type === "term" && callbacks.onRefresh) {
     const refreshBtn = document.createElement("button");
     refreshBtn.className = "tile-action-btn tile-refresh-btn";
-    refreshBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 0-1.5 3.5"/><path d="M13 3v4h-4"/></svg>`;
+    refreshBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 0-1.5 3.5"/><path d="M13 3v4h-4"/></svg>`;
     refreshBtn.title = "Refresh terminal";
     refreshBtn.addEventListener("mousedown", (e) => e.stopPropagation());
     refreshBtn.addEventListener("click", (e) => {
@@ -200,8 +200,8 @@ export function createTileDOM(tile, callbacks) {
 
   const lockBtn = document.createElement("button");
   lockBtn.className = "tile-action-btn tile-lock-btn";
-  const lockedIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="9" height="7" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>`;
-  const unlockedIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="9" height="7" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/><line x1="8.5" y1="11" x2="8.5" y2="13"/></svg>`;
+  const lockedIcon = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="9" height="7" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>`;
+  const unlockedIcon = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="9" height="7" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/><line x1="8.5" y1="11" x2="8.5" y2="13"/></svg>`;
   lockBtn.innerHTML = tile.locked !== false ? lockedIcon : unlockedIcon;
   lockBtn.title = tile.locked !== false ? "Unlock resize" : "Lock resize";
   lockBtn.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -257,8 +257,8 @@ export function createTileDOM(tile, callbacks) {
 }
 
 export function updateLockButton(lockBtn, locked) {
-  const lockedIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="9" height="7" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>`;
-  const unlockedIcon = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="9" height="7" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/><line x1="8.5" y1="11" x2="8.5" y2="13"/></svg>`;
+  const lockedIcon = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="9" height="7" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>`;
+  const unlockedIcon = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="9" height="7" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/><line x1="8.5" y1="11" x2="8.5" y2="13"/></svg>`;
   lockBtn.innerHTML = locked ? lockedIcon : unlockedIcon;
   lockBtn.title = locked ? "Unlock resize" : "Lock resize";
 }
