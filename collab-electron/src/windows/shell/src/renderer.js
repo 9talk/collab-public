@@ -638,6 +638,30 @@ async function init() {
 		onTileDblClick(tile) {
 			edgeIndicators.panToTile(tile);
 		},
+		onTermScreenshot(tileId) {
+			// Show context menu → screenshot via webContents.capturePage()
+			const tile = tileManager.getTile(tileId);
+			if (!tile) return;
+			if (tile.type !== "term") return;
+			const dom = tileManager.getTileDOMs().get(tileId);
+			if (!dom?.webview) return;
+			if (!tile.ptySessionId) {
+				window.shellApi.showConfirmDialog({
+					message: "No terminal session",
+					detail: "This terminal tile has no active session.",
+					buttons: ["OK"],
+				});
+				return;
+			}
+			window.shellApi.showContextMenu([
+				{ id: "screenshot", label: "Screenshot" },
+			]).then((selected) => {
+				if (selected === "screenshot") {
+					const wcId = dom.webview.getWebContentsId();
+					window.shellApi.termScreenshotClipboard(wcId);
+				}
+			});
+		},
 	});
 
 	// Allow onPrefChanged handler to refresh all tile titles when aliases change

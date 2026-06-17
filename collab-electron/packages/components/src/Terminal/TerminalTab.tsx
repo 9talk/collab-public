@@ -437,6 +437,14 @@ function TerminalTab({
 		container.addEventListener("dragover", handleDragOver);
 		container.addEventListener("drop", handleDrop);
 
+		// Right-click → request screenshot via shell
+		const handleContextMenu = (e: MouseEvent) => {
+			e.preventDefault();
+			e.stopPropagation();
+			window.api.sendToHost("term:request-screenshot");
+		};
+		container.addEventListener("contextmenu", handleContextMenu);
+
 		const offShellBlur = window.api.onShellBlur(() => {
 			term.blur();
 			const active = document.activeElement as HTMLElement | null;

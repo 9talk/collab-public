@@ -380,4 +380,10 @@ contextBridge.exposeInMainWorld("shellApi", {
     ipcRenderer.invoke("navigation:go-back"),
   navigationGoForward: (): Promise<string | null> =>
     ipcRenderer.invoke("navigation:go-forward"),
+
+  // Terminal screenshot
+  termScreenshotClipboard: (
+    webContentsId: number,
+  ): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke("term:screenshot", { webContentsId }),
 });

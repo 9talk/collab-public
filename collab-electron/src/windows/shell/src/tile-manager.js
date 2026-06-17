@@ -29,6 +29,7 @@ export function createTileManager({
 	onTerminalTileResized,
 	onTileFocused,
 	onTileDblClick,
+	onTermScreenshot,
 	onReposition,
 	getAliases = () => ({}),
 }) {
@@ -241,6 +242,11 @@ export function createTileManager({
 				saveCanvasDebounced();
 				if (onTerminalSessionCreated) {
 					onTerminalSessionCreated(tile);
+				}
+			}
+			if (event.channel === "term:request-screenshot") {
+				if (onTermScreenshot) {
+					onTermScreenshot(tile.id);
 				}
 			}
 			if (event.channel === "pty-cwd-changed") {

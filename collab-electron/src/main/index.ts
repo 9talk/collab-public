@@ -2,12 +2,15 @@ import "./logger";
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   globalShortcut,
   ipcMain,
   Menu,
+  nativeImage,
   nativeTheme,
   net,
+  Notification,
   protocol,
   screen,
   session,
@@ -728,6 +731,30 @@ ipcMain.handle(
     _event,
     { sessionId, lines }: { sessionId: string; lines?: number },
   ) => pty.captureSession(sessionId, lines),
+);
+
+// Terminal screenshot: capturePage and copy to clipboard
+ipcMain.handle(
+  "term:screenshot",
+  async (
+    _event,
+    { webContentsId }: { webContentsId: number },
+  ) => {
+    const wc = webContentsModule.fromId(webContentsId);
+    if (!wc || wc.isDestroyed()) {
+      throw new Error("Terminal webview not found");
+    }
+    const img = await wc.capturePage();
+    clipboard.writeImage(img);
+    if (Notification.isSupported()) {
+      const n = new Notification({
+        title: "Screenshot Copied",
+        body: "Terminal screenshot has been copied to clipboard.",
+      });
+      n.show();
+    }
+    return { ok: true };
+  },
 );
 
 let settingsOpen = false;
