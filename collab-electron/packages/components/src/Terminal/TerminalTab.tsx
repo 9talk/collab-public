@@ -13,6 +13,7 @@ import "./TerminalTab.css";
 // call, preventing partial-render artifacts from the renderer
 // processing many small sequential writes.
 const DATA_BUFFER_FLUSH_MS = 5;
+const MAX_WEBGL_RETRIES = 3;
 const IS_MAC = window.api.getPlatform() === "darwin";
 
 interface TerminalTabProps {
@@ -33,15 +34,13 @@ function TerminalTab({
 	const termRef = useRef<Terminal | null>(null);
 	const dataBufferRef = useRef<Uint8Array[]>([]);
 	const flushTimerRef = useRef<number | undefined>(undefined);
+	const webglRetriesRef = useRef(0);
+	const createWebglRef = useRef<(() => void) | null>(null);
 
 	useEffect(() => {
 		const container = containerRef.current;
 		if (!container) return;
 		console.log("[TerminalTab] useEffect mounted, sessionId:", sessionId);
-
-		const prefersDark = window.matchMedia(
-			"(prefers-color-scheme: dark)",
-		).matches;
 
 		const term = new Terminal({
 			theme: getTheme(),
@@ -52,7 +51,6 @@ function TerminalTab({
 			cursorBlink: true,
 			scrollback: 200000,
 			allowProposedApi: true,
-			allowTransparency: prefersDark,
 			macOptionIsMeta: false,
 			overviewRuler: { width: 8 },
 		});
@@ -77,17 +75,47 @@ function TerminalTab({
 		);
 		term.loadAddon(webLinks);
 
-		// WebGL renderer: double-buffered canvas avoids the
-		// partial-paint artifacts the DOM renderer can show
-		// during rapid sequential writes. Falls back to DOM
-		// if the GPU context can't be acquired.
-		try {
-			const webgl = new WebglAddon();
-			webgl.onContextLoss(() => webgl.dispose());
-			term.loadAddon(webgl);
-		} catch {
-			// DOM renderer fallback — no action needed
+		// WebGL retry counter: tracks consecutive context losses.
+		// Reset to 0 on successful creation; incremented on each loss.
+		// After MAX_WEBGL_RETRIES, falls back to DOM renderer.
+		webglRetriesRef.current = 0;
+
+		/**
+		 * Create a WebglAddon with automatic recovery on GPU context loss.
+		 * On context loss the addon is disposed and a fresh one is created
+		 * on the next animation frame (giving the GPU time to settle).
+		 * After MAX_WEBGL_RETRIES consecutive failures, gives up and falls
+		 * back to the DOM renderer permanently.
+		 */
+		function createWebglRenderer(): void {
+			try {
+				const webgl = new WebglAddon();
+				webgl.onContextLoss(() => {
+					webgl.dispose();
+					webglRetriesRef.current++;
+					console.warn(
+						`[TerminalTab] WebGL context lost (retry ${webglRetriesRef.current}/${MAX_WEBGL_RETRIES})`,
+					);
+					if (webglRetriesRef.current <= MAX_WEBGL_RETRIES) {
+						requestAnimationFrame(() => {
+							createWebglRenderer();
+							fitRef.current?.fit();
+						});
+					} else {
+						console.warn(
+							"[TerminalTab] WebGL retries exhausted, falling back to DOM renderer",
+						);
+					}
+				});
+				term.loadAddon(webgl);
+				webglRetriesRef.current = 0;
+			} catch {
+				console.warn("[TerminalTab] WebGL unavailable, using DOM renderer");
+			}
 		}
+
+		createWebglRenderer();
+		createWebglRef.current = createWebglRenderer;
 
 		// Delay initial fit: the webview may not have its final
 		// dimensions when the page first loads. Double-rAF ensures
@@ -466,7 +494,6 @@ function TerminalTab({
 			"(prefers-color-scheme: dark)",
 		);
 		const onThemeChange = (e: MediaQueryListEvent) => {
-			term.options.allowTransparency = e.matches;
 			term.options.theme = getTheme();
 		};
 		mediaQuery.addEventListener("change", onThemeChange);
@@ -489,6 +516,7 @@ function TerminalTab({
 			term.dispose();
 			termRef.current = null;
 			fitRef.current = null;
+			createWebglRef.current = null;
 		};
 	}, [sessionId]);
 
@@ -500,9 +528,6 @@ function TerminalTab({
 
 	useEffect(() => {
 		const unsub = window.api.onTerminalRefresh(() => {
-			// Dispose and re-create the WebGL renderer to fully
-			// release any corrupted texture atlas memory, then
-			// force a full redraw.
 			const t = termRef.current;
 			if (!t) return;
 			if (flushTimerRef.current !== undefined) {
@@ -510,8 +535,10 @@ function TerminalTab({
 				flushTimerRef.current = undefined;
 			}
 			dataBufferRef.current = [];
-			// Replace WebGL renderer to force a full redraw.
-			t.loadAddon(new WebglAddon());
+			// Reset retry counter — manual refresh is a fresh start.
+			webglRetriesRef.current = 0;
+			// Re-create WebGL renderer to flush corrupted texture atlas.
+			createWebglRef.current?.();
 			requestAnimationFrame(() => fitRef.current?.fit());
 		});
 		return unsub;
