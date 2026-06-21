@@ -30,6 +30,7 @@ export function createTileManager({
 	onTileFocused,
 	onTileDblClick,
 	onTermScreenshot,
+	onLocate,
 	onReposition,
 	getAliases = () => ({}),
 }) {
@@ -537,6 +538,14 @@ export function createTileManager({
 					d.webview.send("terminal:refresh");
 				}
 			},
+			onLocate: onLocate
+				? (id) => {
+						const t = getTile(id);
+						if (t?.type === "term" && t.cwd) {
+							onLocate(t.cwd);
+						}
+					}
+				: undefined,
 			onToggleLock: (id) => {
 				const t = getTile(id);
 				const d = tileDOMs.get(id);

@@ -161,6 +161,7 @@ export const FolderRow = React.memo(function FolderRow({
 
 	return (
 		<div
+			data-item-id={item.path}
 			className={className}
 			style={style}
 			draggable={!isWorkspace}

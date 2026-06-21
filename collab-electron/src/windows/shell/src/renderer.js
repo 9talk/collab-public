@@ -627,6 +627,13 @@ async function init() {
 			setLastTerminalCwd(cwd);
 		},
 		onTerminalTileResized() {},
+		onLocate(cwd) {
+			if (panelManager.getMode() !== "files") {
+				panelManager.setMode("files");
+			}
+			// Send directly to nav webview to avoid viewer trying to readFile a directory path.
+			workspaceManager.getNavWebview().send("file-selected", cwd);
+		},
 		onTerminalTileClosed() {
 			syncTileList();
 		},

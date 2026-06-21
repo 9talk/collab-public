@@ -181,6 +181,8 @@ export default function App() {
 	const [selectedPath, setSelectedPath] = useState<
 		string | null
 	>(null);
+	const [highlightPath, setHighlightPath] = useState<string | null>(null);
+	const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const [importModal, setImportModal] = useState<{
 		folderPath: string;
 	} | null>(null);
@@ -520,7 +522,38 @@ export default function App() {
 
 	useEffect(() => {
 		return window.api.onFileSelected((path) => {
-			setSelectedPath(path);
+			setSelectedPath((prev) => {
+				// Always expand ancestors, even for same path (re-click support)
+				if (prev === path && path) {
+					queueMicrotask(() => {
+						const ws = workspacePathsRef.current.find(
+							(p) => isSubpath(p, path),
+						);
+						if (ws) {
+							setExpandedWorkspaces((prevExp) => {
+								if (prevExp.has(ws)) return prevExp;
+								const next = new Set(prevExp);
+								next.add(ws);
+								saveExpandedWorkspaces(next);
+								return next;
+							});
+							const ref = workspaceRefsMap.current.get(ws);
+							ref?.current?.expandAncestors(path);
+						}
+					});
+				}
+				return path;
+			});
+			// Trigger highlight flash
+			if (path) {
+				setHighlightPath(path);
+				if (highlightTimerRef.current) {
+					clearTimeout(highlightTimerRef.current);
+				}
+				highlightTimerRef.current = setTimeout(() => {
+					setHighlightPath(null);
+				}, 3000);
+			}
 		});
 	}, []);
 
@@ -529,6 +562,50 @@ export default function App() {
 			focusActiveSearch();
 		});
 	}, [focusActiveSearch]);
+
+	// Flash highlight on located folder
+	useEffect(() => {
+		if (!highlightPath) return;
+		let cancelled = false;
+		// Defer to next macrotask so expandAncestors (queued via
+		// queueMicrotask in onFileSelected) has rendered to the DOM.
+		const scheduleId = setTimeout(() => {
+			let el = document.querySelector(`[data-item-id="${CSS.escape(highlightPath)}"]`);
+			// The target row may still be outside the virtualized render
+			// window after expand — retry once after a paint.
+			if (!el) {
+				requestAnimationFrame(() => {
+					if (cancelled) return;
+					el = document.querySelector(`[data-item-id="${CSS.escape(highlightPath)}"]`);
+					if (!el) return;
+					applyFlash(el);
+				});
+				return;
+			}
+			applyFlash(el);
+		}, 0);
+
+		function applyFlash(el: Element) {
+			if (cancelled) return;
+			const container = containerRef.current;
+			if (container) {
+				const elRect = el.getBoundingClientRect();
+				const boxRect = container.getBoundingClientRect();
+				const offset = elRect.top - boxRect.top;
+				const targetScroll = container.scrollTop + offset - 24; // 24px padding from top
+				container.scrollTo({ top: targetScroll, behavior: "smooth" });
+			}
+			el.classList.add("locate-flash");
+			const timer = setTimeout(() => {
+				el.classList.remove("locate-flash");
+			}, 3000);
+		}
+
+		return () => {
+			cancelled = true;
+			clearTimeout(scheduleId);
+		};
+	}, [highlightPath]);
 
 	// Expand ancestors when a file is selected externally
 	useEffect(() => {

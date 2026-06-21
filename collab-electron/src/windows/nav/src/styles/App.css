@@ -315,3 +315,18 @@ button {
 		border-color: rgba(255, 255, 255, 0.08);
 	}
 }
+/* Locate-in-files flash highlight animation */
+@keyframes locate-flash-anim {
+	0% { box-shadow: inset 0 0 0 0 rgba(96, 165, 250, 0.5); background: rgba(96, 165, 250, 0.15); }
+	15% { box-shadow: inset 0 0 8px 1px rgba(96, 165, 250, 0.4); background: rgba(96, 165, 250, 0.08); }
+	30% { box-shadow: inset 0 0 0 0 rgba(96, 165, 250, 0.3); background: rgba(96, 165, 250, 0.04); }
+	50% { box-shadow: inset 0 0 8px 1px rgba(96, 165, 250, 0.35); background: rgba(96, 165, 250, 0.07); }
+	70% { box-shadow: inset 0 0 0 0 rgba(96, 165, 250, 0.2); background: rgba(96, 165, 250, 0.02); }
+	100% { box-shadow: inset 0 0 0 0 transparent; background: transparent; }
+}
+
+.collection-folder-row.locate-flash,
+.collection-item-row.locate-flash {
+	animation: locate-flash-anim 3s ease-out;
+	border-radius: 4px;
+}
