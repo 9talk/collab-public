@@ -195,6 +195,8 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.send("nav:reveal-in-finder", path),
   createGraphTile: (folderPath: string) =>
     ipcRenderer.send("nav:create-graph-tile", folderPath),
+  locateTerminal: (folderPath: string) =>
+    ipcRenderer.send("nav:locate-terminal", folderPath),
   runInTerminal: (command: string) =>
     ipcRenderer.send("viewer:run-in-terminal", command),
 

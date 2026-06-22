@@ -45,17 +45,7 @@ export function createTileDOM(tile, callbacks) {
 
   const titleText = document.createElement("span");
   titleText.className = "tile-title-text";
-  const label = getTileLabel(tile, window.__tileAliases);
-  const parentSpan = document.createElement("span");
-  parentSpan.className = "tile-title-parent";
-  parentSpan.textContent = label.parent;
-  const nameSpan = document.createElement("span");
-  nameSpan.className = "tile-title-name";
-  nameSpan.textContent = label.name;
-  titleText.appendChild(parentSpan);
-  titleText.appendChild(nameSpan);
-  if (tile.filePath) titleText.title = tile.filePath;
-  if (tile.folderPath) titleText.title = tile.folderPath;
+  renderTileTitleContent(titleText, tile, window.__tileAliases);
   titleBar.appendChild(titleText);
 
   // For browser tiles, add nav controls and a URL input to the title bar
@@ -284,7 +274,7 @@ export function getTileLabel(tile, aliases) {
     if (tile.autoTitle) return splitFilepath(tile.autoTitle);
     if (tile.cwd) {
       const alias = aliases?.[tile.cwd];
-      if (alias) return { parent: tile.cwd, name: `${alias}(${tile.cwd})` };
+      if (alias) return { parent: tile.cwd, name: alias };
       return splitFilepath(tile.cwd);
     }
     return { parent: "", name: "Terminal" };
@@ -308,19 +298,58 @@ export function splitFilepath(path) {
   return splitDisplayPath(path);
 }
 
-export function updateTileTitle(dom, tile) {
-  const label = getTileLabel(tile, window.__tileAliases);
-  const titleText = dom.titleText;
+function renderTileTitleContent(titleText, tile, aliases) {
   titleText.textContent = "";
-  const parentSpan = document.createElement("span");
-  parentSpan.className = "tile-title-parent";
-  parentSpan.textContent = label.parent;
-  const nameSpan = document.createElement("span");
-  nameSpan.className = "tile-title-name";
-  nameSpan.textContent = label.name;
-  titleText.appendChild(parentSpan);
-  titleText.appendChild(nameSpan);
-  titleText.title = tile.filePath || tile.folderPath || tile.cwd || "";
+  const alias = (tile.type === "term" && !tile.userTitle && tile.cwd)
+    ? aliases?.[tile.cwd]
+    : null;
+
+  if (alias) {
+    const iconSpan = document.createElement("span");
+    iconSpan.className = "tile-title-alias-icon";
+    iconSpan.textContent = "@";
+    iconSpan.title = "Click to toggle full path";
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "tile-title-alias-name";
+    nameSpan.textContent = alias;
+
+    let showPath = false;
+    let revertTimer = null;
+
+    iconSpan.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showPath = !showPath;
+      nameSpan.textContent = showPath ? tile.cwd : alias;
+      if (revertTimer) clearTimeout(revertTimer);
+      if (showPath) {
+        revertTimer = setTimeout(() => {
+          showPath = false;
+          nameSpan.textContent = alias;
+          revertTimer = null;
+        }, 3000);
+      }
+    });
+
+    titleText.appendChild(iconSpan);
+    titleText.appendChild(nameSpan);
+    titleText.title = tile.cwd || "";
+  } else {
+    const label = getTileLabel(tile, aliases);
+    const parentSpan = document.createElement("span");
+    parentSpan.className = "tile-title-parent";
+    parentSpan.textContent = label.parent;
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "tile-title-name";
+    nameSpan.textContent = label.name;
+    titleText.appendChild(parentSpan);
+    titleText.appendChild(nameSpan);
+    titleText.title = tile.filePath || tile.folderPath || tile.cwd || "";
+  }
+}
+
+export function updateTileTitle(dom, tile) {
+  renderTileTitleContent(dom.titleText, tile, window.__tileAliases);
 }
 
 export function startInlineRename(dom, tile, onCommit) {

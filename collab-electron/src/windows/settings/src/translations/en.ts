@@ -14,6 +14,8 @@ export const en = {
   "appearance.description": "Customize how Collaborator looks.",
   "appearance.theme": "Theme",
   "appearance.canvasOpacity": "Canvas opacity",
+  "appearance.rememberExpandedDirs": "Remember expanded folders",
+  "appearance.rememberExpandedDirsDesc": "Restore folder expansion state when reopening the app",
 
   // Terminal pane
   "terminal.title": "Terminal",

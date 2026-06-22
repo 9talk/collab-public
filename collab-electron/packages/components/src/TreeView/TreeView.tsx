@@ -10,6 +10,7 @@ import {
 	Terminal,
 	Plus,
 	Graph,
+	Crosshair,
 } from '@phosphor-icons/react';
 import type { FlatItem } from './useFileTree';
 import {
@@ -251,6 +252,18 @@ export const FolderRow = React.memo(function FolderRow({
 					{item.childCount}
 				</span>
 			)}
+			<button
+				className="folder-action-button"
+				data-tooltip="Locate terminal"
+				onClick={(e) => {
+					e.stopPropagation();
+					if (typeof window.api.locateTerminal === "function") {
+						window.api.locateTerminal(item.path);
+					}
+				}}
+			>
+				<Crosshair size={12} weight="bold" />
+			</button>
 			<button
 				className="folder-action-button"
 				data-tooltip="Create in folder"

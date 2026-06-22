@@ -171,13 +171,18 @@ export function useWorkspaceFileTree(
 
 	// Load persisted expanded dirs and root on mount
 	useEffect(() => {
-		window.api
-			.getWorkspacePref(
-				'expanded_dirs',
-				workspacePath,
-			)
+		window.api.getPref("rememberExpandedDirs")
+			.then((enabled) => {
+				console.log("[useWorkspaceFileTree] rememberExpandedDirs =", enabled, "workspace =", workspacePath);
+				if (enabled === false) return [];
+				return window.api.getWorkspacePref(
+					'expanded_dirs',
+					workspacePath,
+				);
+			})
 			.then((dirs) => {
 				if (Array.isArray(dirs)) {
+					console.log("[useWorkspaceFileTree] restoring expandedDirs count =", dirs.length);
 					setExpandedDirs(
 						new Set(dirs as string[]),
 					);

@@ -1376,6 +1376,16 @@ async function init() {
 					);
 					minimap.update();
 				}
+				if (channel === "locate-terminal") {
+					const folderPath = args[0];
+					const termTile = tiles.find(
+						(t) => t.type === "term" && t.cwd === folderPath,
+					);
+					if (termTile) {
+						edgeIndicators.panToTile(termTile);
+						tileManager.focusCanvasTile(termTile.id);
+					}
+				}
 			}
 		},
 	);

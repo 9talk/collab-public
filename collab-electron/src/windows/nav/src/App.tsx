@@ -261,6 +261,7 @@ export default function App() {
 		useState<Set<string>>(new Set());
 	const [pendingExpandAll, setPendingExpandAll] =
 		useState<Set<string>>(new Set());
+	const suppressWorkspaceExpandRef = useRef(false);
 
 	// Refs for each workspace's imperative handle
 	const workspaceRefsMap = useRef(
@@ -399,8 +400,16 @@ export default function App() {
 	// Load persisted expanded workspaces
 	useEffect(() => {
 		window.api
-			.getPref('expanded_workspaces')
+			.getPref("rememberExpandedDirs")
+			.then((enabled) => {
+				if (enabled === false) {
+					suppressWorkspaceExpandRef.current = true;
+					return null;
+				}
+				return window.api.getPref('expanded_workspaces');
+			})
 			.then((stored) => {
+				if (stored === null) return;
 				if (
 					Array.isArray(stored) &&
 					stored.length > 0
@@ -441,7 +450,7 @@ export default function App() {
 				for (const p of prev) {
 					if (roots.has(p)) valid.add(p);
 				}
-				if (valid.size === 0) return roots;
+				if (valid.size === 0 && !suppressWorkspaceExpandRef.current) return roots;
 				return valid;
 			});
 			// Clean up refs for removed workspaces

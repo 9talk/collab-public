@@ -276,6 +276,7 @@ export interface CollabApi {
   // Navigation
   openInTerminal: (path: string) => void;
   createGraphTile: (folderPath: string) => void;
+  locateTerminal: (folderPath: string) => void;
   runInTerminal: (command: string) => void;
   onRunInTerminal: (cb: RunInTerminalCb) => void;
   offRunInTerminal: (cb: RunInTerminalCb) => void;

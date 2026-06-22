@@ -18,6 +18,8 @@ export const zh: Record<TranslationKey, string> = {
   "appearance.description": "自定义 Collaborator 的显示效果。",
   "appearance.theme": "主题",
   "appearance.canvasOpacity": "画布不透明度",
+  "appearance.rememberExpandedDirs": "记住展开的文件夹",
+  "appearance.rememberExpandedDirsDesc": "重新打开应用时恢复之前的展开状态",
 
   // Terminal pane
   "terminal.title": "终端",

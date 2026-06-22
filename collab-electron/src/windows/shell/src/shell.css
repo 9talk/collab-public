@@ -951,6 +951,24 @@ body.platform-win {
 	flex-shrink: 0;
 }
 
+.tile-title-alias-icon {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--muted);
+	cursor: pointer;
+	margin-right: 2px;
+	flex-shrink: 0;
+	user-select: none;
+}
+
+.tile-title-alias-icon:hover {
+	color: var(--fg);
+}
+
+.tile-title-alias-name {
+	flex-shrink: 0;
+}
+
 .tile-btn-group {
 	display: flex;
 	align-items: center;

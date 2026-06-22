@@ -114,4 +114,15 @@ export function registerKnowledgeHandlers(
       );
     },
   );
+
+  ipcMain.on(
+    "nav:locate-terminal",
+    (_event, folderPath: string) => {
+      ctx.forwardToWebview(
+        "canvas",
+        "locate-terminal",
+        folderPath,
+      );
+    },
+  );
 }

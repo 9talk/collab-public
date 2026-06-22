@@ -182,6 +182,7 @@ function AppearancePane({ t }: { t: (key: TranslationKey) => string }) {
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [canvasOpacity, setCanvasOpacity] = useState(0);
   const [locale, setLocale] = useState<SupportedLocale>("en");
+  const [rememberExpandedDirs, setRememberExpandedDirs] = useState(true);
 
   useEffect(() => {
     api.getPref("theme")
@@ -200,6 +201,11 @@ function AppearancePane({ t }: { t: (key: TranslationKey) => string }) {
         if (v === "en" || v === "zh") setLocale(v);
       })
       .catch(() => { });
+    api.getPref("rememberExpandedDirs")
+      .then((v) => {
+        if (typeof v === "boolean") setRememberExpandedDirs(v);
+      })
+      .catch(() => { });
   }, []);
 
   async function handleThemeChange(mode: ThemeMode) {
@@ -210,6 +216,11 @@ function AppearancePane({ t }: { t: (key: TranslationKey) => string }) {
   async function handleOpacityChange(value: number) {
     setCanvasOpacity(value);
     await api.setPref("canvasOpacity", value);
+  }
+
+  async function handleRememberExpandedDirsChange(value: boolean) {
+    setRememberExpandedDirs(value);
+    await api.setPref("rememberExpandedDirs", value);
   }
 
   return (
@@ -260,6 +271,19 @@ function AppearancePane({ t }: { t: (key: TranslationKey) => string }) {
           value={canvasOpacity}
           onChange={(v) => { void handleOpacityChange(v); }}
         />
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">{t("appearance.rememberExpandedDirs")}</p>
+            <p className="text-xs text-muted-foreground">{t("appearance.rememberExpandedDirsDesc")}</p>
+          </div>
+          <ToggleSwitch
+            checked={rememberExpandedDirs}
+            onChange={(v) => { void handleRememberExpandedDirsChange(v); }}
+          />
+        </div>
       </div>
     </div>
   );
