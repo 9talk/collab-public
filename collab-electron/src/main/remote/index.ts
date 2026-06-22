@@ -5,6 +5,7 @@ import { generateToken, getLocalIP } from "./auth";
 import { createHttpServer } from "./http-server";
 import { RemoteWSServer } from "./ws-server";
 import type { AppConfig } from "../config";
+import { handleRemoteRPC } from "./rpc-bridge";
 
 export class RemoteServer {
   private httpServer: ReturnType<typeof createHttpServer> | null = null;
@@ -12,6 +13,7 @@ export class RemoteServer {
   private token: string = "";
   private port: number = 9357;
   private started = false;
+  private canvasState: unknown = null;
 
   get wsServer(): RemoteWSServer | null {
     return this.wsServerInternal;
@@ -33,6 +35,25 @@ export class RemoteServer {
     return this.started;
   }
 
+  getCanvasState(): unknown {
+    return this.canvasState;
+  }
+
+  setCanvasState(state: unknown): void {
+    this.canvasState = state;
+  }
+
+  broadcastCanvasState(state: unknown): void {
+    this.wsServerInternal?.broadcast("canvas:stateChanged", state);
+  }
+
+  broadcastPTYData(sessionId: string, data: string): void {
+    this.wsServerInternal?.broadcast(`pty:data:${sessionId}`, {
+      sessionId,
+      data,
+    });
+  }
+
   async start(_config: AppConfig, _password: string, port?: number): Promise<void> {
     if (this.started) await this.stop();
 
@@ -44,6 +65,7 @@ export class RemoteServer {
     const mainOutDir = path.join(appPath, "out", "main");
 
     this.wsServerInternal = new RemoteWSServer(this.token);
+    this.wsServerInternal.setRPCHandler(handleRemoteRPC);
 
     this.httpServer = createHttpServer({
       staticDir: rendererDir,

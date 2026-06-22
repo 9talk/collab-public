@@ -57,6 +57,8 @@ import { readSessionMeta } from "./session-meta";
 import { registerBrowserIpc } from "./ipc-browser";
 import { registerAgentIpc } from "./acp-agent";
 import * as canvasPersistence from "./canvas-persistence";
+import { getRemoteServer } from "./remote";
+import { setBridgeContext } from "./remote/rpc-bridge";
 
 // macOS apps launched from Finder don't inherit the user's shell
 // LANG, so child processes default to ASCII.
@@ -585,7 +587,13 @@ ipcMain.handle("shell:get-view-config", () => {
 
 ipcMain.handle(
   "pref:get",
-  (_event, key: string) => getPref(config, key),
+  (_event, key: string) => {
+    if (key === "remote.connectionURL") {
+      const server = getRemoteServer();
+      if (server.isRunning()) return server.getConnectionURL();
+    }
+    return getPref(config, key);
+  },
 );
 
 ipcMain.handle(
@@ -597,6 +605,18 @@ ipcMain.handle(
     }
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("pref:changed", key, value);
+    }
+    // Remote server lifecycle
+    if (key === "remote.enabled" || key === "remote.port" || key === "remote.password") {
+      const enabled = key === "remote.enabled" ? value === true : getPref(config, "remote.enabled");
+      const password = getPref(config, "remote.password") as string;
+      const port = (getPref(config, "remote.port") as number) || 9357;
+      const server = getRemoteServer();
+      if (enabled && password) {
+        server.stop().then(() => server.start(config, password, port));
+      } else if (!enabled) {
+        server.stop();
+      }
     }
   },
 );
@@ -905,6 +925,26 @@ app.whenReady().then(async () => {
   createWindow();
   registerAgentIpc(mainWindow!, config);
   registerToggleShortcuts(mainWindow!);
+
+  // Set up remote access bridge context
+  setBridgeContext(mainWindow);
+
+  // Start remote server if enabled
+  const remoteEnabled = getPref(config, "remote.enabled") as boolean;
+  const remoteAutoStart = getPref(config, "remote.autoStart") as boolean;
+  if (remoteEnabled || remoteAutoStart) {
+    const remotePassword = getPref(config, "remote.password") as string;
+    const remotePort = (getPref(config, "remote.port") as number) || 9357;
+    if (remotePassword) {
+      try {
+        const remoteServer = getRemoteServer();
+        await remoteServer.start(config, remotePassword, remotePort);
+        setPref(config, "remote.connectionURL", remoteServer.getConnectionURL());
+      } catch (err) {
+        console.error("Failed to start remote server:", err);
+      }
+    }
+  }
 
   // Register F1 as a global shortcut: bring app to front when in background,
   // dismiss the first notification when already focused.
