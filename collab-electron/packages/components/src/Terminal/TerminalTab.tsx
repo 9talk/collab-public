@@ -265,6 +265,24 @@ function TerminalTab({
 			return true;
 		});
 
+		// OSC 9;4: terminal progress indicator (Claude Code etc.)
+		// 0 = CLEAR, 1 = SET, 2 = ERROR, 3 = INDETERMINATE
+		term.parser.registerOscHandler(9, (data) => {
+			const semi = data.indexOf(";");
+			const kind = semi >= 0 ? data.slice(0, semi) : data;
+			const rest = semi >= 0 ? data.slice(semi + 1) : "";
+			if (kind === "4") {
+				const semi2 = rest.indexOf(";");
+				const state = semi2 >= 0 ? rest.slice(0, semi2) : rest;
+				if (state === "1" || state === "2" || state === "3") {
+					window.api.notifyTerminalStatus(sessionId, "running");
+				} else {
+					window.api.notifyTerminalStatus(sessionId, "idle");
+				}
+			}
+			return true;
+		});
+
 		// Registered slash commands for tab-completion and handling
 		const SLASH_COMMANDS = ["/clear"] as const;
 

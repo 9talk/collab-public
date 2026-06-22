@@ -7,7 +7,7 @@ import {
 } from "./canvas-state.js";
 import {
 	createTileDOM, positionTile, updateTileTitle, getTileLabel,
-	startInlineRename, updateLockButton,
+	startInlineRename, updateLockButton, updateTileStatus,
 } from "./tile-renderer.js";
 import { toCollabFileUrl } from "@collab/shared/collab-file-url";
 import { workspaceRootMatch } from "@collab/shared/path-utils";
@@ -263,6 +263,19 @@ export function createTileManager({
 					if (onTerminalCwdChanged) {
 						onTerminalCwdChanged(cwd);
 					}
+				}
+			}
+			if (event.channel === "term:status-changed") {
+				const sessionId = event.args[0];
+				const status = event.args[1];
+				const command = event.args[2] || "";
+				const t = tiles.find(
+					(t) => t.ptySessionId === sessionId,
+				);
+				if (t) {
+					t.running = status === "running";
+					t.runningCommand = status === "running" ? command : "";
+					updateTileStatus(tileDOMs.get(t.id), t);
 				}
 			}
 		});

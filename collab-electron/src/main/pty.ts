@@ -228,6 +228,8 @@ function utf8Env(): Record<string, string> {
   }
   env.COLORTERM = "truecolor";
   env.FORCE_COLOR = "3";
+  env.TERM_PROGRAM = "iTerm.app";
+  env.TERM_PROGRAM_VERSION = "3.6.6";
   return env;
 }
 

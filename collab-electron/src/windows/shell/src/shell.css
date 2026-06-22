@@ -1087,6 +1087,38 @@ body.platform-win {
 	color: rgba(255, 255, 255, 0.7);
 }
 
+.tile-run-indicator {
+	height: 3px;
+	background: linear-gradient(
+		90deg,
+		transparent 0%,
+		transparent 30%,
+		var(--accent, #3b82f6) 50%,
+		transparent 70%,
+		transparent 100%
+	);
+	background-size: 200% 100%;
+	opacity: 0;
+	transition: opacity 0.15s;
+	flex-shrink: 0;
+}
+.tile-run-indicator.active {
+	opacity: 1;
+	animation: run-sweep 4s ease-in-out infinite;
+}
+@keyframes run-sweep {
+	from { background-position: 100% 0; }
+	to { background-position: -100% 0; }
+}
+.tile-run-indicator.active {
+	opacity: 1;
+	animation: run-sweep 3s linear infinite;
+}
+@keyframes run-sweep {
+	from { background-position: 200% 0; }
+	to { background-position: -200% 0; }
+}
+
 .canvas-tile[data-tile-type="note"] .tile-title-bar,
 .canvas-tile[data-tile-type="code"] .tile-title-bar {
 	background: #e7e7e7;

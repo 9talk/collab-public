@@ -266,6 +266,7 @@ export interface CollabApi {
     backend?: "sidecar";
   } | null>;
   notifyPtySessionId: (sessionId: string) => void;
+  notifyTerminalStatus: (sessionId: string, status: string, command?: string) => void;
   onPtyData: (sessionId: string, cb: PtyDataCb) => void;
   offPtyData: (sessionId: string, cb: PtyDataCb) => void;
   onPtyExit: (sessionId: string, cb: PtyExitCb) => void;
