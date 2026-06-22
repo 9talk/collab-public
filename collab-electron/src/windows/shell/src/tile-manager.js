@@ -40,6 +40,17 @@ export function createTileManager({
 	let saveTimer = null;
 	let focusedTileId = null;
 
+	const isRemote = !!window.api?.isRemote;
+
+	function toRemotePath(configURL) {
+		try {
+			const u = new URL(configURL);
+			return u.pathname + u.search;
+		} catch {
+			return configURL;
+		}
+	}
+
 	// Viewport read-only accessor for tile-interactions
 	const viewport = {
 		get panX() { return viewportState.panX; },
@@ -206,6 +217,33 @@ export function createTileManager({
 		const dom = tileDOMs.get(tile.id);
 		if (!dom) return;
 
+		if (isRemote) {
+			const iframe = document.createElement("iframe");
+			const termConfig = configs.terminalTile;
+			const params = new URLSearchParams();
+			params.set("tileId", tile.id);
+			if (tile.ptySessionId) {
+				params.set("sessionId", tile.ptySessionId);
+				params.set("restored", "1");
+				if (tile.cwd) params.set("cwd", tile.cwd);
+			} else if (tile.cwd) {
+				params.set("cwd", tile.cwd);
+			}
+			const qs = params.toString();
+			const base = toRemotePath(termConfig.src);
+			iframe.src = qs ? `${base}?${qs}` : base;
+			iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
+			iframe.style.width = "100%";
+			iframe.style.height = "100%";
+			iframe.style.border = "none";
+			dom.contentArea.appendChild(iframe);
+			dom.webview = iframe;
+			iframe.addEventListener("load", () => {
+				if (autoFocus) focusCanvasTile(tile.id);
+			});
+			return;
+		}
+
 		const wv = document.createElement("webview");
 		const termConfig = configs.terminalTile;
 		const params = new URLSearchParams();
@@ -292,6 +330,24 @@ export function createTileManager({
 		const dom = tileDOMs.get(tile.id);
 		if (!dom) return;
 
+		if (isRemote) {
+			const iframe = document.createElement("iframe");
+			const graphConfig = configs.graphTile;
+			const params = new URLSearchParams();
+			params.set("folder", tile.folderPath);
+			params.set("workspace", tile.workspacePath ?? "");
+			const qs = params.toString();
+			const base = toRemotePath(graphConfig.src);
+			iframe.src = `${base}?${qs}`;
+			iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
+			iframe.style.width = "100%";
+			iframe.style.height = "100%";
+			iframe.style.border = "none";
+			dom.contentArea.appendChild(iframe);
+			dom.webview = iframe;
+			return;
+		}
+
 		const wv = document.createElement("webview");
 		const graphConfig = configs.graphTile;
 		const params = new URLSearchParams();
@@ -331,6 +387,18 @@ export function createTileManager({
 		}
 		const blocked = /^(javascript|file|data):/i;
 		if (blocked.test(url)) return;
+
+		if (isRemote) {
+			const iframe = document.createElement("iframe");
+			iframe.src = url;
+			iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
+			iframe.style.width = "100%";
+			iframe.style.height = "100%";
+			iframe.style.border = "none";
+			dom.contentArea.appendChild(iframe);
+			dom.webview = iframe;
+			return;
+		}
 
 		const wv = document.createElement("webview");
 		wv.setAttribute("src", url);
@@ -672,14 +740,21 @@ export function createTileManager({
 		if (!dom) return tile;
 
 		if (type === "pdf") {
-			const wv = document.createElement("webview");
-			wv.setAttribute("src", toCollabFileUrl(filePath));
-			wv.setAttribute("webpreferences", "contextIsolation=yes, sandbox=yes");
-			wv.style.width = "100%";
-			wv.style.height = "100%";
-			wv.style.border = "none";
-			dom.contentArea.appendChild(wv);
-			dom.webview = wv;
+			if (isRemote) {
+				const div = document.createElement("div");
+				div.style.cssText = "display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:var(--muted-foreground, #888);font-size:13px";
+				div.textContent = "PDF viewing not supported in remote mode";
+				dom.contentArea.appendChild(div);
+			} else {
+				const wv = document.createElement("webview");
+				wv.setAttribute("src", toCollabFileUrl(filePath));
+				wv.setAttribute("webpreferences", "contextIsolation=yes, sandbox=yes");
+				wv.style.width = "100%";
+				wv.style.height = "100%";
+				wv.style.border = "none";
+				dom.contentArea.appendChild(wv);
+				dom.webview = wv;
+			}
 		} else if (type === "image") {
 			const img = document.createElement("img");
 			img.src = toCollabFileUrl(filePath);
@@ -689,26 +764,40 @@ export function createTileManager({
 			img.draggable = false;
 			dom.contentArea.appendChild(img);
 		} else {
-			const wv = document.createElement("webview");
-			const viewerConfig = configs.viewer;
-			const mode = type === "note" ? "note" : "code";
-			wv.setAttribute(
-				"src",
-				`${viewerConfig.src}?tilePath=${encodeURIComponent(filePath)}&tileMode=${mode}`,
-			);
-			wv.setAttribute("preload", viewerConfig.preload);
-			wv.setAttribute(
-				"webpreferences",
-				"contextIsolation=yes, sandbox=yes",
-			);
-			wv.style.width = "100%";
-			wv.style.height = "100%";
-			wv.style.border = "none";
+			if (isRemote) {
+				const iframe = document.createElement("iframe");
+				const viewerConfig = configs.viewer;
+				const mode = type === "note" ? "note" : "code";
+				const base = toRemotePath(viewerConfig.src);
+				iframe.src = `${base}?tilePath=${encodeURIComponent(filePath)}&tileMode=${mode}`;
+				iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
+				iframe.style.width = "100%";
+				iframe.style.height = "100%";
+				iframe.style.border = "none";
+				dom.contentArea.appendChild(iframe);
+				dom.webview = iframe;
+			} else {
+				const wv = document.createElement("webview");
+				const viewerConfig = configs.viewer;
+				const mode = type === "note" ? "note" : "code";
+				wv.setAttribute(
+					"src",
+					`${viewerConfig.src}?tilePath=${encodeURIComponent(filePath)}&tileMode=${mode}`,
+				);
+				wv.setAttribute("preload", viewerConfig.preload);
+				wv.setAttribute(
+					"webpreferences",
+					"contextIsolation=yes, sandbox=yes",
+				);
+				wv.style.width = "100%";
+				wv.style.height = "100%";
+				wv.style.border = "none";
 
-			dom.contentArea.appendChild(wv);
-			dom.webview = wv;
+				dom.contentArea.appendChild(wv);
+				dom.webview = wv;
 
-			wv.addEventListener("dom-ready", () => {});
+				wv.addEventListener("dom-ready", () => {});
+			}
 		}
 
 		saveCanvasImmediate();
