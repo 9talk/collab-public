@@ -45,7 +45,10 @@ export function attachDrag(titleBar, tile, {
     if (isSpaceHeld?.()) return;
     e.preventDefault();
     if (!deferFocus && onFocus) onFocus(tile.id, e);
-    if (tile.locked !== false) return;
+    if (tile.locked !== false) {
+      if (deferFocus && onFocus) onFocus(tile.id, e);
+      return;
+    }
 
     const startMX = e.clientX;
     const startMY = e.clientY;

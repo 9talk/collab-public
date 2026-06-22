@@ -645,6 +645,9 @@ async function init() {
 		onTileDblClick(tile) {
 			edgeIndicators.panToTile(tile);
 		},
+		onPanToTile(tile) {
+			edgeIndicators.panToTile(tile);
+		},
 		onTermScreenshot(tileId) {
 			// Show context menu → screenshot via webContents.capturePage()
 			const tile = tileManager.getTile(tileId);

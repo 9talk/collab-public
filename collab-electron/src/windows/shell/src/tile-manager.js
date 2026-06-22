@@ -32,6 +32,7 @@ export function createTileManager({
 	onTermScreenshot,
 	onLocate,
 	onReposition,
+	onPanToTile,
 	getAliases = () => ({}),
 }) {
 	/** @type {Map<string, {container: HTMLElement, contentArea: HTMLElement, titleText: HTMLElement, webview?: HTMLElement}>} */
@@ -187,6 +188,8 @@ export function createTileManager({
 			dom.container.classList.add("tile-focused");
 			dom.webview.focus();
 			onNoteSurfaceFocus("canvas-tile");
+
+			if (onPanToTile && tile) onPanToTile(tile);
 
 			if (
 				mouseEvent && mouseEvent.button === 0 &&
