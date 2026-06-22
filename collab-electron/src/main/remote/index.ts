@@ -60,12 +60,26 @@ export class RemoteServer {
     });
   }
 
-  async start(_config: AppConfig, port?: number): Promise<void> {
+  async start(config: AppConfig, port?: number, forceNewToken = false): Promise<void> {
     if (this.started) await this.stop();
 
     this.port = port ?? 9357;
-    this.token = generateToken();
-    this.tokenGeneratedAt = Date.now();
+
+    // Load persisted token unless explicitly rotating
+    const persistedToken = !forceNewToken
+      ? (config.ui["remote.token"] as string | undefined)
+      : undefined;
+    if (persistedToken && typeof persistedToken === "string" && persistedToken.length === 64) {
+      this.token = persistedToken;
+      this.tokenGeneratedAt = (config.ui["remote.tokenGeneratedAt"] as number) || Date.now();
+    } else {
+      this.token = generateToken();
+      this.tokenGeneratedAt = Date.now();
+      config.ui["remote.token"] = this.token;
+      config.ui["remote.tokenGeneratedAt"] = this.tokenGeneratedAt;
+      const { saveConfig } = require("../config");
+      saveConfig(config);
+    }
 
     const appPath = app.getAppPath();
     const rendererDir = path.join(appPath, "out", "renderer");
@@ -93,7 +107,7 @@ export class RemoteServer {
   async rotateToken(config: AppConfig): Promise<string> {
     const port = this.port;
     await this.stop();
-    await this.start(config, port);
+    await this.start(config, port, true);
     return this.getConnectionURL();
   }
 

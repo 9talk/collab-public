@@ -6,8 +6,11 @@ import * as path from "node:path";
 import { shell, dialog, BrowserWindow } from "electron";
 import * as pty from "../pty";
 import { loadConfig, getPref, setPref, saveConfig } from "../config";
+import { loadWorkspaceConfig, saveWorkspaceConfig } from "../workspace-config";
 import { readSessionMeta } from "../session-meta";
 import { trackEvent } from "../analytics";
+import { workspaceRootMatch } from "@collab/shared/path-utils";
+import fm from "front-matter";
 
 interface BridgeContext {
   mainWindow: BrowserWindow | null;
@@ -112,8 +115,43 @@ export async function handleRemoteRPC(
 
     // Files
     case "fs:readdir": {
-      const entries = fs.readdirSync(p.path as string, { withFileTypes: true });
-      return entries.map((e) => ({ name: e.name, isDirectory: e.isDirectory() }));
+      const dirPath = p.path as string;
+      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+      const result: Array<{
+        name: string;
+        isDirectory: boolean;
+        isFile: boolean;
+        isSymlink: boolean;
+        createdAt: string;
+        modifiedAt: string;
+        fileCount?: number;
+      }> = [];
+      for (const e of entries) {
+        let createdAt = "";
+        let modifiedAt = "";
+        let fileCount: number | undefined;
+        if (e.isFile()) {
+          try {
+            const s = fs.statSync(path.join(dirPath, e.name));
+            createdAt = s.birthtime.toISOString();
+            modifiedAt = s.mtime.toISOString();
+          } catch { /* skip */ }
+        } else if (e.isDirectory()) {
+          try {
+            fileCount = countFilesRecursive(path.join(dirPath, e.name));
+          } catch { /* skip */ }
+        }
+        result.push({
+          name: e.name,
+          isDirectory: e.isDirectory(),
+          isFile: e.isFile(),
+          isSymlink: e.isSymbolicLink(),
+          createdAt,
+          modifiedAt,
+          ...(fileCount !== undefined ? { fileCount } : {}),
+        });
+      }
+      return result;
     }
     case "fs:readfile":
       return fs.readFileSync(p.path as string, "utf-8");
@@ -255,6 +293,98 @@ export async function handleRemoteRPC(
       forwardToShell("workspace-removed", removedPath);
       return { workspaces: cfg.workspaces };
     }
+    case "workspace:add": {
+      const win = ctx.mainWindow;
+      if (!win) return null;
+      const result = await dialog.showOpenDialog(win, {
+        properties: ["openDirectory", "createDirectory"],
+      });
+      if (result.canceled || result.filePaths.length === 0) return null;
+      const cfg = loadConfig();
+      const chosen = fs.realpathSync(result.filePaths[0]!);
+      if (cfg.workspaces.includes(chosen)) return { workspaces: cfg.workspaces };
+      const collabDir = path.join(chosen, ".collaborator");
+      if (!fs.existsSync(collabDir)) fs.mkdirSync(collabDir, { recursive: true });
+      cfg.workspaces.push(chosen);
+      saveConfig(cfg);
+      forwardToShell("workspace-added", chosen);
+      return { workspaces: cfg.workspaces };
+    }
+    case "workspace:remove-by-path": {
+      const cfg = loadConfig();
+      const idx = cfg.workspaces.indexOf(p.path as string);
+      if (idx === -1) return { workspaces: cfg.workspaces };
+      const removedPath = cfg.workspaces[idx];
+      cfg.workspaces.splice(idx, 1);
+      saveConfig(cfg);
+      forwardToShell("workspace-removed", removedPath);
+      return { workspaces: cfg.workspaces };
+    }
+
+    // Per-workspace config
+    case "workspace-pref:get": {
+      if (!p.workspacePath) return null;
+      const wsConfig = loadWorkspaceConfig(p.workspacePath as string);
+      const key = p.key as string;
+      if (key === "expanded_dirs") return wsConfig.expanded_dirs;
+      if (key === "agent_skip_permissions") return wsConfig.agent_skip_permissions;
+      if (key === "alias") return wsConfig.alias ?? null;
+      return null;
+    }
+    case "workspace-pref:set": {
+      if (!p.workspacePath) return;
+      const wsConfig = loadWorkspaceConfig(p.workspacePath as string);
+      const key = p.key as string;
+      if (key === "expanded_dirs") {
+        wsConfig.expanded_dirs = Array.isArray(p.value) ? p.value : [];
+      } else if (key === "agent_skip_permissions") {
+        wsConfig.agent_skip_permissions = p.value === true;
+      } else if (key === "alias") {
+        wsConfig.alias = typeof p.value === "string" && p.value.length > 0 ? p.value : undefined;
+      }
+      saveWorkspaceConfig(p.workspacePath as string, wsConfig);
+      return { ok: true };
+    }
+
+    // File tree for Tiles view
+    case "workspace:read-tree":
+      return readTreeSync(p.root as string, p.root as string);
+
+    // Folder table (frontmatter columns)
+    case "fs:read-folder-table": {
+      const folderPath = p.folderPath as string;
+      const entries = fs.readdirSync(folderPath, { withFileTypes: true });
+      const columnSet = new Set<string>();
+      const mdEntries = entries.filter((e) => e.isFile() && e.name.endsWith(".md"));
+      const files: Array<{
+        path: string;
+        filename: string;
+        frontmatter: Record<string, unknown>;
+        mtime: string;
+        ctime: string;
+      }> = [];
+      for (const entry of mdEntries) {
+        const fullPath = path.join(folderPath, entry.name);
+        try {
+          const stats = fs.statSync(fullPath);
+          const content = fs.readFileSync(fullPath, "utf-8");
+          let attributes: Record<string, unknown> = {};
+          try {
+            attributes = fm<Record<string, unknown>>(content).attributes;
+          } catch { /* malformed frontmatter */ }
+          for (const key of Object.keys(attributes)) columnSet.add(key);
+          files.push({
+            path: fullPath,
+            filename: entry.name,
+            frontmatter: attributes,
+            mtime: stats.mtime.toISOString(),
+            ctime: stats.birthtime.toISOString(),
+          });
+        } catch { /* skip unreadable */ }
+      }
+      const columns = [...columnSet].sort((a, b) => a.localeCompare(b));
+      return { folderPath, files, columns };
+    }
 
     // Dialog
     case "dialog:confirm": {
@@ -304,6 +434,91 @@ export async function handleRemoteRPC(
     case "browser:info":
       return null;
 
+    // PTY raw keys (terminal keyboard input from browser)
+    case "pty:send-raw-keys":
+      pty.writeToSession(p.sessionId as string, p.data as string);
+      return { ok: true };
+
+    // Misc
+    case "get-home-path":
+      return os.homedir();
+    case "terminal:list-targets":
+      return ["auto", "shell", "powershell"];
+
+    // Navigation (forward to shell webviews)
+    case "nav:open-in-terminal":
+      forwardToWebview("shell", "open-in-terminal", p.path);
+      return { ok: true };
+    case "nav:reveal-in-finder":
+      shell.showItemInFolder(p.path as string);
+      return { ok: true };
+    case "nav:create-graph-tile":
+      forwardToWebview("shell", "create-graph-tile", p.folderPath);
+      return { ok: true };
+    case "nav:locate-terminal":
+      forwardToWebview("shell", "locate-terminal", p.folderPath);
+      return { ok: true };
+    case "viewer:run-in-terminal":
+      forwardToWebview("shell", "run-in-terminal", p.command);
+      return { ok: true };
+
+    // Theme
+    case "theme:set":
+      forwardToShell("theme:set", p.mode);
+      return { ok: true };
+
+    // Agent
+    case "agent:focus-session":
+      forwardToShell("agent:focus-session", p.sessionId);
+      return { ok: true };
+
+    // Dialogs (stubs for remote)
+    case "dialog:open-folder":
+    case "dialog:open-image":
+      return null;
+
+    // Updates (stubs for remote)
+    case "update:getStatus":
+    case "update:check":
+    case "update:install":
+      return null;
+
+    // Replay (stubs for remote)
+    case "replay:start":
+    case "replay:stop":
+      return null;
+
+    // Drag-drop (stubs for remote)
+    case "drag:set-paths":
+    case "drag:clear-paths":
+    case "drag:get-paths":
+      return null;
+
+    // Integrations (stubs for remote)
+    case "integrations:get-agents":
+    case "integrations:install-skill":
+    case "integrations:uninstall-skill":
+      return null;
+
+    // Images (stubs for remote — complex, requires image-service)
+    case "image:thumbnail":
+    case "image:full":
+      return null;
+
+    // Workspace graph (stub for remote)
+    case "workspace:get-graph":
+      return null;
+
+    // Wikilinks (stubs for remote)
+    case "wikilink:resolve":
+    case "wikilink:suggest":
+    case "wikilink:backlinks":
+      return null;
+
+    // Analytics device ID
+    case "analytics:get-device-id":
+      return "remote-browser";
+
     // Integrations — plugin offer tracking
     case "integrations:has-offered-plugin": {
       const marker = path.join(os.homedir(), ".collaborator", "canvas-plugin-offered");
@@ -339,4 +554,57 @@ function countFilesRecursive(dir: string): number {
     else count++;
   }
   return count;
+}
+
+interface TreeNode {
+  path: string;
+  name: string;
+  kind: "folder" | "file";
+  ctime: string;
+  mtime: string;
+  children?: TreeNode[];
+  frontmatter?: Record<string, unknown>;
+  preview?: string;
+}
+
+function readTreeSync(dirPath: string, rootPath: string): TreeNode[] {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const folders: TreeNode[] = [];
+  const files: TreeNode[] = [];
+  for (const entry of entries) {
+    if (entry.name.startsWith(".")) continue;
+    const fullPath = path.join(dirPath, entry.name);
+    let stats;
+    try {
+      stats = fs.statSync(fullPath);
+    } catch {
+      continue;
+    }
+    const ctime = stats.birthtime.toISOString();
+    const mtime = stats.mtime.toISOString();
+    if (entry.isDirectory()) {
+      const children = readTreeSync(fullPath, rootPath);
+      folders.push({ path: fullPath, name: entry.name, kind: "folder", ctime, mtime, children });
+    } else {
+      const stem = path.basename(entry.name, path.extname(entry.name));
+      const node: TreeNode = { path: fullPath, name: stem, kind: "file", ctime, mtime };
+      if (entry.name.endsWith(".md")) {
+        try {
+          const content = fs.readFileSync(fullPath, "utf-8");
+          const parsed = fm<Record<string, unknown>>(content);
+          node.frontmatter = parsed.attributes;
+          node.preview = parsed.body.slice(0, 200);
+        } catch { /* skip frontmatter on failure */ }
+      }
+      files.push(node);
+    }
+  }
+  folders.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  return [...folders, ...files];
 }

@@ -152,6 +152,7 @@ export function createTileManager({
 	}
 
 	function forwardClickToWebview(webview, mouseEvent) {
+		if (typeof webview.sendInputEvent !== "function") return;
 		if (!webview.isConnected) return;
 		if (
 			typeof webview.isLoading === "function" &&
@@ -619,7 +620,7 @@ export function createTileManager({
 			onRefresh: (id) => {
 				const d = tileDOMs.get(id);
 				if (d?.webview) {
-					d.webview.send("terminal:refresh");
+					try { d.webview.send("terminal:refresh"); } catch { /* noop */ }
 				}
 			},
 			onLocate: onLocate
@@ -912,9 +913,9 @@ export function createTileManager({
 				if (dom) {
 					updateTileTitle(dom, t);
 					if (dom.webview) {
-						dom.webview.send(
+						try { dom.webview.send(
 							"scope-changed", t.folderPath,
-						);
+						); } catch { /* noop */ }
 					}
 				}
 				anyUpdated = true;
@@ -940,7 +941,7 @@ export function createTileManager({
 
 	function broadcastToTileWebviews(channel, ...args) {
 		for (const [, dom] of tileDOMs) {
-			if (dom.webview) dom.webview.send(channel, ...args);
+			if (dom.webview) { try { dom.webview.send(channel, ...args); } catch { /* noop */ } }
 		}
 	}
 
