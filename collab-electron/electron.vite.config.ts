@@ -41,6 +41,10 @@ export default defineConfig({
             __dirname,
             "src/main/image-worker.ts",
           ),
+          "ws-preload": resolve(
+            __dirname,
+            "src/main/remote/ws-preload.ts",
+          ),
         },
       },
     },

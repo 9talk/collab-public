@@ -41,13 +41,14 @@ export class RemoteServer {
 
     const appPath = app.getAppPath();
     const rendererDir = path.join(appPath, "out", "renderer");
+    const mainOutDir = path.join(appPath, "out", "main");
 
     this.wsServerInternal = new RemoteWSServer(this.token);
 
     this.httpServer = createHttpServer({
       staticDir: rendererDir,
       token: this.token,
-      wsPreloadPath: path.join(rendererDir, "ws-preload.js"),
+      wsPreloadPath: path.join(mainOutDir, "ws-preload.js"),
     });
 
     this.wsServerInternal.attach(this.httpServer);
