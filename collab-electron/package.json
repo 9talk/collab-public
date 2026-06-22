@@ -160,7 +160,8 @@
 		"tailwind-merge": "^3.6.0",
 		"typescript": "^6.0.3",
 		"use-stick-to-bottom": "^1.1.4",
-		"vite": "8"
+		"vite": "8",
+		"ws": "^8.21.0"
 	},
 	"overrides": {
 		"@tiptap/core": "3.20.0",
