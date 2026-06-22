@@ -23,6 +23,7 @@ import {
 } from "./sidecar/protocol";
 import { COLLAB_DIR } from "./paths";
 import { resolveTerminalTarget } from "./terminal-target";
+import { getRemoteServer } from "./remote";
 
 let shuttingDown = false;
 
@@ -158,6 +159,8 @@ function flushPendingPtyData(
     sessionId,
     data: data.toString("utf-8"),
   });
+  const r = getRemoteServer();
+  if (r.isRunning()) r.broadcastPTYData(sessionId, data.toString("utf-8"));
   scheduleForegroundCheck(sessionId);
 }
 
@@ -203,6 +206,8 @@ function forwardPtyData(
       sessionId,
       data: text,
     });
+    const r = getRemoteServer();
+    if (r.isRunning()) r.broadcastPTYData(sessionId, text);
     scheduleForegroundCheck(sessionId);
     return;
   }
@@ -294,6 +299,8 @@ async function doEnsureSidecar(): Promise<void> {
         sidecarPowerShellSessionIds.delete(sessionId);
         deleteSessionMeta(sessionId);
         sendToMainWindow("pty:exit", { sessionId, exitCode });
+        const rs = getRemoteServer();
+        if (rs.isRunning()) rs.wsServer?.broadcast(`pty:exit:${sessionId}`, { sessionId, exitCode });
       }
     });
   }
