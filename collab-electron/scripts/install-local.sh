@@ -6,6 +6,8 @@
 
 set -euo pipefail
 
+START_TIME=$(date +%s)
+
 KEEP=false
 for arg in "$@"; do
   case "$arg" in
@@ -26,7 +28,7 @@ rm -rf "$PROJECT_DIR/out" "$PROJECT_DIR/dist"
 # Step 2: Build + package with China-friendly electron mirror
 echo "Building and packaging..."
 ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" \
-  bun run --cwd "$PROJECT_DIR" package:unsigned -- --arch arm64
+  bun run --cwd "$PROJECT_DIR" package:unsigned -- --arch arm64 --no-zip
 
 # Step 3: Replace the installed app
 echo "Installing to /Applications..."
@@ -77,3 +79,7 @@ fi
 
 # Step 5: Notify completion
 echo "Done. App installed at /Applications/Collaborator.app"
+
+END_TIME=$(date +%s)
+ELAPSED=$((END_TIME - START_TIME))
+echo "Build took ${ELAPSED}s"

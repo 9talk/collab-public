@@ -154,7 +154,8 @@ run(process.execPath, [electronVite, "build"]);
 // so electron-builder builds exactly one arch. Without --arch, CI
 // still reads all configured architectures from package.json.
 if (builtArches.length === 1) {
-  builderArgs.push("-c.mac.target=zip");
+  const target = args.includes("--no-zip") ? "dir" : "zip";
+  builderArgs.push(`-c.mac.target=${target}`);
   builderArgs.push("--" + builtArches[0]);
 }
 run(process.execPath, [electronBuilder, ...builderArgs]);
