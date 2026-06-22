@@ -431,15 +431,24 @@ export function startInlineRename(dom, tile, onCommit) {
  * @param {number} zoom
  */
 export function positionTile(container, tile, panX, panY, zoom) {
-  const sx = tile.x * zoom + panX;
-  const sy = tile.y * zoom + panY;
+  let sx = tile.x * zoom + panX;
+  let sy = tile.y * zoom + panY;
 
-  container.style.left = `${sx}px`;
-  container.style.top = `${sy}px`;
   container.style.width = `${tile.width}px`;
   container.style.height = `${tile.height}px`;
-  container.style.transform = `scale(${zoom})`;
-  container.style.transformOrigin = "top left";
+  if (zoom !== 1) {
+    container.style.transform = `scale(${zoom})`;
+    container.style.transformOrigin = "top left";
+  } else {
+    container.style.transform = "";
+    container.style.transformOrigin = "";
+    // Round to integer pixels to avoid sub-pixel rendering that
+    // causes text ghosting in webview tiles (e.g. xterm).
+    sx = Math.round(sx);
+    sy = Math.round(sy);
+  }
+  container.style.left = `${sx}px`;
+  container.style.top = `${sy}px`;
   container.style.zIndex = String(tile.zIndex);
 }
 

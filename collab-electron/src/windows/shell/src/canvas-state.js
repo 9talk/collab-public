@@ -25,7 +25,7 @@ export const tiles = [];
 let nextZIndex = 1;
 
 const DEFAULT_TILE_SIZES = {
-	term: { width: 1180, height: 700 },
+	term: { width: 1196, height: 739 },
 	note: { width: 1180, height: 700 },
 	code: { width: 1180, height: 700 },
 	image: { width: 1180, height: 700 },

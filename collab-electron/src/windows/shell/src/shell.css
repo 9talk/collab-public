@@ -845,9 +845,9 @@ body.platform-win {
 }
 
 @keyframes seek-highlight-flash {
-	0% { border-color: rgba(128, 128, 128, 0.2); }
-	25% { border-color: #4a9eff; }
-	100% { border-color: rgba(128, 128, 128, 0.2); }
+	0% { outline-color: rgba(128, 128, 128, 0.2); }
+	25% { outline-color: #4a9eff; }
+	100% { outline-color: rgba(128, 128, 128, 0.2); }
 }
 
 /* ── Canvas tiles ── */
@@ -859,7 +859,8 @@ body.platform-win {
 	display: flex;
 	flex-direction: column;
 	background: var(--bg);
-	border: 1px solid var(--tile-border);
+	border: none;
+	outline: 1px solid var(--tile-border);
 	user-select: none;
 }
 
@@ -892,19 +893,19 @@ body.platform-win {
 }
 
 .canvas-tile.tile-focused {
-	border-color: rgba(0, 0, 0, 0.5);
+	outline-color: rgba(0, 0, 0, 0.5);
 }
 .canvas-tile.tile-focused::before,
 .canvas-tile.tile-focused::after {
-	border-color: rgba(0, 0, 0, 0.5);
+border-color: rgba(0, 0, 0, 0.5);
 }
 
 .dark .canvas-tile.tile-focused {
-	border-color: rgba(255, 255, 255, 0.5);
+	outline-color: rgba(255, 255, 255, 0.5);
 }
 .dark .canvas-tile.tile-focused::before,
 .dark .canvas-tile.tile-focused::after {
-	border-color: rgba(255, 255, 255, 0.5);
+border-color: rgba(255, 255, 255, 0.5);
 }
 
 
@@ -913,7 +914,7 @@ body.platform-win {
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
-	height: auto;
+	height: 34px;
 	padding: 8px 8px;
 	background: var(--bg);
 	border-bottom: none;
@@ -1292,11 +1293,11 @@ body.platform-win {
 /* ── Selection, dragging, marquee ── */
 
 .canvas-tile.tile-selected {
-	border-color: #4a9eff;
+	outline-color: #4a9eff;
 }
 .canvas-tile.tile-selected::before,
 .canvas-tile.tile-selected::after {
-	border-color: #4a9eff;
+border-color: #4a9eff;
 }
 
 .canvas-tile.tile-dragging {
@@ -1368,11 +1369,11 @@ body.platform-win {
 }
 
 .tile-url-input:focus {
-	border-color: rgba(0, 0, 0, 0.5);
+border-color: rgba(0, 0, 0, 0.5);
 }
 
 .dark .tile-url-input:focus {
-	border-color: rgba(255, 255, 255, 0.5);
+border-color: rgba(255, 255, 255, 0.5);
 }
 
 .tile-url-input::placeholder {
@@ -1396,11 +1397,11 @@ body.platform-win {
 }
 
 .tile-rename-input:focus {
-	border-color: rgba(0, 0, 0, 0.5);
+border-color: rgba(0, 0, 0, 0.5);
 }
 
 .dark .tile-rename-input:focus {
-	border-color: rgba(255, 255, 255, 0.5);
+border-color: rgba(255, 255, 255, 0.5);
 }
 
 /* ── Notifications ─────────────────────────────────────────────────── */
