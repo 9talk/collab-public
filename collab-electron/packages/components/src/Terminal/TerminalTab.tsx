@@ -141,6 +141,14 @@ function TerminalTab({
 			term.write(scrollbackData);
 		}
 
+		// Force a fresh prompt to absorb zsh PROMPT_SP % marker
+		// that may appear during shell initialization.
+		if (!restored) {
+			setTimeout(() => {
+				window.api.ptyWrite(sessionId, "\x0c");
+			}, 600);
+		}
+
 		// Shift+Enter: inject a CSI u escape sequence directly into the
 		// PTY so TUI apps like Claude Code can detect the shift modifier.
 		// Block both keydown AND keypress to prevent xterm from also
