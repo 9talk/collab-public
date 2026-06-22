@@ -1,5 +1,6 @@
 import { ipcMain, type BrowserWindow } from "electron";
 import * as canvasPersistence from "./canvas-persistence";
+import { getRemoteServer } from "./remote";
 
 interface IpcContext {
   mainWindow: () => BrowserWindow | null;
@@ -23,7 +24,12 @@ export function registerCanvasHandlers(
 
   ipcMain.handle(
     "canvas:save-state",
-    async (_event, state) => canvasPersistence.saveState(state),
+    async (_event, state) => {
+      const server = getRemoteServer();
+      server.setCanvasState(state);
+      if (server.isRunning()) server.broadcastCanvasState(state);
+      return canvasPersistence.saveState(state);
+    },
   );
 
   // Request current canvas state from renderer (used during quit)
