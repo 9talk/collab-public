@@ -14,6 +14,7 @@ export class RemoteServer {
   private port: number = 9357;
   private started = false;
   private canvasState: unknown = null;
+  private tokenGeneratedAt: number = 0;
 
   get wsServer(): RemoteWSServer | null {
     return this.wsServerInternal;
@@ -35,6 +36,11 @@ export class RemoteServer {
     return this.started;
   }
 
+  isTokenExpired(expiryHours: number): boolean {
+    if (expiryHours <= 0 || this.tokenGeneratedAt === 0) return false;
+    return Date.now() - this.tokenGeneratedAt > expiryHours * 3600_000;
+  }
+
   getCanvasState(): unknown {
     return this.canvasState;
   }
@@ -54,11 +60,12 @@ export class RemoteServer {
     });
   }
 
-  async start(_config: AppConfig, _password: string, port?: number): Promise<void> {
+  async start(_config: AppConfig, port?: number): Promise<void> {
     if (this.started) await this.stop();
 
     this.port = port ?? 9357;
     this.token = generateToken();
+    this.tokenGeneratedAt = Date.now();
 
     const appPath = app.getAppPath();
     const rendererDir = path.join(appPath, "out", "renderer");
@@ -81,6 +88,13 @@ export class RemoteServer {
     });
 
     this.started = true;
+  }
+
+  async rotateToken(config: AppConfig): Promise<string> {
+    const port = this.port;
+    await this.stop();
+    await this.start(config, port);
+    return this.getConnectionURL();
   }
 
   async stop(): Promise<void> {

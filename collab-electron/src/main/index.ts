@@ -598,7 +598,7 @@ ipcMain.handle(
 
 ipcMain.handle(
   "pref:set",
-  (_event, key: string, value: unknown) => {
+  async (_event, key: string, value: unknown) => {
     setPref(config, key, value);
     if (key === "autoCheckUpdates" && typeof value === "boolean") {
       updateManager.setAutoCheckEnabled(value);
@@ -607,17 +607,46 @@ ipcMain.handle(
       mainWindow.webContents.send("pref:changed", key, value);
     }
     // Remote server lifecycle
-    if (key === "remote.enabled" || key === "remote.port" || key === "remote.password") {
+    if (key === "remote.enabled" || key === "remote.port") {
       const enabled = key === "remote.enabled" ? value === true : getPref(config, "remote.enabled");
-      const password = getPref(config, "remote.password") as string;
       const port = (getPref(config, "remote.port") as number) || 9357;
       const server = getRemoteServer();
-      if (enabled && password) {
-        server.stop().then(() => server.start(config, password, port));
+      if (enabled) {
+        try {
+          await server.stop();
+          await server.start(config, port);
+          const url = server.getConnectionURL();
+          setPref(config, "remote.connectionURL", url);
+          setPref(config, "remote.tokenGeneratedAt", Date.now());
+          console.log("[remote] server started:", url);
+        } catch (err) {
+          console.error("[remote] failed to start:", err);
+        }
       } else if (!enabled) {
-        server.stop();
+        await server.stop();
+        console.log("[remote] server stopped");
       }
     }
+  },);
+
+ipcMain.handle(
+  "remote:rotate-token",
+  async () => {
+    const server = getRemoteServer();
+    const url = await server.rotateToken(config);
+    setPref(config, "remote.connectionURL", url);
+    setPref(config, "remote.tokenGeneratedAt", Date.now());
+    return url;
+  },
+);
+
+ipcMain.handle(
+  "remote:check-token-expiry",
+  () => {
+    const expiryHours = (getPref(config, "remote.tokenExpiryHours") as number) || 0;
+    if (expiryHours <= 0) return { expired: false };
+    const generatedAt = (getPref(config, "remote.tokenGeneratedAt") as number) || 0;
+    return { expired: Date.now() - generatedAt > expiryHours * 3600_000 };
   },
 );
 
@@ -933,16 +962,14 @@ app.whenReady().then(async () => {
   const remoteEnabled = getPref(config, "remote.enabled") as boolean;
   const remoteAutoStart = getPref(config, "remote.autoStart") as boolean;
   if (remoteEnabled || remoteAutoStart) {
-    const remotePassword = getPref(config, "remote.password") as string;
     const remotePort = (getPref(config, "remote.port") as number) || 9357;
-    if (remotePassword) {
-      try {
-        const remoteServer = getRemoteServer();
-        await remoteServer.start(config, remotePassword, remotePort);
-        setPref(config, "remote.connectionURL", remoteServer.getConnectionURL());
-      } catch (err) {
-        console.error("Failed to start remote server:", err);
-      }
+    try {
+      const remoteServer = getRemoteServer();
+      await remoteServer.start(config, remotePort);
+      setPref(config, "remote.connectionURL", remoteServer.getConnectionURL());
+      setPref(config, "remote.tokenGeneratedAt", Date.now());
+    } catch (err) {
+      console.error("Failed to start remote server:", err);
     }
   }
 

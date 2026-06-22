@@ -628,10 +628,10 @@ type Pane = "appearance" | "terminal" | "integrations" | "controls" | "updates" 
 
 function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
   const [enabled, setEnabled] = useState(false);
-  const [password, setPassword] = useState("");
   const [port, setPort] = useState(9357);
   const [autoStart, setAutoStart] = useState(false);
-  const [connectionURL, setConnectionURL] = useState("");
+  const [tokenExpiryHours, setTokenExpiryHours] = useState(0);
+  const [tokenExpired, setTokenExpired] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -644,28 +644,17 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
     api.getPref("remote.autoStart")
       .then((v) => { if (typeof v === "boolean") setAutoStart(v); })
       .catch(() => {});
-    api.getPref("remote.connectionURL")
-      .then((v) => { if (typeof v === "string") setConnectionURL(v); })
+    api.getPref("remote.tokenExpiryHours")
+      .then((v) => { if (typeof v === "number") setTokenExpiryHours(v); })
+      .catch(() => {});
+    api.checkRemoteTokenExpiry()
+      .then((r: unknown) => { if (r && typeof r === "object" && "expired" in r) setTokenExpired((r as { expired: boolean }).expired); })
       .catch(() => {});
   }, []);
 
   async function handleEnabledChange(value: boolean) {
-    if (value) {
-      const stored = await api.getPref("remote.password");
-      if (!stored || typeof stored !== "string" || stored === "") {
-        alert(t("remote.passwordRequired"));
-        return;
-      }
-    }
     setEnabled(value);
     await api.setPref("remote.enabled", value);
-  }
-
-  async function handlePasswordChange(value: string) {
-    setPassword(value);
-    if (value) {
-      await api.setPref("remote.password", value);
-    }
   }
 
   async function handlePortChange(value: number) {
@@ -678,14 +667,37 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
     await api.setPref("remote.autoStart", value);
   }
 
-  async function copyURL() {
-    const url = connectionURL || (await api.getPref("remote.connectionURL")) as string;
-    if (url) {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  async function handleTokenExpiryChange(value: number) {
+    setTokenExpiryHours(value);
+    await api.setPref("remote.tokenExpiryHours", value);
+  }
+
+  async function copyOrRefreshURL() {
+    if (tokenExpired) {
+      const url = await api.rotateRemoteToken() as string;
+      if (url) {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTokenExpired(false);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    } else {
+      const url = await api.getPref("remote.connectionURL") as string;
+      if (url) {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
     }
   }
+
+  const EXPIRY_OPTIONS = [
+    { value: 0, label: t("remote.tokenExpiry.never") },
+    { value: 1, label: t("remote.tokenExpiry.hour1") },
+    { value: 12, label: t("remote.tokenExpiry.hour12") },
+    { value: 24, label: t("remote.tokenExpiry.hour24") },
+    { value: 168, label: t("remote.tokenExpiry.day7") },
+  ];
 
   return (
     <div className="space-y-6 p-6">
@@ -701,49 +713,6 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
           onChange={(v) => { void handleEnabledChange(v); }}
         />
       </div>
-
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">{t("remote.password")}</p>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => { void handlePasswordChange(e.target.value); }}
-          placeholder="••••••••"
-          className="rounded-md border bg-transparent px-2 py-1 text-sm w-40"
-          style={{
-            borderColor: "color-mix(in srgb, var(--foreground) 15%, transparent)",
-            color: "var(--foreground)",
-          }}
-        />
-      </div>
-
-      {enabled && connectionURL && (
-        <div className="space-y-2">
-          <p className="text-sm font-medium">{t("remote.connectionUrl")}</p>
-          <div className="flex items-center gap-2">
-            <code
-              className="flex-1 rounded-md px-3 py-2 text-xs select-all"
-              style={{
-                backgroundColor: "color-mix(in srgb, var(--foreground) 6%, transparent)",
-                color: "var(--foreground)",
-              }}
-            >
-              {connectionURL}
-            </code>
-            <button
-              type="button"
-              onClick={() => { void copyURL(); }}
-              className="rounded-md px-3 py-2 text-xs font-medium cursor-pointer"
-              style={{
-                backgroundColor: "color-mix(in srgb, var(--foreground) 8%, transparent)",
-                color: "var(--foreground)",
-              }}
-            >
-              {copied ? t("remote.copied") : "Copy"}
-            </button>
-          </div>
-        </div>
-      )}
 
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">{t("remote.port")}</p>
@@ -762,12 +731,56 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
       </div>
 
       <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{t("remote.tokenExpiry")}</p>
+        <select
+          value={tokenExpiryHours}
+          onChange={(e) => { void handleTokenExpiryChange(Number(e.target.value)); }}
+          className="rounded-md border bg-transparent px-2 py-1 text-sm"
+          style={{
+            borderColor: "color-mix(in srgb, var(--foreground) 15%, transparent)",
+            color: "var(--foreground)",
+          }}
+        >
+          {EXPIRY_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex items-center justify-between">
         <p className="text-sm font-medium">{t("remote.autoStart")}</p>
         <ToggleSwitch
           checked={autoStart}
           onChange={(v) => { void handleAutoStartChange(v); }}
         />
       </div>
+
+      {enabled && (
+        <div className="space-y-2">
+          {tokenExpired && (
+            <p className="text-xs" style={{ color: "var(--warning, #f59e0b)" }}>
+              {t("remote.tokenExpired")}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => { void copyOrRefreshURL(); }}
+            className="rounded-md px-4 py-2 text-sm font-medium cursor-pointer"
+            style={{
+              backgroundColor: tokenExpired
+                ? "color-mix(in srgb, var(--warning, #f59e0b) 15%, transparent)"
+                : "color-mix(in srgb, var(--foreground) 8%, transparent)",
+              color: "var(--foreground)",
+            }}
+          >
+            {copied
+              ? t("remote.copiedUrl")
+              : tokenExpired
+                ? t("remote.regenerateUrl")
+                : t("remote.copyUrl")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

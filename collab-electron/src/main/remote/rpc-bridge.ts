@@ -1,10 +1,11 @@
 // src/main/remote/rpc-bridge.ts
 // Maps WebSocket JSON-RPC methods to existing backend functions.
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
-import { shell, BrowserWindow } from "electron";
+import { shell, dialog, BrowserWindow } from "electron";
 import * as pty from "../pty";
-import { loadConfig, getPref, setPref } from "../config";
+import { loadConfig, getPref, setPref, saveConfig } from "../config";
 import { readSessionMeta } from "../session-meta";
 import { trackEvent } from "../analytics";
 
@@ -75,13 +76,28 @@ export async function handleRemoteRPC(
     case "pty:kill":
       await pty.killSession(p.sessionId as string);
       return { ok: true };
-    case "pty:reconnect":
-      return pty.reconnectSession(
-        p.sessionId as string,
-        p.cols as number,
-        p.rows as number,
-        undefined,
-      );
+    case "pty:reconnect": {
+      // Remote clients must NOT reconnect — that would destroy the existing
+      // data socket and steal the session from the local terminal.
+      // Instead, return metadata + scrollback so the browser can mirror.
+      const meta = readSessionMeta(p.sessionId as string);
+      const shell = meta?.command || meta?.shell || process.env.SHELL || "/bin/zsh";
+      const displayName = meta?.displayName || path.basename(shell);
+      let scrollback = "";
+      try { scrollback = await pty.captureSession(p.sessionId as string, 50); } catch { /* ok */ }
+      return {
+        sessionId: p.sessionId,
+        shell,
+        displayName,
+        target: meta?.target,
+        command: meta?.command,
+        args: meta?.args,
+        cwdHostPath: meta?.cwdHostPath ?? meta?.cwd,
+        cwdGuestPath: meta?.cwdGuestPath,
+        meta,
+        scrollback,
+      };
+    }
     case "pty:discover":
       return pty.discoverSessions();
     case "pty:read-meta":
@@ -170,6 +186,139 @@ export async function handleRemoteRPC(
     case "analytics:track-event":
       trackEvent(p.name as string, p.properties as Record<string, unknown> | undefined);
       return { ok: true };
+
+    // ---- shellApi-specific methods ----
+
+    // View config (return HTTP URLs for remote clients)
+    case "shell:get-view-config":
+      return {
+        nav: { src: "/nav/", preload: "" },
+        viewer: { src: "/viewer/", preload: "" },
+        terminal: { src: "/terminal/", preload: "" },
+        terminalTile: { src: "/terminal-tile/", preload: "" },
+        graphTile: { src: "/graph-tile/", preload: "" },
+        settings: { src: "/settings/", preload: "" },
+        tileList: { src: "/tile-list/", preload: "" },
+        agentChat: { src: "/agent-chat/", preload: "" },
+      };
+
+    // Settings
+    case "settings:open":
+      forwardToShell("settings:open");
+      return { ok: true };
+    case "settings:toggle":
+      forwardToShell("settings:toggle");
+      return { ok: true };
+
+    // Webview console forwarding
+    case "webview:console":
+      forwardToShell("webview:console", p.panel, p.level, p.message, p.source);
+      return { ok: true };
+
+    // Updates
+    case "update:download":
+      forwardToShell("update:download");
+      return { ok: true };
+
+    // Canvas state
+    case "canvas:load-state": {
+      const { getRemoteServer } = require("./index");
+      return getRemoteServer().getCanvasState();
+    }
+    case "canvas:save-state": {
+      const { getRemoteServer } = require("./index");
+      const server = getRemoteServer();
+      server.setCanvasState(p.state);
+      if (server.isRunning()) server.broadcastCanvasState(p.state);
+      return { ok: true };
+    }
+    case "canvas:rpc-response":
+      forwardToShell("canvas:rpc-response", p);
+      return { ok: true };
+
+    // Filesystem checks
+    case "fs:is-directory":
+      return fs.statSync(p.path as string).isDirectory();
+
+    // Workspace management
+    case "workspace:list": {
+      const cfg = loadConfig();
+      return { workspaces: cfg.workspaces, aliases: {} };
+    }
+    case "workspace:remove": {
+      const cfg = loadConfig();
+      const idx = p.index as number;
+      if (idx < 0 || idx >= cfg.workspaces.length) return { workspaces: cfg.workspaces };
+      const removedPath = cfg.workspaces[idx];
+      cfg.workspaces.splice(idx, 1);
+      saveConfig(cfg);
+      forwardToShell("workspace-removed", removedPath);
+      return { workspaces: cfg.workspaces };
+    }
+
+    // Dialog
+    case "dialog:confirm": {
+      const win = ctx.mainWindow;
+      if (!win) return 0;
+      return (
+        await dialog.showMessageBox(win, {
+          type: "warning",
+          message: p.message as string,
+          detail: p.detail as string | undefined,
+          buttons: (p.buttons as string[]) ?? ["OK", "Cancel"],
+        })
+      ).response;
+    }
+
+    // PTY capture
+    case "pty:capture":
+      return pty.captureSession(
+        p.sessionId as string,
+        (p.lines as number) ?? 50,
+      );
+
+    // Navigation
+    case "navigation:push":
+      forwardToShell("navigation:push", p.tileId);
+      return { ok: true };
+    case "navigation:go-back":
+      forwardToShell("navigation:go-back");
+      return { ok: true };
+    case "navigation:go-forward":
+      forwardToShell("navigation:go-forward");
+      return { ok: true };
+
+    // Terminal screenshot (Electron-specific, stub for remote)
+    case "term:screenshot":
+      return { ok: false };
+
+    // Browser tile control (Electron-specific webContents ops, stubbed)
+    case "browser:navigate":
+    case "browser:screenshot":
+    case "browser:snapshot":
+    case "browser:click":
+    case "browser:type":
+    case "browser:scroll":
+    case "browser:evaluate":
+    case "browser:wait":
+    case "browser:info":
+      return null;
+
+    // Integrations — plugin offer tracking
+    case "integrations:has-offered-plugin": {
+      const marker = path.join(os.homedir(), ".collaborator", "canvas-plugin-offered");
+      return fs.existsSync(marker);
+    }
+    case "integrations:mark-plugin-offered": {
+      const dir = path.join(os.homedir(), ".collaborator");
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, "canvas-plugin-offered"),
+        new Date().toISOString(),
+        "utf-8",
+      );
+      return { ok: true };
+    }
 
     default:
       throw new Error(`Unknown method: ${method}`);

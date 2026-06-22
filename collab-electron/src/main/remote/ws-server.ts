@@ -4,11 +4,13 @@ import { WebSocketServer, WebSocket } from "ws";
 import { verifyToken } from "./auth";
 
 type EventHandler = (client: WebSocket, type: string, data: unknown) => void;
+type RPCHandler = (method: string, params: unknown) => Promise<unknown>;
 
 export class RemoteWSServer {
   private wss: WebSocketServer | null = null;
   private clients = new Set<WebSocket>();
   private eventHandler: EventHandler | null = null;
+  private rpcHandler: RPCHandler | null = null;
   private token: string;
 
   constructor(token: string) {
@@ -17,6 +19,10 @@ export class RemoteWSServer {
 
   setEventHandler(handler: EventHandler): void {
     this.eventHandler = handler;
+  }
+
+  setRPCHandler(handler: RPCHandler): void {
+    this.rpcHandler = handler;
   }
 
   attach(server: http.Server): void {
@@ -54,13 +60,26 @@ export class RemoteWSServer {
         this.clients.add(ws);
 
         ws.on("message", (raw) => {
-          let parsed: { type?: string; id?: number; method?: string; data?: unknown };
+          let parsed: { type?: string; id?: number; method?: string; params?: unknown; data?: unknown };
           try {
             parsed = JSON.parse(raw.toString());
           } catch {
             return;
           }
 
+          // RPC request (has id + method)
+          if (parsed.id !== undefined && parsed.method && this.rpcHandler) {
+            this.rpcHandler(parsed.method, parsed.params ?? parsed.data)
+              .then((result) => {
+                ws.send(JSON.stringify({ id: parsed.id, result }));
+              })
+              .catch((err: Error) => {
+                ws.send(JSON.stringify({ id: parsed.id, error: { message: err.message } }));
+              });
+            return;
+          }
+
+          // Server-push event (no id)
           if (this.eventHandler) {
             this.eventHandler(ws, parsed.type ?? parsed.method ?? "unknown", parsed.data ?? parsed);
           }

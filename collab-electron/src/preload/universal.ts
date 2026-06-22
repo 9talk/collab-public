@@ -161,6 +161,10 @@ contextBridge.exposeInMainWorld("api", {
   getPref: (key: string) => ipcRenderer.invoke("pref:get", key),
   setPref: (key: string, value: unknown) =>
     ipcRenderer.invoke("pref:set", key, value),
+  rotateRemoteToken: () =>
+    ipcRenderer.invoke("remote:rotate-token"),
+  checkRemoteTokenExpiry: () =>
+    ipcRenderer.invoke("remote:check-token-expiry"),
   listTerminalTargets: () =>
     ipcRenderer.invoke("terminal:list-targets"),
   getWorkspacePref: (key: string, workspacePath: string) =>

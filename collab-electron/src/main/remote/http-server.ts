@@ -22,7 +22,17 @@ export interface HttpServerOptions {
 }
 
 export function createHttpServer(opts: HttpServerOptions): http.Server {
-  const wsPreloadTag = `<script src="/__remote/ws-preload.js"></script>`;
+  // Inline the ws-preload script so it executes synchronously during HTML parse,
+  // before any module scripts. This avoids a separate network request and the
+  // risk of the script tag failing to load.
+  let wsPreloadInline = "";
+  try {
+    let content = fs.readFileSync(opts.wsPreloadPath, "utf-8");
+    content = content.replace(/^export\s*\{\s*\}\s*;?\s*$/gm, "");
+    wsPreloadInline = `<script>${content}</script>`;
+  } catch {
+    console.error("[remote] Failed to read ws-preload for inlining:", opts.wsPreloadPath);
+  }
 
   return http.createServer((req, res) => {
     if (!req.url) {
@@ -43,16 +53,32 @@ export function createHttpServer(opts: HttpServerOptions): http.Server {
     // Token check (skip for ws-preload itself)
     if (url.pathname !== "/__remote/ws-preload.js") {
       const tokenParam = url.searchParams.get("token");
-      if (!tokenParam || !verifyToken(tokenParam, opts.token)) {
+      const cookieHeader = req.headers.cookie ?? "";
+      const cookieToken = cookieHeader.split("; ").find((c) => c.startsWith("collab_token="))?.slice(13);
+      const token = tokenParam ?? cookieToken ?? "";
+      if (!verifyToken(token, opts.token)) {
         res.writeHead(403, { "Content-Type": "text/plain" });
         res.end("Forbidden");
         return;
       }
+      // Set cookie on first successful token auth so subresources load without token in URL
+      if (tokenParam) {
+        res.setHeader("Set-Cookie", `collab_token=${opts.token}; Path=/; SameSite=Lax`);
+      }
     }
 
-    // Route: ws-preload script
+    // Route: ws-preload script (no longer injected as external script,
+    // but keep the route so it's available for debugging)
     if (url.pathname === "/__remote/ws-preload.js") {
-      serveFile(res, opts.wsPreloadPath, "application/javascript; charset=utf-8");
+      try {
+        let content = fs.readFileSync(opts.wsPreloadPath, "utf-8");
+        content = content.replace(/^export\s*\{\s*\}\s*;?\s*$/gm, "");
+        res.writeHead(200, { "Content-Type": "application/javascript; charset=utf-8" });
+        res.end(content);
+      } catch {
+        res.writeHead(404);
+        res.end("Not Found");
+      }
       return;
     }
 
@@ -64,18 +90,18 @@ export function createHttpServer(opts: HttpServerOptions): http.Server {
       // SPA paths (terminal-tile, viewer, etc.) — serve their index.html
       const indexPath = path.join(opts.staticDir, url.pathname, "index.html");
       if (fs.existsSync(indexPath)) {
-        serveFile(res, indexPath, "text/html; charset=utf-8", wsPreloadTag);
+        serveFile(res, indexPath, "text/html; charset=utf-8", wsPreloadInline);
         return;
       }
       // Root fallback: serve shell
       filePath = path.join(opts.staticDir, "shell/index.html");
-      serveFile(res, filePath, "text/html; charset=utf-8", wsPreloadTag);
+      serveFile(res, filePath, "text/html; charset=utf-8", wsPreloadInline);
       return;
     }
 
     const ext = path.extname(filePath);
     const contentType = MIME[ext] ?? "application/octet-stream";
-    const inject = ext === ".html" ? wsPreloadTag : undefined;
+    const inject = ext === ".html" ? wsPreloadInline : undefined;
     serveFile(res, filePath, contentType, inject);
   });
 }
@@ -84,16 +110,16 @@ function serveFile(
   res: http.ServerResponse,
   filePath: string,
   contentType: string,
-  wsPreloadTag?: string,
+  wsPreloadInline?: string,
 ): void {
   try {
     const content = fs.readFileSync(filePath);
     res.writeHead(200, { "Content-Type": contentType });
 
     // Inject ws-preload into HTML files for the remote bridge
-    if (wsPreloadTag && contentType.startsWith("text/html")) {
+    if (wsPreloadInline && contentType.startsWith("text/html")) {
       let html = content.toString("utf-8");
-      html = html.replace("<head>", `<head>\n    ${wsPreloadTag}`);
+      html = html.replace("<head>", `<head>\n    ${wsPreloadInline}`);
       res.end(html);
     } else {
       res.end(content);

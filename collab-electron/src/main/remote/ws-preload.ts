@@ -2,16 +2,21 @@
 // Runs in browser BEFORE renderer code. Provides window.api over WebSocket.
 // This replaces the Electron preload for remote browser clients.
 
-const token = new URLSearchParams(window.location.search).get("token") || "";
+const token = new URLSearchParams(window.location.search).get("token") ||
+  (document.cookie.match(/(?:^|;\s*)collab_token=([^;]*)/) ?? [])[1] ||
+  "";
 const wsUrl = `ws://${location.host}/__remote/ws`;
 
 let ws: WebSocket | null = null;
+let ready = false;
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+const requestQueue: Array<{ method: string; params: unknown; resolve: (v: unknown) => void; reject: (e: Error) => void }> = [];
 let nextId = 1;
 const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
 const buffered = new Map<string, unknown[]>();
 
 function connect(): void {
+  ready = false;
   ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
@@ -22,7 +27,16 @@ function connect(): void {
     if (typeof event.data === "string") {
       const msg = JSON.parse(event.data);
 
-      if (msg.type === "auth:ok") return;
+      if (msg.type === "auth:ok") {
+        ready = true;
+        fire("shell:loading-done", {});
+        // Flush queued requests
+        while (requestQueue.length > 0) {
+          const q = requestQueue.shift()!;
+          sendRequest(q.method, q.params).then(q.resolve, q.reject);
+        }
+        return;
+      }
 
       // Server push (event)
       if (msg.type && msg.id === undefined) {
@@ -44,6 +58,7 @@ function connect(): void {
   };
 
   ws.onclose = () => {
+    ready = false;
     setTimeout(connect, 1000);
   };
 
@@ -64,10 +79,7 @@ function fire(type: string, data: unknown): void {
   }
 }
 
-function request(method: string, params?: unknown): Promise<unknown> {
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
-    return Promise.reject(new Error("Not connected"));
-  }
+function sendRequest(method: string, params?: unknown): Promise<unknown> {
   const id = nextId++;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -80,6 +92,15 @@ function request(method: string, params?: unknown): Promise<unknown> {
     });
     ws!.send(JSON.stringify({ id, method, params }));
   });
+}
+
+function request(method: string, params?: unknown): Promise<unknown> {
+  if (!ready || !ws || ws.readyState !== WebSocket.OPEN) {
+    return new Promise((resolve, reject) => {
+      requestQueue.push({ method, params, resolve, reject });
+    });
+  }
+  return sendRequest(method, params);
 }
 
 function on(type: string, cb: (...args: unknown[]) => void): () => void {
@@ -97,7 +118,7 @@ function on(type: string, cb: (...args: unknown[]) => void): () => void {
   };
 }
 
-connect();
+try { connect(); } catch (e) { console.error("[ws-preload] connect failed:", e); }
 
 // ---- window.api ----
 const api: Record<string, unknown> = {
@@ -276,3 +297,104 @@ const api: Record<string, unknown> = {
 };
 
 (window as unknown as Record<string, unknown>).api = api;
+
+// ---- window.shellApi (shell-specific methods not in window.api) ----
+const shellApi: Record<string, unknown> = {
+  ...api,
+
+  getViewConfig: () => request("shell:get-view-config"),
+
+  // Events
+  onForwardToWebview: (cb: (target: string, channel: string, ...args: unknown[]) => void) =>
+    on("shell:forward", (d: unknown) => {
+      const m = d as { target: string; channel: string; args: unknown[] };
+      cb(m.target, m.channel, ...(m.args ?? []));
+    }),
+  onSettingsToggle: (cb: (action: string) => void) => on("shell:settings", cb),
+  onLoadingStatus: (cb: (message: string) => void) => on("shell:loading-status", cb),
+  onLoadingDone: (cb: () => void) => on("shell:loading-done", cb),
+  onShortcut: (cb: (action: string) => void) => on("shell:shortcut", cb),
+  onBrowserTileFocusUrl: (cb: (id: number) => void) => on("browser-tile:focus-url", cb),
+  onPrefChanged: (cb: (key: string, value: unknown) => void) => on("pref:changed", cb),
+  onCanvasPinch: (cb: (deltaY: number) => void) => on("canvas:pinch", cb),
+  onCanvasRpcRequest: (cb: (request: unknown) => void) => on("canvas:rpc-request", cb),
+  onPtyStatusChanged: (cb: (payload: unknown) => void) => on("pty:status-changed", cb),
+  onAgentUpdate: (cb: (params: unknown) => void) => on("agent:update", cb),
+  onAgentPromptComplete: (cb: (data: unknown) => void) => on("agent:prompt-complete", cb),
+  onAgentPromptError: (cb: (data: unknown) => void) => on("agent:prompt-error", cb),
+  onAgentExit: (cb: (data: unknown) => void) => on("agent:exit", cb),
+  onAgentSessionReady: (cb: (data: unknown) => void) => on("agent:session-ready", cb),
+  onAgentSessionFailed: (cb: (data: unknown) => void) => on("agent:session-failed", cb),
+
+  // Settings
+  openSettings: () => { request("settings:open"); },
+  closeSettings: () => { request("settings:close"); },
+  toggleSettings: () => { request("settings:toggle"); },
+
+  // Logging
+  logFromWebview: (panel: string, level: number, message: string, source: string) => {
+    request("webview:console", { panel, level, message, source });
+  },
+
+  // Updates
+  updateDownload: () => request("update:download"),
+
+  // Canvas
+  canvasLoadState: () => request("canvas:load-state"),
+  canvasSaveState: (state: unknown) => request("canvas:save-state", { state }),
+  canvasRpcResponse: (response: unknown) => { request("canvas:rpc-response", response); },
+
+  // Files
+  getPathForFile: (file: File) => (file as unknown as { path?: string }).path || file.name || "",
+  isDirectory: (filePath: string) => request("fs:is-directory", { path: filePath }),
+
+  // Workspace
+  workspaceRemove: (index: number) => request("workspace:remove", { index }),
+  workspaceList: () => request("workspace:list"),
+
+  // Dialogs
+  showConfirmDialog: (opts: { message: string; detail?: string; buttons?: string[] }) =>
+    request("dialog:confirm", opts),
+  trackEvent: (name: string, properties?: Record<string, unknown>) => {
+    request("analytics:track-event", { name, properties });
+  },
+
+  // PTY
+  ptyKillSession: (sessionId: string) => request("pty:kill", { sessionId }),
+  ptyCapture: (sessionId: string, lines?: number) => request("pty:capture", { sessionId, lines }),
+
+  // Browser tile control (Electron-specific, stubbed for remote)
+  browserNavigate: (webContentsId: number, url: string) =>
+    request("browser:navigate", { webContentsId, url }),
+  browserScreenshot: (webContentsId: number) =>
+    request("browser:screenshot", { webContentsId }),
+  browserSnapshot: (webContentsId: number) =>
+    request("browser:snapshot", { webContentsId }),
+  browserClick: (webContentsId: number, selector: string) =>
+    request("browser:click", { webContentsId, selector }),
+  browserType: (webContentsId: number, selector: string, text: string) =>
+    request("browser:type", { webContentsId, selector, text }),
+  browserScroll: (webContentsId: number, x: number, y: number) =>
+    request("browser:scroll", { webContentsId, x, y }),
+  browserEvaluate: (webContentsId: number, expression: string) =>
+    request("browser:evaluate", { webContentsId, expression }),
+  browserWait: (webContentsId: number, timeout?: number) =>
+    request("browser:wait", { webContentsId, timeout }),
+  browserInfo: (webContentsId: number) =>
+    request("browser:info", { webContentsId }),
+
+  // Navigation
+  navigationPush: (tileId: string) => { request("navigation:push", { tileId }); },
+  navigationGoBack: () => request("navigation:go-back"),
+  navigationGoForward: () => request("navigation:go-forward"),
+
+  // Terminal screenshot
+  termScreenshotClipboard: (webContentsId: number) =>
+    request("term:screenshot", { webContentsId }),
+
+  // Integrations
+  hasOfferedPlugin: () => request("integrations:has-offered-plugin"),
+  markPluginOffered: () => { request("integrations:mark-plugin-offered"); },
+};
+
+(window as unknown as Record<string, unknown>).shellApi = shellApi;
