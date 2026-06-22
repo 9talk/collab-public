@@ -8,6 +8,7 @@ export const en = {
   "nav.integrations": "Integrations",
   "nav.controls": "Controls",
   "nav.updates": "Updates",
+  "nav.remote": "Remote",
 
   // Appearance pane
   "appearance.title": "Appearance",
@@ -16,6 +17,17 @@ export const en = {
   "appearance.canvasOpacity": "Canvas opacity",
   "appearance.rememberExpandedDirs": "Remember expanded folders",
   "appearance.rememberExpandedDirsDesc": "Restore folder expansion state when reopening the app",
+
+  // Remote pane
+  "remote.title": "Remote Access",
+  "remote.description": "Access Collaborator from a web browser on another device in your local network.",
+  "remote.enable": "Enable Remote Access",
+  "remote.password": "Password",
+  "remote.passwordRequired": "Please set a password before enabling remote access.",
+  "remote.connectionUrl": "Connection URL",
+  "remote.port": "Port",
+  "remote.autoStart": "Auto-start on launch",
+  "remote.copied": "Copied",
 
   // Terminal pane
   "terminal.title": "Terminal",

@@ -9,6 +9,7 @@ import {
   Monitor,
   Terminal,
   ArrowClockwise,
+  Globe,
 } from "@phosphor-icons/react";
 import { useTranslation } from "./translations";
 import type { SupportedLocale, TranslationKey } from "./translations";
@@ -623,7 +624,153 @@ function IntegrationsPane({ t }: { t: (key: TranslationKey) => string }) {
   );
 }
 
-type Pane = "appearance" | "terminal" | "integrations" | "controls" | "updates";
+type Pane = "appearance" | "terminal" | "integrations" | "controls" | "updates" | "remote";
+
+function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
+  const [enabled, setEnabled] = useState(false);
+  const [password, setPassword] = useState("");
+  const [port, setPort] = useState(9357);
+  const [autoStart, setAutoStart] = useState(false);
+  const [connectionURL, setConnectionURL] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    api.getPref("remote.enabled")
+      .then((v) => { if (typeof v === "boolean") setEnabled(v); })
+      .catch(() => {});
+    api.getPref("remote.port")
+      .then((v) => { if (typeof v === "number") setPort(v); })
+      .catch(() => {});
+    api.getPref("remote.autoStart")
+      .then((v) => { if (typeof v === "boolean") setAutoStart(v); })
+      .catch(() => {});
+    api.getPref("remote.connectionURL")
+      .then((v) => { if (typeof v === "string") setConnectionURL(v); })
+      .catch(() => {});
+  }, []);
+
+  async function handleEnabledChange(value: boolean) {
+    if (value) {
+      const stored = await api.getPref("remote.password");
+      if (!stored || typeof stored !== "string" || stored === "") {
+        alert(t("remote.passwordRequired"));
+        return;
+      }
+    }
+    setEnabled(value);
+    await api.setPref("remote.enabled", value);
+  }
+
+  async function handlePasswordChange(value: string) {
+    setPassword(value);
+    if (value) {
+      await api.setPref("remote.password", value);
+    }
+  }
+
+  async function handlePortChange(value: number) {
+    setPort(value);
+    await api.setPref("remote.port", value);
+  }
+
+  async function handleAutoStartChange(value: boolean) {
+    setAutoStart(value);
+    await api.setPref("remote.autoStart", value);
+  }
+
+  async function copyURL() {
+    const url = connectionURL || (await api.getPref("remote.connectionURL")) as string;
+    if (url) {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  return (
+    <div className="space-y-6 p-6">
+      <div className="space-y-1">
+        <h2 className="text-base font-semibold">{t("remote.title")}</h2>
+        <p className="text-sm text-muted-foreground">{t("remote.description")}</p>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{t("remote.enable")}</p>
+        <ToggleSwitch
+          checked={enabled}
+          onChange={(v) => { void handleEnabledChange(v); }}
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{t("remote.password")}</p>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => { void handlePasswordChange(e.target.value); }}
+          placeholder="••••••••"
+          className="rounded-md border bg-transparent px-2 py-1 text-sm w-40"
+          style={{
+            borderColor: "color-mix(in srgb, var(--foreground) 15%, transparent)",
+            color: "var(--foreground)",
+          }}
+        />
+      </div>
+
+      {enabled && connectionURL && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{t("remote.connectionUrl")}</p>
+          <div className="flex items-center gap-2">
+            <code
+              className="flex-1 rounded-md px-3 py-2 text-xs select-all"
+              style={{
+                backgroundColor: "color-mix(in srgb, var(--foreground) 6%, transparent)",
+                color: "var(--foreground)",
+              }}
+            >
+              {connectionURL}
+            </code>
+            <button
+              type="button"
+              onClick={() => { void copyURL(); }}
+              className="rounded-md px-3 py-2 text-xs font-medium cursor-pointer"
+              style={{
+                backgroundColor: "color-mix(in srgb, var(--foreground) 8%, transparent)",
+                color: "var(--foreground)",
+              }}
+            >
+              {copied ? t("remote.copied") : "Copy"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{t("remote.port")}</p>
+        <input
+          type="number"
+          value={port}
+          onChange={(e) => { void handlePortChange(Number(e.target.value)); }}
+          className="rounded-md border bg-transparent px-2 py-1 text-sm w-24"
+          style={{
+            borderColor: "color-mix(in srgb, var(--foreground) 15%, transparent)",
+            color: "var(--foreground)",
+          }}
+          min={1024}
+          max={65535}
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{t("remote.autoStart")}</p>
+        <ToggleSwitch
+          checked={autoStart}
+          onChange={(v) => { void handleAutoStartChange(v); }}
+        />
+      </div>
+    </div>
+  );
+}
 
 function UpdatesPane({ t }: { t: (key: TranslationKey) => string }) {
   const [autoCheck, setAutoCheck] = useState(false);
@@ -735,6 +882,7 @@ export default function App() {
     { id: "integrations", label: t("nav.integrations"), icon: PuzzlePiece },
     { id: "controls", label: t("nav.controls"), icon: Keyboard },
     { id: "updates", label: t("nav.updates"), icon: ArrowClockwise },
+    { id: "remote", label: t("nav.remote"), icon: Globe },
   ];
 
   return (
@@ -793,6 +941,7 @@ export default function App() {
         {activePane === "integrations" && <IntegrationsPane t={t} />}
         {activePane === "controls" && <ControlsPane t={t} />}
         {activePane === "updates" && <UpdatesPane t={t} />}
+        {activePane === "remote" && <RemotePane t={t} />}
       </div>
     </div>
   );

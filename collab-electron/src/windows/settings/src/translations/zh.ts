@@ -12,6 +12,7 @@ export const zh: Record<TranslationKey, string> = {
   "nav.integrations": "集成",
   "nav.controls": "控制",
   "nav.updates": "更新",
+  "nav.remote": "远程",
 
   // Appearance pane
   "appearance.title": "外观",
@@ -20,6 +21,17 @@ export const zh: Record<TranslationKey, string> = {
   "appearance.canvasOpacity": "画布不透明度",
   "appearance.rememberExpandedDirs": "记住展开的文件夹",
   "appearance.rememberExpandedDirsDesc": "重新打开应用时恢复之前的展开状态",
+
+  // Remote pane
+  "remote.title": "远程访问",
+  "remote.description": "从局域网内的其他设备通过浏览器访问 Collaborator。",
+  "remote.enable": "启用远程访问",
+  "remote.password": "密码",
+  "remote.passwordRequired": "请先设置密码再启用远程访问。",
+  "remote.connectionUrl": "连接地址",
+  "remote.port": "端口",
+  "remote.autoStart": "启动时自动开启",
+  "remote.copied": "已复制",
 
   // Terminal pane
   "terminal.title": "终端",
