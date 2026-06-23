@@ -8,19 +8,21 @@
 		"packages/*"
 	],
 	"main": "out/main/index.js",
-	"scripts": {
-		"dev": "bun ./scripts/dev.mjs",
-		"build": "node ./scripts/run-local-bin.mjs electron-vite build",
-		"preview": "node ./scripts/run-local-bin.mjs electron-vite preview",
-		"clean": "bun ./scripts/clean.mjs",
-		"clean:deep": "bun ./scripts/clean.mjs --deep",
-		"package": "bun ./scripts/package.mjs",
-		"package:unsigned": "bun ./scripts/package.mjs --no-sign",
-		"release": "bun ./scripts/package.mjs --publish",
-		"test": "bun test",
-		"test:updater": "bun test src/main/updater/github-release-fetcher.test.ts && bun test src/main/updater/downloader.test.ts && bun test src/main/updater/update-manager.test.ts",
-		"postinstall": "node scripts/postinstall.mjs"
-	},
+  "scripts": {
+    "dev": "bun format && bun ./scripts/dev.mjs",
+    "build": "bun format && node ./scripts/run-local-bin.mjs electron-vite build",
+    "preview": "bun format && node ./scripts/run-local-bin.mjs electron-vite preview",
+    "clean": "bun ./scripts/clean.mjs && bun format",
+    "clean:deep": "bun ./scripts/clean.mjs --deep && bun format",
+    "package": "bun format && bun ./scripts/package.mjs",
+    "package:unsigned": "bun format && bun ./scripts/package.mjs --no-sign",
+    "release": "bun format && bun ./scripts/package.mjs --publish",
+    "test": "bun format && bun test",
+    "test:updater": "bun format && bun test src/main/updater/github-release-fetcher.test.ts && bun test src/main/updater/downloader.test.ts && bun test src/main/updater/update-manager.test.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "postinstall": "node scripts/postinstall.mjs"
+  },
 	"build": {
 		"appId": "com.collaborator.desktop",
 		"productName": "Collaborator",
@@ -160,7 +162,8 @@
 		"tailwind-merge": "^3.6.0",
 		"typescript": "^6.0.3",
 		"use-stick-to-bottom": "^1.1.4",
-		"vite": "8"
+		"vite": "8",
+		"ws": "^8.21.0"
 	},
 	"overrides": {
 		"@tiptap/core": "3.20.0",
@@ -203,6 +206,7 @@
 		"electron": "^42.3.3",
 		"electron-builder": "26.8.1",
 		"electron-vite": "6.0.0-beta.1",
+		"prettier": "^3.8.4",
 		"react": "^19.2.7",
 		"react-dom": "^19.2.7",
 		"tailwindcss": "4.3.0",
