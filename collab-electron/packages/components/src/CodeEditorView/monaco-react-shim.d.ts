@@ -60,8 +60,8 @@ declare namespace React {
         ? P
         : any;
 
-  type ComponentPropsWithRef<T extends ElementType> =
-    ComponentProps<T> & RefAttributes<any>;
+  type ComponentPropsWithRef<T extends ElementType> = ComponentProps<T> &
+    RefAttributes<any>;
 
   type ComponentPropsWithoutRef<T extends ElementType> = ComponentProps<T>;
   type PropsWithoutRef<P> = P;
@@ -196,7 +196,8 @@ declare namespace React {
     displayName?: string | undefined;
   }
 
-  type ContextType<C extends Context<any>> = C extends Context<infer T> ? T : never;
+  type ContextType<C extends Context<any>> =
+    C extends Context<infer T> ? T : never;
 
   namespace JSX {
     type ElementType = React.ElementType;
@@ -253,10 +254,7 @@ declare namespace React {
     effect: () => void | (() => void),
     deps?: DependencyList,
   ): void;
-  function useMemo<T>(
-    factory: () => T,
-    deps?: DependencyList,
-  ): T;
+  function useMemo<T>(factory: () => T, deps?: DependencyList): T;
   function useRef<T>(initialValue: T): MutableRefObject<T>;
   function useRef<T>(initialValue: T | null): RefObject<T | null>;
   function useState<S>(
@@ -285,12 +283,15 @@ declare namespace JSX {
 
   interface IntrinsicAttributes extends React.JSX.IntrinsicAttributes {}
 
-  interface IntrinsicClassAttributes<T>
-    extends React.JSX.IntrinsicClassAttributes<T> {}
+  interface IntrinsicClassAttributes<T> extends React.JSX
+    .IntrinsicClassAttributes<T> {}
 
   interface IntrinsicElements extends React.JSX.IntrinsicElements {}
 
-  type LibraryManagedAttributes<C, P> = React.JSX.LibraryManagedAttributes<C, P>;
+  type LibraryManagedAttributes<C, P> = React.JSX.LibraryManagedAttributes<
+    C,
+    P
+  >;
 }
 
 declare module "react/jsx-runtime" {
@@ -303,11 +304,13 @@ declare module "react/jsx-runtime" {
     interface ElementChildrenAttribute
       extends React.JSX.ElementChildrenAttribute {}
     interface IntrinsicAttributes extends React.JSX.IntrinsicAttributes {}
-    interface IntrinsicClassAttributes<T>
-      extends React.JSX.IntrinsicClassAttributes<T> {}
+    interface IntrinsicClassAttributes<T> extends React.JSX
+      .IntrinsicClassAttributes<T> {}
     interface IntrinsicElements extends React.JSX.IntrinsicElements {}
-    type LibraryManagedAttributes<C, P> =
-      React.JSX.LibraryManagedAttributes<C, P>;
+    type LibraryManagedAttributes<C, P> = React.JSX.LibraryManagedAttributes<
+      C,
+      P
+    >;
   }
 
   export const Fragment: any;
@@ -335,11 +338,13 @@ declare module "react/jsx-dev-runtime" {
     interface ElementChildrenAttribute
       extends React.JSX.ElementChildrenAttribute {}
     interface IntrinsicAttributes extends React.JSX.IntrinsicAttributes {}
-    interface IntrinsicClassAttributes<T>
-      extends React.JSX.IntrinsicClassAttributes<T> {}
+    interface IntrinsicClassAttributes<T> extends React.JSX
+      .IntrinsicClassAttributes<T> {}
     interface IntrinsicElements extends React.JSX.IntrinsicElements {}
-    type LibraryManagedAttributes<C, P> =
-      React.JSX.LibraryManagedAttributes<C, P>;
+    type LibraryManagedAttributes<C, P> = React.JSX.LibraryManagedAttributes<
+      C,
+      P
+    >;
   }
 
   export const Fragment: any;

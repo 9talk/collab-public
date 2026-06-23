@@ -10,7 +10,9 @@ function App() {
     };
   });
   const [theme, setTheme] = useState<"light" | "dark">(() =>
-    window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+    window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light",
   );
   const [scopePath, setScopePath] = useState(params.folderPath);
 
@@ -30,7 +32,11 @@ function App() {
   }, []);
 
   if (!params.workspacePath) {
-    return <div style={{ color: "var(--muted-foreground)", padding: 16 }}>No workspace</div>;
+    return (
+      <div style={{ color: "var(--muted-foreground)", padding: 16 }}>
+        No workspace
+      </div>
+    );
   }
 
   return (

@@ -3,7 +3,9 @@
  */
 
 export function createWorkspaceManager({ navWebview }) {
-	return {
-		getNavWebview() { return navWebview; },
-	};
+  return {
+    getNavWebview() {
+      return navWebview;
+    },
+  };
 }

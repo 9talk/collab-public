@@ -1,21 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type {
-  ReplayCommit,
-  ReplayCheckpoint,
-} from "@collab/shared/types";
+import type { ReplayCommit, ReplayCheckpoint } from "@collab/shared/types";
 import type { GraphData, GraphNode, GraphLink } from "./types";
 
-const CODE_EXTENSIONS = new Set([
-  ".ts", ".tsx", ".js", ".jsx", ".py", ".pyi",
-]);
+const CODE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".py", ".pyi"]);
 
 /**
  * Determine nodeType from a file path extension.
  * Matches the main-process heuristic in workspace-graph.ts.
  */
-function nodeTypeForPath(
-  path: string,
-): "file" | "code" {
+function nodeTypeForPath(path: string): "file" | "code" {
   const dot = path.lastIndexOf(".");
   if (dot === -1) return "file";
   const ext = path.slice(dot);
@@ -29,11 +22,7 @@ function titleForPath(path: string): string {
 }
 
 /** Composite key for deduplicating links in a Set. */
-function linkKey(
-  source: string,
-  target: string,
-  linkType: string,
-): string {
+function linkKey(source: string, target: string, linkType: string): string {
   return `${source}|${target}|${linkType}`;
 }
 
@@ -161,16 +150,14 @@ export interface ReplayEngine {
 
 export function useReplayEngine(): ReplayEngine {
   const [commits, setCommits] = useState<ReplayCommit[]>([]);
-  const [checkpoints, setCheckpoints] = useState<
-    Map<number, ReplayCheckpoint>
-  >(new Map());
+  const [checkpoints, setCheckpoints] = useState<Map<number, ReplayCheckpoint>>(
+    new Map(),
+  );
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGitRepo, setIsGitRepo] = useState(false);
-  const [totalCommits, setTotalCommits] = useState<
-    number | null
-  >(null);
+  const [totalCommits, setTotalCommits] = useState<number | null>(null);
 
   const commitsRef = useRef(commits);
   commitsRef.current = commits;
@@ -199,78 +186,71 @@ export function useReplayEngine(): ReplayEngine {
     }
   }, []);
 
-  const start = useCallback(
-    (workspacePath: string) => {
-      // Clean up previous listener without stopping the worker —
-      // other tabs may still be loading their own workspace.
-      if (unsubRef.current) {
-        unsubRef.current();
-        unsubRef.current = null;
-      }
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-      isPlayingRef.current = false;
-      setIsPlaying(false);
+  const start = useCallback((workspacePath: string) => {
+    // Clean up previous listener without stopping the worker —
+    // other tabs may still be loading their own workspace.
+    if (unsubRef.current) {
+      unsubRef.current();
+      unsubRef.current = null;
+    }
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    isPlayingRef.current = false;
+    setIsPlaying(false);
 
-      commitsRef.current = [];
-      setCommits([]);
-      setCheckpoints(new Map());
-      currentIndexRef.current = -1;
-      setCurrentIndex(-1);
-      setTotalCommits(null);
-      setIsGitRepo(false);
+    commitsRef.current = [];
+    setCommits([]);
+    setCheckpoints(new Map());
+    currentIndexRef.current = -1;
+    setCurrentIndex(-1);
+    setTotalCommits(null);
+    setIsGitRepo(false);
 
-      window.api.startReplay({ workspacePath }).then(
-        (isGit) => {
-          if (!isGit) {
-            isLoadingRef.current = false;
-            setIsLoading(false);
-            return;
+    window.api.startReplay({ workspacePath }).then(
+      (isGit) => {
+        if (!isGit) {
+          isLoadingRef.current = false;
+          setIsLoading(false);
+          return;
+        }
+        setIsGitRepo(true);
+        isLoadingRef.current = true;
+        setIsLoading(true);
+
+        unsubRef.current = window.api.onReplayData((msg) => {
+          if (msg.workspacePath !== workspacePath) return;
+
+          switch (msg.type) {
+            case "meta":
+              setTotalCommits(msg.data.totalCommits);
+              break;
+            case "commit":
+              setCommits((prev) => [...prev, msg.data]);
+              break;
+            case "checkpoint":
+              setCheckpoints((prev) => {
+                const next = new Map(prev);
+                next.set(msg.data.commitIndex, msg.data);
+                return next;
+              });
+              break;
+            case "complete":
+              setCommits((prev) =>
+                [...prev].sort((a, b) => a.timestamp - b.timestamp),
+              );
+              isLoadingRef.current = false;
+              setIsLoading(false);
+              break;
           }
-          setIsGitRepo(true);
-          isLoadingRef.current = true;
-          setIsLoading(true);
-
-          unsubRef.current = window.api.onReplayData(
-            (msg) => {
-              if (msg.workspacePath !== workspacePath) return;
-
-              switch (msg.type) {
-                case "meta":
-                  setTotalCommits(msg.data.totalCommits);
-                  break;
-                case "commit":
-                  setCommits((prev) => [...prev, msg.data]);
-                  break;
-                case "checkpoint":
-                  setCheckpoints((prev) => {
-                    const next = new Map(prev);
-                    next.set(msg.data.commitIndex, msg.data);
-                    return next;
-                  });
-                  break;
-                case "complete":
-                  setCommits((prev) =>
-                    [...prev].sort(
-                      (a, b) => a.timestamp - b.timestamp,
-                    ),
-                  );
-                  isLoadingRef.current = false;
-                  setIsLoading(false);
-                  break;
-              }
-            },
-          );
-        },
-        (err: unknown) => {
-          console.warn("startReplay failed:", err);
-        },
-      );
-    },
-    [],
-  );
+        });
+      },
+      (err: unknown) => {
+        console.warn("startReplay failed:", err);
+      },
+    );
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -290,10 +270,7 @@ export function useReplayEngine(): ReplayEngine {
   const currentGraphData = useMemo(() => {
     if (currentIndex < 0) return null;
     if (commits.length === 0) return null;
-    const clamped = Math.min(
-      currentIndex,
-      commits.length - 1,
-    );
+    const clamped = Math.min(currentIndex, commits.length - 1);
     return buildGraphAtIndex(clamped, commits, checkpoints);
   }, [currentIndex, commits, checkpoints]);
 
@@ -312,10 +289,7 @@ export function useReplayEngine(): ReplayEngine {
 
   const liveTimeRange = useMemo((): [number, number] | null => {
     if (commits.length === 0) return null;
-    return [
-      commits[0]!.timestamp,
-      commits[commits.length - 1]!.timestamp,
-    ];
+    return [commits[0]!.timestamp, commits[commits.length - 1]!.timestamp];
   }, [commits]);
 
   // Freeze timeRange during playback so commit positions don't
@@ -327,16 +301,13 @@ export function useReplayEngine(): ReplayEngine {
   }
   const timeRange = stableTimeRange.current;
 
-  const seekTo = useCallback(
-    (index: number) => {
-      if (commitsRef.current.length === 0) return;
-      const max = commitsRef.current.length - 1;
-      const clamped = Math.max(0, Math.min(index, max));
-      currentIndexRef.current = clamped;
-      setCurrentIndex(clamped);
-    },
-    [],
-  );
+  const seekTo = useCallback((index: number) => {
+    if (commitsRef.current.length === 0) return;
+    const max = commitsRef.current.length - 1;
+    const clamped = Math.max(0, Math.min(index, max));
+    currentIndexRef.current = clamped;
+    setCurrentIndex(clamped);
+  }, []);
 
   const seekToLive = useCallback(() => {
     currentIndexRef.current = -1;
@@ -373,9 +344,7 @@ export function useReplayEngine(): ReplayEngine {
     setIsPlaying(true);
 
     const totalSpan =
-      c.length >= 2
-        ? c[c.length - 1]!.timestamp - c[0]!.timestamp
-        : 1;
+      c.length >= 2 ? c[c.length - 1]!.timestamp - c[0]!.timestamp : 1;
     const speedMultiplier = Math.max(totalSpan / 10000, 1);
 
     let lastFrameTime: number | null = null;
@@ -426,13 +395,8 @@ export function useReplayEngine(): ReplayEngine {
         return;
       }
 
-      const realGap = Math.abs(
-        next.timestamp - current.timestamp,
-      );
-      const delay = Math.min(
-        2000,
-        Math.max(16, realGap / speedMultiplier),
-      );
+      const realGap = Math.abs(next.timestamp - current.timestamp);
+      const delay = Math.min(2000, Math.max(16, realGap / speedMultiplier));
 
       if (accumulated >= delay) {
         accumulated = 0;

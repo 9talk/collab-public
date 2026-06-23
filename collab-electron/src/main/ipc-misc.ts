@@ -21,15 +21,10 @@ interface IpcContext {
     channel: string,
     ...args: unknown[]
   ) => void;
-  trackEvent: (
-    name: string,
-    props?: Record<string, unknown>,
-  ) => void;
+  trackEvent: (name: string, props?: Record<string, unknown>) => void;
 }
 
-export function registerMiscHandlers(
-  ctx: IpcContext,
-): void {
+export function registerMiscHandlers(ctx: IpcContext): void {
   // Dialog: open folder
   ipcMain.handle("dialog:open-folder", async () => {
     const win = ctx.mainWindow();
@@ -133,38 +128,25 @@ export function registerMiscHandlers(
   );
 
   // Open external URL
-  ipcMain.on(
-    "shell:open-external",
-    (_event, url: string) => {
-      if (/^https?:\/\//i.test(url)) shell.openExternal(url);
-    },
-  );
+  ipcMain.on("shell:open-external", (_event, url: string) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+  });
 
   // Open file with system default application
-  ipcMain.on(
-    "shell:open-path",
-    (_event, path: string) => {
-      shell.openPath(path);
-    },
-  );
+  ipcMain.on("shell:open-path", (_event, path: string) => {
+    shell.openPath(path);
+  });
 
   // Git replay
   if (!DISABLE_GIT_REPLAY) {
     gitReplay.setNotifyFn((msg) => {
-      ctx.forwardToWebview(
-        `viewer:${msg.workspacePath}`,
-        "replay:data",
-        msg,
-      );
+      ctx.forwardToWebview(`viewer:${msg.workspacePath}`, "replay:data", msg);
     });
   }
 
   ipcMain.handle(
     "replay:start",
-    (
-      _event,
-      params: { workspacePath: string },
-    ): boolean => {
+    (_event, params: { workspacePath: string }): boolean => {
       if (DISABLE_GIT_REPLAY) return false;
       return gitReplay.startReplay(params.workspacePath);
     },
@@ -179,18 +161,11 @@ export function registerMiscHandlers(
   ipcMain.handle(
     "import:web-article",
     async (_event, url: string, targetDir: string) => {
-      const ws = workspaceForFile(
-        targetDir,
-        ctx.workspaces(),
-      );
+      const ws = workspaceForFile(targetDir, ctx.workspaces());
       if (!ws) {
         throw new Error("No workspace found for target directory");
       }
-      const articleResult = await importWebArticle(
-        url,
-        targetDir,
-        ws,
-      );
+      const articleResult = await importWebArticle(url, targetDir, ws);
       ctx.trackEvent("web_article_imported");
       return articleResult;
     },
@@ -198,39 +173,20 @@ export function registerMiscHandlers(
 
   // Agent activity
   agentActivity.setNotifyFn((event) => {
-    ctx.forwardToWebview(
-      "viewer",
-      `agent:${event.kind}`,
-      event,
-    );
+    ctx.forwardToWebview("viewer", `agent:${event.kind}`, event);
   });
 
-  ipcMain.handle(
-    "agent:focus-session",
-    (_event, sessionId: string) => {
-      const ptyId =
-        agentActivity.getPtySessionId(sessionId);
-      if (ptyId) {
-        ctx.forwardToWebview(
-          "terminal",
-          "focus-tab",
-          ptyId,
-        );
-      }
-    },
-  );
+  ipcMain.handle("agent:focus-session", (_event, sessionId: string) => {
+    const ptyId = agentActivity.getPtySessionId(sessionId);
+    if (ptyId) {
+      ctx.forwardToWebview("terminal", "focus-tab", ptyId);
+    }
+  });
 
   // Viewer: run in terminal
-  ipcMain.on(
-    "viewer:run-in-terminal",
-    (_event, command: string) => {
-      ctx.forwardToWebview(
-        "terminal",
-        "run-in-terminal",
-        command,
-      );
-    },
-  );
+  ipcMain.on("viewer:run-in-terminal", (_event, command: string) => {
+    ctx.forwardToWebview("terminal", "run-in-terminal", command);
+  });
 
   // JSON-RPC methods
   registerMethod(
@@ -243,10 +199,7 @@ export function registerMiscHandlers(
       };
       agentActivity.sessionStart(p);
       if (p.pty_session_id) {
-        agentActivity.linkPtySession(
-          p.session_id,
-          p.pty_session_id,
-        );
+        agentActivity.linkPtySession(p.session_id, p.pty_session_id);
       }
       return { ok: true };
     },
@@ -255,8 +208,7 @@ export function registerMiscHandlers(
       params: {
         session_id: "Unique session identifier",
         cwd: "Working directory of the agent",
-        pty_session_id:
-          "(optional) PTY session to link",
+        pty_session_id: "(optional) PTY session to link",
       },
     },
   );
@@ -273,8 +225,7 @@ export function registerMiscHandlers(
       return { ok: true };
     },
     {
-      description:
-        "Log a file read/write by an agent",
+      description: "Log a file read/write by an agent",
       params: {
         session_id: "Agent session identifier",
         tool_name: "Tool that accessed the file",
@@ -315,8 +266,7 @@ export function registerMiscHandlers(
     {
       description: "Show a native macOS notification",
       params: {
-        title:
-          "(optional) Notification title, defaults to 'Collaborator'",
+        title: "(optional) Notification title, defaults to 'Collaborator'",
         body: "Notification body text",
       },
     },

@@ -15,7 +15,8 @@ export const en = {
   "appearance.theme": "Theme",
   "appearance.canvasOpacity": "Canvas opacity",
   "appearance.rememberExpandedDirs": "Remember expanded folders",
-  "appearance.rememberExpandedDirsDesc": "Restore folder expansion state when reopening the app",
+  "appearance.rememberExpandedDirsDesc":
+    "Restore folder expansion state when reopening the app",
 
   // Terminal pane
   "terminal.title": "Terminal",
@@ -67,7 +68,8 @@ export const en = {
 
   // Updates pane
   "updates.title": "Updates",
-  "updates.description": "Manage how Collaborator checks for and installs updates.",
+  "updates.description":
+    "Manage how Collaborator checks for and installs updates.",
   "updates.autoCheck": "Check for updates automatically",
 
   // Language selector
@@ -76,8 +78,8 @@ export const en = {
   "language.chinese": "简体中文",
 
   // Misc
-  "esc": "esc",
-  "close": "Close",
+  esc: "esc",
+  close: "Close",
 } as const;
 
 export type TranslationKey = keyof typeof en;

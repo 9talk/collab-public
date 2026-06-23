@@ -4,12 +4,8 @@
  */
 
 type UpdateCb = (params: unknown) => void;
-type CompleteCb = (data: {
-  sessionId: string; stopReason: string;
-}) => void;
-type ErrorCb = (data: {
-  sessionId: string; error: string;
-}) => void;
+type CompleteCb = (data: { sessionId: string; stopReason: string }) => void;
+type ErrorCb = (data: { sessionId: string; error: string }) => void;
 type ExitCb = (data: { sessionId: string }) => void;
 
 const listeners = {
@@ -19,19 +15,13 @@ const listeners = {
   exit: [] as ExitCb[],
 };
 
-function emit(
-  type: keyof typeof listeners,
-  data: unknown,
-) {
+function emit(type: keyof typeof listeners, data: unknown) {
   for (const cb of listeners[type]) {
     (cb as (d: unknown) => void)(data);
   }
 }
 
-function simulateResponse(
-  sessionId: string,
-  userText: string,
-) {
+function simulateResponse(sessionId: string, userText: string) {
   const response =
     `You said: "${userText}"\n\n` +
     "This is a **mock response** from the dev shim. " +
@@ -85,13 +75,15 @@ function simulateResponse(
         sessionUpdate: "tool_call_update",
         toolCallId: `call_${Date.now() - 200}`,
         status: "completed",
-        content: [{
-          type: "content",
-          content: {
-            type: "text",
-            text: userText,
+        content: [
+          {
+            type: "content",
+            content: {
+              type: "text",
+              text: userText,
+            },
           },
-        }],
+        ],
       },
     });
   }, delay);
@@ -117,9 +109,7 @@ export function installDevShim() {
       return { sessionId };
     },
 
-    agentPrompt: async (
-      sid: string, text: string,
-    ) => {
+    agentPrompt: async (sid: string, text: string) => {
       console.log("[dev-shim] agentPrompt:", text);
       simulateResponse(sid, text);
     },

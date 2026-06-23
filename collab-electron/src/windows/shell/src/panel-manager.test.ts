@@ -5,7 +5,12 @@ function makePanel(id) {
   const el = document.createElement("div");
   el.id = id;
   el.getBoundingClientRect = () => ({
-    width: 280, height: 600, top: 0, left: 0, right: 280, bottom: 600,
+    width: 280,
+    height: 600,
+    top: 0,
+    left: 0,
+    right: 280,
+    bottom: 600,
   });
   return el;
 }
@@ -24,7 +29,12 @@ describe("createPanel", () => {
     panelsEl = document.createElement("div");
     panelsEl.id = "panels";
     panelsEl.getBoundingClientRect = () => ({
-      width: 1200, height: 600, top: 0, left: 0, right: 1200, bottom: 600,
+      width: 1200,
+      height: 600,
+      top: 0,
+      left: 0,
+      right: 1200,
+      bottom: 600,
     });
     document.body.appendChild(panelsEl);
 
@@ -55,7 +65,10 @@ describe("createPanel", () => {
   it("starts visible by default", async () => {
     const { createPanel } = await import("./panel-manager.js");
     const mgr = createPanel("nav", {
-      panel, viewer, resizeHandle, toggle,
+      panel,
+      viewer,
+      resizeHandle,
+      toggle,
       label: "Navigator",
       defaultWidth: 280,
       direction: 1,
@@ -67,7 +80,10 @@ describe("createPanel", () => {
   it("toggles visibility", async () => {
     const { createPanel } = await import("./panel-manager.js");
     const mgr = createPanel("nav", {
-      panel, viewer, resizeHandle, toggle,
+      panel,
+      viewer,
+      resizeHandle,
+      toggle,
       label: "Navigator",
       defaultWidth: 280,
       direction: 1,
@@ -76,14 +92,18 @@ describe("createPanel", () => {
     mgr.toggle();
     expect(mgr.isVisible()).toBe(false);
     expect(window.shellApi.setPref).toHaveBeenCalledWith(
-      "panel-visible-nav", false,
+      "panel-visible-nav",
+      false,
     );
   });
 
   it("persists width on pref key panel-width-{side}", async () => {
     const { createPanel } = await import("./panel-manager.js");
     const mgr = createPanel("nav", {
-      panel, viewer, resizeHandle, toggle,
+      panel,
+      viewer,
+      resizeHandle,
+      toggle,
       label: "Navigator",
       defaultWidth: 280,
       direction: 1,
@@ -103,7 +123,9 @@ describe("createPanel", () => {
     document.body.appendChild(termToggle);
 
     const mgr = createPanel("terminal", {
-      panel: termPanel, viewer, resizeHandle: termResize,
+      panel: termPanel,
+      viewer,
+      resizeHandle: termResize,
       toggle: termToggle,
       label: "Terminals",
       defaultWidth: 240,

@@ -1,6 +1,15 @@
 export const IMAGE_EXTENSIONS = new Set([
-  ".png", ".jpg", ".jpeg", ".gif", ".webp",
-  ".bmp", ".tiff", ".tif", ".avif", ".heic", ".heif",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".bmp",
+  ".tiff",
+  ".tif",
+  ".avif",
+  ".heic",
+  ".heif",
 ]);
 
 export function isImageFile(filePath: string): boolean {

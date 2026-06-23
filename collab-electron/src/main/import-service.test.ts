@@ -51,9 +51,9 @@ describe("validateWorkspaceBoundary", () => {
   });
 
   test("rejects path outside workspace", () => {
-    expect(() =>
-      validateWorkspaceBoundary("/other/dir", "/workspace"),
-    ).toThrow(/outside workspace/);
+    expect(() => validateWorkspaceBoundary("/other/dir", "/workspace")).toThrow(
+      /outside workspace/,
+    );
   });
 
   test("rejects partial prefix match", () => {
@@ -109,9 +109,7 @@ describe("fixMalformedLinkedImages", () => {
 describe("buildFrontmatter", () => {
   test("builds YAML frontmatter with JSON-encoded values", () => {
     const result = buildFrontmatter({ type: "article", url: "https://x.com" });
-    expect(result).toBe(
-      '---\ntype: "article"\nurl: "https://x.com"\n---',
-    );
+    expect(result).toBe('---\ntype: "article"\nurl: "https://x.com"\n---');
   });
 
   test("omits undefined values", () => {
@@ -120,9 +118,7 @@ describe("buildFrontmatter", () => {
       author: undefined,
       url: "https://x.com",
     });
-    expect(result).toBe(
-      '---\ntype: "article"\nurl: "https://x.com"\n---',
-    );
+    expect(result).toBe('---\ntype: "article"\nurl: "https://x.com"\n---');
   });
 
   test("produces empty frontmatter when all values are undefined", () => {

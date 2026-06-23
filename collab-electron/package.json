@@ -1,13 +1,13 @@
 {
-	"name": "@collaborator/electron",
-	"version": "0.8.0",
-	"private": true,
-	"license": "FSL-1.1-ALv2",
-	"type": "module",
-	"workspaces": [
-		"packages/*"
-	],
-	"main": "out/main/index.js",
+  "name": "@collaborator/electron",
+  "version": "0.8.0",
+  "private": true,
+  "license": "FSL-1.1-ALv2",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "main": "out/main/index.js",
   "scripts": {
     "dev": "bun format && bun ./scripts/dev.mjs",
     "build": "bun format && node ./scripts/run-local-bin.mjs electron-vite build",
@@ -23,193 +23,193 @@
     "format:check": "prettier --check .",
     "postinstall": "node scripts/postinstall.mjs"
   },
-	"build": {
-		"appId": "com.collaborator.desktop",
-		"productName": "Collaborator",
-		"publish": [
-			{
-				"provider": "github",
-				"owner": "collaborator-ai",
-				"repo": "collab-public"
-			}
-		],
-		"directories": {
-			"output": "dist"
-		},
-		"files": [
-			{
-				"from": "out",
-				"to": "out",
-				"filter": [
-					"**/*"
-				]
-			},
-			"package.json",
-			"NOTICE"
-		],
-		"asarUnpack": [
-			"node_modules/@img/sharp-libvips-linux-x64/**/*",
-			"node_modules/@img/sharp-libvips-linuxmusl-x64/**/*"
-		],
-		"afterSign": "scripts/notarize.cjs",
-		"afterAllArtifactBuild": "scripts/fix-artifacts.cjs",
-		"extraResources": [
-			{
-				"from": "resources/terminfo",
-				"to": "terminfo"
-			},
-			{
-				"from": "cli/collab-cli.mjs",
-				"to": "collab-cli.mjs"
-			},
-			{
-				"from": "packages/collab-canvas-skill",
-				"to": "collab-canvas-skill"
-			}
-		],
-		"mac": {
-			"category": "public.app-category.productivity",
-			"hardenedRuntime": true,
-			"gatekeeperAssess": false,
-			"notarize": false,
-			"entitlements": "build/entitlements.mac.plist",
-			"entitlementsInherit": "build/entitlements.mac.plist",
-			"artifactName": "${productName}-${version}-${arch}-mac.${ext}",
-			"extendInfo": {
-				"NSMicrophoneUsageDescription": "Collaborator needs microphone access to enable voice input for CLI tools like Claude Code."
-			},
-			"target": [
-				{
-					"target": "zip",
-					"arch": [
-						"arm64",
-						"x64"
-					]
-				}
-			]
-		},
-		"win": {
-			"target": [
-				{
-					"target": "nsis",
-					"arch": [
-						"x64",
-						"arm64"
-					]
-				}
-			]
-		},
-		"nsis": {
-			"oneClick": false,
-			"perMachine": false,
-			"allowElevation": true,
-			"allowToChangeInstallationDirectory": true
-		},
-		"linux": {
-			"category": "Development",
-			"target": [
-				{
-					"target": "AppImage",
-					"arch": "x64"
-				}
-			]
-		}
-	},
-	"dependencies": {
-		"@agentclientprotocol/claude-agent-acp": "^0.26.0",
-		"@agentclientprotocol/sdk": "^0.18.2",
-		"@assistant-ui/react": "^0.14.13",
-		"@assistant-ui/react-markdown": "^0.14.1",
-		"@blocknote/core": "0.47.0",
-		"@blocknote/mantine": "0.47.0",
-		"@blocknote/react": "0.47.0",
-		"@lezer/common": "^1.5.2",
-		"@lezer/python": "^1.1.19",
-		"@parcel/watcher": "2.5.6",
-		"@phosphor-icons/react": "^2.1.10",
-		"@posthog/react": "^1.10.0",
-		"@postlight/parser": "^2.2.3",
-		"@tiptap/core": "3.20.0",
-		"@tiptap/extension-typography": "3.20.0",
-		"@xterm/addon-fit": "^0.11.0",
-		"@xterm/addon-unicode11": "^0.9.0",
-		"@xterm/addon-web-links": "^0.12.0",
-		"@xterm/addon-webgl": "^0.19.0",
-		"@xterm/xterm": "^6.0.0",
-		"class-variance-authority": "^0.7.1",
-		"clsx": "2.1.1",
-		"d3": "7.9.0",
-		"dependency-cruiser": "^17.4.3",
-		"electron-log": "^5.4.4",
-		"electron-updater": "^6.8.3",
-		"front-matter": "4.0.2",
-		"ignore": "7.0.5",
-		"katex": "0.17.0",
-		"lucide-react": "^1.17.0",
-		"monaco-editor": "^0.55.1",
-		"node-pty": "^1.1.0",
-		"posthog-js": "^1.379.2",
-		"posthog-node": "^5.35.14",
-		"react-markdown": "10.1.0",
-		"rehype-katex": "7.0.1",
-		"rehype-raw": "7.0.0",
-		"remark-breaks": "4.0.0",
-		"remark-gfm": "4.0.1",
-		"remark-math": "6.0.0",
-		"sharp": "0.34.5",
-		"sonner": "^2.0.7",
-		"streamdown": "^2.5.0",
-		"tailwind-merge": "^3.6.0",
-		"typescript": "^6.0.3",
-		"use-stick-to-bottom": "^1.1.4",
-		"vite": "8",
-		"ws": "^8.21.0"
-	},
-	"overrides": {
-		"@tiptap/core": "3.20.0",
-		"@tiptap/extensions": "3.20.0",
-		"@tiptap/extension-bold": "3.20.0",
-		"@tiptap/extension-bubble-menu": "3.20.0",
-		"@tiptap/extension-code": "3.20.0",
-		"@tiptap/extension-floating-menu": "3.20.0",
-		"@tiptap/extension-horizontal-rule": "3.20.0",
-		"@tiptap/extension-italic": "3.20.0",
-		"@tiptap/extension-link": "3.20.0",
-		"@tiptap/extension-paragraph": "3.20.0",
-		"@tiptap/react": "3.20.0",
-		"@tiptap/pm": "3.20.0",
-		"@tiptap/extension-strike": "3.20.0",
-		"@tiptap/extension-text": "3.20.0",
-		"@tiptap/extension-underline": "3.20.0",
-		"@tiptap/extension-typography": "3.20.0"
-	},
-	"optionalDependencies": {
-		"@img/sharp-darwin-arm64": "0.34.5",
-		"@img/sharp-darwin-x64": "0.34.5",
-		"@img/sharp-libvips-darwin-arm64": "1.2.4",
-		"@img/sharp-libvips-darwin-x64": "1.2.4",
-		"@img/sharp-libvips-linux-x64": "1.2.4",
-		"@img/sharp-linux-x64": "0.34.5",
-		"@parcel/watcher-darwin-arm64": "2.5.6",
-		"@parcel/watcher-darwin-x64": "2.5.6"
-	},
-	"devDependencies": {
-		"@electron/notarize": "^3.1.1",
-		"@electron/rebuild": "^4.0.4",
-		"@octokit/rest": "22.0.1",
-		"@tailwindcss/vite": "4.3.0",
-		"@types/d3": "7.4.3",
-		"@types/react": "^19.2.17",
-		"@types/react-dom": "^19.2.3",
-		"@vitejs/plugin-react": "6.0.2",
-		"app-builder-bin": "4.2.0",
-		"electron": "^42.3.3",
-		"electron-builder": "26.8.1",
-		"electron-vite": "6.0.0-beta.1",
-		"prettier": "^3.8.4",
-		"react": "^19.2.7",
-		"react-dom": "^19.2.7",
-		"tailwindcss": "4.3.0",
-		"tsx": "^4.22.4"
-	}
+  "build": {
+    "appId": "com.collaborator.desktop",
+    "productName": "Collaborator",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "collaborator-ai",
+        "repo": "collab-public"
+      }
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      {
+        "from": "out",
+        "to": "out",
+        "filter": [
+          "**/*"
+        ]
+      },
+      "package.json",
+      "NOTICE"
+    ],
+    "asarUnpack": [
+      "node_modules/@img/sharp-libvips-linux-x64/**/*",
+      "node_modules/@img/sharp-libvips-linuxmusl-x64/**/*"
+    ],
+    "afterSign": "scripts/notarize.cjs",
+    "afterAllArtifactBuild": "scripts/fix-artifacts.cjs",
+    "extraResources": [
+      {
+        "from": "resources/terminfo",
+        "to": "terminfo"
+      },
+      {
+        "from": "cli/collab-cli.mjs",
+        "to": "collab-cli.mjs"
+      },
+      {
+        "from": "packages/collab-canvas-skill",
+        "to": "collab-canvas-skill"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "notarize": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "artifactName": "${productName}-${version}-${arch}-mac.${ext}",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Collaborator needs microphone access to enable voice input for CLI tools like Claude Code."
+      },
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "category": "Development",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": "x64"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@agentclientprotocol/claude-agent-acp": "^0.26.0",
+    "@agentclientprotocol/sdk": "^0.18.2",
+    "@assistant-ui/react": "^0.14.13",
+    "@assistant-ui/react-markdown": "^0.14.1",
+    "@blocknote/core": "0.47.0",
+    "@blocknote/mantine": "0.47.0",
+    "@blocknote/react": "0.47.0",
+    "@lezer/common": "^1.5.2",
+    "@lezer/python": "^1.1.19",
+    "@parcel/watcher": "2.5.6",
+    "@phosphor-icons/react": "^2.1.10",
+    "@posthog/react": "^1.10.0",
+    "@postlight/parser": "^2.2.3",
+    "@tiptap/core": "3.20.0",
+    "@tiptap/extension-typography": "3.20.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-unicode11": "^0.9.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/xterm": "^6.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "2.1.1",
+    "d3": "7.9.0",
+    "dependency-cruiser": "^17.4.3",
+    "electron-log": "^5.4.4",
+    "electron-updater": "^6.8.3",
+    "front-matter": "4.0.2",
+    "ignore": "7.0.5",
+    "katex": "0.17.0",
+    "lucide-react": "^1.17.0",
+    "monaco-editor": "^0.55.1",
+    "node-pty": "^1.1.0",
+    "posthog-js": "^1.379.2",
+    "posthog-node": "^5.35.14",
+    "react-markdown": "10.1.0",
+    "rehype-katex": "7.0.1",
+    "rehype-raw": "7.0.0",
+    "remark-breaks": "4.0.0",
+    "remark-gfm": "4.0.1",
+    "remark-math": "6.0.0",
+    "sharp": "0.34.5",
+    "sonner": "^2.0.7",
+    "streamdown": "^2.5.0",
+    "tailwind-merge": "^3.6.0",
+    "typescript": "^6.0.3",
+    "use-stick-to-bottom": "^1.1.4",
+    "vite": "8",
+    "ws": "^8.21.0"
+  },
+  "overrides": {
+    "@tiptap/core": "3.20.0",
+    "@tiptap/extensions": "3.20.0",
+    "@tiptap/extension-bold": "3.20.0",
+    "@tiptap/extension-bubble-menu": "3.20.0",
+    "@tiptap/extension-code": "3.20.0",
+    "@tiptap/extension-floating-menu": "3.20.0",
+    "@tiptap/extension-horizontal-rule": "3.20.0",
+    "@tiptap/extension-italic": "3.20.0",
+    "@tiptap/extension-link": "3.20.0",
+    "@tiptap/extension-paragraph": "3.20.0",
+    "@tiptap/react": "3.20.0",
+    "@tiptap/pm": "3.20.0",
+    "@tiptap/extension-strike": "3.20.0",
+    "@tiptap/extension-text": "3.20.0",
+    "@tiptap/extension-underline": "3.20.0",
+    "@tiptap/extension-typography": "3.20.0"
+  },
+  "optionalDependencies": {
+    "@img/sharp-darwin-arm64": "0.34.5",
+    "@img/sharp-darwin-x64": "0.34.5",
+    "@img/sharp-libvips-darwin-arm64": "1.2.4",
+    "@img/sharp-libvips-darwin-x64": "1.2.4",
+    "@img/sharp-libvips-linux-x64": "1.2.4",
+    "@img/sharp-linux-x64": "0.34.5",
+    "@parcel/watcher-darwin-arm64": "2.5.6",
+    "@parcel/watcher-darwin-x64": "2.5.6"
+  },
+  "devDependencies": {
+    "@electron/notarize": "^3.1.1",
+    "@electron/rebuild": "^4.0.4",
+    "@octokit/rest": "22.0.1",
+    "@tailwindcss/vite": "4.3.0",
+    "@types/d3": "7.4.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "app-builder-bin": "4.2.0",
+    "electron": "^42.3.3",
+    "electron-builder": "26.8.1",
+    "electron-vite": "6.0.0-beta.1",
+    "prettier": "^3.8.4",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwindcss": "4.3.0",
+    "tsx": "^4.22.4"
+  }
 }

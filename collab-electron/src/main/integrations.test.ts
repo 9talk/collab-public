@@ -146,12 +146,7 @@ describe("installSkill / uninstallSkill", () => {
 
   test("uninstallSkill removes Codex instruction file", () => {
     installSkill("codex");
-    const file = join(
-      FAKE_HOME,
-      ".codex",
-      "instructions",
-      "collab-canvas.md",
-    );
+    const file = join(FAKE_HOME, ".codex", "instructions", "collab-canvas.md");
     expect(existsSync(file)).toBe(true);
 
     uninstallSkill("codex");

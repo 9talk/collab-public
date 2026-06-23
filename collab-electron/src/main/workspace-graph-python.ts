@@ -10,15 +10,9 @@ import {
 } from "node:path";
 import type { SyntaxNodeRef } from "@lezer/common";
 import { parser as pythonParser } from "@lezer/python";
-import {
-  isPathWithinDirectory,
-  type CollectedFile,
-} from "./workspace-graph";
+import { isPathWithinDirectory, type CollectedFile } from "./workspace-graph";
 
-export const PYTHON_CODE_EXTENSIONS = new Set([
-  ".py",
-  ".pyi",
-]);
+export const PYTHON_CODE_EXTENSIONS = new Set([".py", ".pyi"]);
 
 const PYTHON_SEARCH_IGNORED_DIRS = new Set([
   ".git",
@@ -58,10 +52,7 @@ interface PythonFileInfo extends PythonModuleEntry {
 
 interface PythonImportContext {
   fileInfoById: Map<string, PythonFileInfo>;
-  moduleEntriesByName: Map<
-    string,
-    PythonModuleEntry[]
-  >;
+  moduleEntriesByName: Map<string, PythonModuleEntry[]>;
 }
 
 interface PythonImportStatement {
@@ -85,11 +76,7 @@ export async function buildPythonImportLinks(
     return [];
   }
 
-  const context =
-    await buildPythonImportContext(
-      pythonFiles,
-      workspacePath,
-    );
+  const context = await buildPythonImportContext(pythonFiles, workspacePath);
   const links: Array<{
     source: string;
     target: string;
@@ -97,9 +84,7 @@ export async function buildPythonImportLinks(
   const seenLinks = new Set<string>();
 
   for (const file of pythonFiles) {
-    const fileInfo = context.fileInfoById.get(
-      file.id,
-    );
+    const fileInfo = context.fileInfoById.get(file.id);
     if (!fileInfo) {
       continue;
     }
@@ -111,19 +96,11 @@ export async function buildPythonImportLinks(
       continue;
     }
 
-    const statements =
-      extractPythonImportStatements(content);
+    const statements = extractPythonImportStatements(content);
     for (const statement of statements) {
-      const targets = resolvePythonImportTargets(
-        statement,
-        fileInfo,
-        context,
-      );
+      const targets = resolvePythonImportTargets(statement, fileInfo, context);
       for (const target of targets) {
-        if (
-          !nodeIds.has(target) ||
-          target === file.id
-        ) {
+        if (!nodeIds.has(target) || target === file.id) {
           continue;
         }
 
@@ -151,24 +128,12 @@ async function buildPythonImportContext(
   >,
   workspacePath: string,
 ): Promise<PythonImportContext> {
-  const roots = await listPythonRoots(
-    workspacePath,
-    pythonFiles,
-  );
-  const fileInfoById = new Map<
-    string,
-    PythonFileInfo
-  >();
-  const moduleEntriesByName = new Map<
-    string,
-    PythonModuleEntry[]
-  >();
+  const roots = await listPythonRoots(workspacePath, pythonFiles);
+  const fileInfoById = new Map<string, PythonFileInfo>();
+  const moduleEntriesByName = new Map<string, PythonModuleEntry[]>();
 
   for (const file of pythonFiles) {
-    const fileInfo = createPythonFileInfo(
-      file,
-      roots,
-    );
+    const fileInfo = createPythonFileInfo(file, roots);
     if (!fileInfo) {
       continue;
     }
@@ -178,15 +143,9 @@ async function buildPythonImportContext(
       continue;
     }
 
-    const entries =
-      moduleEntriesByName.get(
-        fileInfo.moduleName,
-      ) ?? [];
+    const entries = moduleEntriesByName.get(fileInfo.moduleName) ?? [];
     entries.push(fileInfo);
-    moduleEntriesByName.set(
-      fileInfo.moduleName,
-      entries,
-    );
+    moduleEntriesByName.set(fileInfo.moduleName, entries);
   }
 
   return {
@@ -204,70 +163,33 @@ async function listPythonRoots(
   >,
 ): Promise<PythonRootCandidate[]> {
   const roots = new Map<string, number>();
-  addPythonRootCandidate(
-    roots,
-    workspacePath,
-    0,
-  );
+  addPythonRootCandidate(roots, workspacePath, 0);
 
   for (const file of pythonFiles) {
-    for (const dirPath of listAncestorPaths(
-      file.path,
-      workspacePath,
-    )) {
+    for (const dirPath of listAncestorPaths(file.path, workspacePath)) {
       if (basename(dirPath) === "src") {
-        addPythonRootCandidate(
-          roots,
-          dirPath,
-          50,
-        );
+        addPythonRootCandidate(roots, dirPath, 50);
       }
     }
   }
 
-  const configPaths =
-    await listPythonConfigPaths(workspacePath);
+  const configPaths = await listPythonConfigPaths(workspacePath);
   for (const configPath of configPaths) {
     const configDir = dirname(configPath);
-    addPythonRootCandidate(
-      roots,
-      configDir,
-      100,
-    );
+    addPythonRootCandidate(roots, configDir, 100);
 
     try {
-      const content = await readFile(
-        configPath,
-        "utf-8",
-      );
-      for (const rootPath of extractPythonPackageRoots(
-        configDir,
-        content,
-      )) {
-        addPythonRootCandidate(
-          roots,
-          rootPath,
-          200,
-        );
+      const content = await readFile(configPath, "utf-8");
+      for (const rootPath of extractPythonPackageRoots(configDir, content)) {
+        addPythonRootCandidate(roots, rootPath, 200);
       }
     } catch {
       // Ignore unreadable package configs and fall back to workspace/src heuristics.
     }
 
     const srcPath = join(configDir, "src");
-    if (
-      pythonFiles.some((file) =>
-        isPathWithinDirectory(
-          file.path,
-          srcPath,
-        ),
-      )
-    ) {
-      addPythonRootCandidate(
-        roots,
-        srcPath,
-        150,
-      );
+    if (pythonFiles.some((file) => isPathWithinDirectory(file.path, srcPath))) {
+      addPythonRootCandidate(roots, srcPath, 150);
     }
   }
 
@@ -279,15 +201,10 @@ async function listPythonRoots(
     .sort(comparePythonRoots);
 }
 
-async function listPythonConfigPaths(
-  workspacePath: string,
-): Promise<string[]> {
+async function listPythonConfigPaths(workspacePath: string): Promise<string[]> {
   const configPaths: string[] = [];
 
-  await collectPythonConfigPaths(
-    workspacePath,
-    configPaths,
-  );
+  await collectPythonConfigPaths(workspacePath, configPaths);
 
   return configPaths;
 }
@@ -308,26 +225,14 @@ async function collectPythonConfigPaths(
   for (const entry of entries) {
     const fullPath = join(dirPath, entry.name);
     if (entry.isDirectory()) {
-      if (
-        PYTHON_SEARCH_IGNORED_DIRS.has(
-          entry.name,
-        )
-      ) {
+      if (PYTHON_SEARCH_IGNORED_DIRS.has(entry.name)) {
         continue;
       }
-      await collectPythonConfigPaths(
-        fullPath,
-        configPaths,
-      );
+      await collectPythonConfigPaths(fullPath, configPaths);
       continue;
     }
 
-    if (
-      entry.isFile() &&
-      PYTHON_CONFIG_FILE_NAMES.has(
-        entry.name,
-      )
-    ) {
+    if (entry.isFile() && PYTHON_CONFIG_FILE_NAMES.has(entry.name)) {
       configPaths.push(fullPath);
     }
   }
@@ -339,10 +244,7 @@ function addPythonRootCandidate(
   priority: number,
 ): void {
   const existing = roots.get(path);
-  if (
-    existing === undefined ||
-    priority > existing
-  ) {
+  if (existing === undefined || priority > existing) {
     roots.set(path, priority);
   }
 }
@@ -351,25 +253,14 @@ function comparePythonRoots(
   a: PythonRootCandidate,
   b: PythonRootCandidate,
 ): number {
-  return (
-    b.priority - a.priority ||
-    b.path.length - a.path.length
-  );
+  return b.priority - a.priority || b.path.length - a.path.length;
 }
 
-function listAncestorPaths(
-  filePath: string,
-  workspacePath: string,
-): string[] {
+function listAncestorPaths(filePath: string, workspacePath: string): string[] {
   const ancestors: string[] = [];
   let currentPath = dirname(filePath);
 
-  while (
-    isPathWithinDirectory(
-      currentPath,
-      workspacePath,
-    )
-  ) {
+  while (isPathWithinDirectory(currentPath, workspacePath)) {
     ancestors.push(currentPath);
     if (currentPath === workspacePath) {
       break;
@@ -389,37 +280,26 @@ function extractPythonPackageRoots(
   content: string,
 ): string[] {
   const roots = new Set<string>();
-  const addRoot = (
-    rawPath: string | undefined,
-  ): void => {
-    const candidate =
-      normalizePythonRootPath(rawPath);
+  const addRoot = (rawPath: string | undefined): void => {
+    const candidate = normalizePythonRootPath(rawPath);
     if (!candidate) {
       return;
     }
     roots.add(resolve(configDir, candidate));
   };
 
-  for (const match of content.matchAll(
-    /\bfrom\s*=\s*["']([^"']+)["']/g,
-  )) {
+  for (const match of content.matchAll(/\bfrom\s*=\s*["']([^"']+)["']/g)) {
     addRoot(match[1]);
   }
-  for (const match of content.matchAll(
-    /\bwhere\s*=\s*["']([^"']+)["']/g,
-  )) {
+  for (const match of content.matchAll(/\bwhere\s*=\s*["']([^"']+)["']/g)) {
     addRoot(match[1]);
   }
-  for (const match of content.matchAll(
-    /\bwhere\s*=\s*\[([^\]]+)\]/g,
-  )) {
+  for (const match of content.matchAll(/\bwhere\s*=\s*\[([^\]]+)\]/g)) {
     const arrayContent = match[1];
     if (!arrayContent) {
       continue;
     }
-    for (const quotedPath of arrayContent.matchAll(
-      /["']([^"']+)["']/g,
-    )) {
+    for (const quotedPath of arrayContent.matchAll(/["']([^"']+)["']/g)) {
       addRoot(quotedPath[1]);
     }
   }
@@ -450,18 +330,13 @@ function extractPythonPackageRoots(
   return Array.from(roots);
 }
 
-function normalizePythonRootPath(
-  rawPath: string | undefined,
-): string | null {
+function normalizePythonRootPath(rawPath: string | undefined): string | null {
   if (!rawPath) {
     return null;
   }
 
   const candidate = rawPath.trim();
-  if (
-    candidate.length === 0 ||
-    candidate === "."
-  ) {
+  if (candidate.length === 0 || candidate === ".") {
     return null;
   }
 
@@ -475,19 +350,13 @@ function createPythonFileInfo(
   roots: PythonRootCandidate[],
 ): PythonFileInfo | null {
   const root = roots.find((candidate) =>
-    isPathWithinDirectory(
-      file.path,
-      candidate.path,
-    ),
+    isPathWithinDirectory(file.path, candidate.path),
   );
   if (!root) {
     return null;
   }
 
-  const relativePath = relative(
-    root.path,
-    file.path,
-  ).replaceAll("\\", "/");
+  const relativePath = relative(root.path, file.path).replaceAll("\\", "/");
   if (
     relativePath.length === 0 ||
     relativePath.startsWith("../") ||
@@ -497,18 +366,10 @@ function createPythonFileInfo(
   }
 
   const extension = extname(relativePath);
-  const pathWithoutExtension =
-    relativePath.slice(
-      0,
-      -extension.length,
-    );
-  const isPackageInit =
-    basename(pathWithoutExtension) ===
-    "__init__";
+  const pathWithoutExtension = relativePath.slice(0, -extension.length);
+  const isPackageInit = basename(pathWithoutExtension) === "__init__";
   const moduleName = (
-    isPackageInit
-      ? dirname(pathWithoutExtension)
-      : pathWithoutExtension
+    isPackageInit ? dirname(pathWithoutExtension) : pathWithoutExtension
   )
     .replaceAll("/", ".")
     .replace(/^\.$/, "");
@@ -518,21 +379,15 @@ function createPythonFileInfo(
     filePath: file.path,
     rootPath: root.path,
     moduleName,
-    packageName: isPackageInit
-      ? moduleName
-      : getParentModuleName(moduleName),
+    packageName: isPackageInit ? moduleName : getParentModuleName(moduleName),
     isPackageInit,
     isStub: extension === ".pyi",
   };
 }
 
-function getParentModuleName(
-  moduleName: string,
-): string {
+function getParentModuleName(moduleName: string): string {
   const lastDot = moduleName.lastIndexOf(".");
-  return lastDot === -1
-    ? ""
-    : moduleName.slice(0, lastDot);
+  return lastDot === -1 ? "" : moduleName.slice(0, lastDot);
 }
 
 function extractPythonImportStatements(
@@ -569,12 +424,8 @@ function parsePythonImportStatement(
     .replaceAll(/\s+/g, " ")
     .trim();
 
-  if (
-    compactSource.startsWith("import ")
-  ) {
-    const moduleNames = splitImportList(
-      compactSource.slice("import ".length),
-    );
+  if (compactSource.startsWith("import ")) {
+    const moduleNames = splitImportList(compactSource.slice("import ".length));
     return moduleNames.length > 0
       ? {
           kind: "import",
@@ -583,15 +434,11 @@ function parsePythonImportStatement(
       : null;
   }
 
-  if (
-    !compactSource.startsWith("from ")
-  ) {
+  if (!compactSource.startsWith("from ")) {
     return null;
   }
 
-  const match = compactSource.match(
-    /^from\s+(.+?)\s+import\s+(.+)$/,
-  );
+  const match = compactSource.match(/^from\s+(.+?)\s+import\s+(.+)$/);
   if (!match) {
     return null;
   }
@@ -603,11 +450,8 @@ function parsePythonImportStatement(
       .replace(/^\(\s*/, "")
       .replace(/\s*\)$/, ""),
   );
-  const relativeLevel =
-    moduleSpecifier.match(/^\.+/)?.[0]
-      .length ?? 0;
-  const moduleName =
-    moduleSpecifier.slice(relativeLevel);
+  const relativeLevel = moduleSpecifier.match(/^\.+/)?.[0].length ?? 0;
+  const moduleName = moduleSpecifier.slice(relativeLevel);
 
   return {
     kind: "from",
@@ -617,16 +461,10 @@ function parsePythonImportStatement(
   };
 }
 
-function splitImportList(
-  importListSource: string,
-): string[] {
+function splitImportList(importListSource: string): string[] {
   return importListSource
     .split(",")
-    .map((entry) =>
-      entry
-        .trim()
-        .replace(/\s+as\s+.+$/, ""),
-    )
+    .map((entry) => entry.trim().replace(/\s+as\s+.+$/, ""))
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0);
 }
@@ -640,11 +478,7 @@ function resolvePythonImportTargets(
 
   if (statement.kind === "import") {
     for (const moduleName of statement.moduleNames ?? []) {
-      const target = resolvePythonModuleTarget(
-        moduleName,
-        fileInfo,
-        context,
-      );
+      const target = resolvePythonModuleTarget(moduleName, fileInfo, context);
       if (target) {
         targets.add(target);
       }
@@ -652,22 +486,14 @@ function resolvePythonImportTargets(
     return Array.from(targets);
   }
 
-  const resolvedBaseModule =
-    resolvePythonFromBaseModule(
-      statement,
-      fileInfo,
-    );
+  const resolvedBaseModule = resolvePythonFromBaseModule(statement, fileInfo);
   if (resolvedBaseModule === null) {
     return [];
   }
 
   const baseTarget =
     resolvedBaseModule.length > 0
-      ? resolvePythonModuleTarget(
-          resolvedBaseModule,
-          fileInfo,
-          context,
-        )
+      ? resolvePythonModuleTarget(resolvedBaseModule, fileInfo, context)
       : null;
   for (const importedName of statement.importedNames ?? []) {
     if (importedName === "*") {
@@ -677,18 +503,13 @@ function resolvePythonImportTargets(
       continue;
     }
 
-    const submoduleName =
-      joinPythonModuleName(
-        resolvedBaseModule,
-        importedName,
-      );
+    const submoduleName = joinPythonModuleName(
+      resolvedBaseModule,
+      importedName,
+    );
     const submoduleTarget =
       submoduleName.length > 0
-        ? resolvePythonModuleTarget(
-            submoduleName,
-            fileInfo,
-            context,
-          )
+        ? resolvePythonModuleTarget(submoduleName, fileInfo, context)
         : null;
     if (submoduleTarget) {
       targets.add(submoduleTarget);
@@ -706,54 +527,39 @@ function resolvePythonFromBaseModule(
   statement: PythonImportStatement,
   fileInfo: PythonFileInfo,
 ): string | null {
-  const relativeLevel =
-    statement.relativeLevel ?? 0;
-  const moduleParts = splitPythonModuleName(
-    statement.moduleName ?? "",
-  );
+  const relativeLevel = statement.relativeLevel ?? 0;
+  const moduleParts = splitPythonModuleName(statement.moduleName ?? "");
   if (relativeLevel === 0) {
     return joinPythonModuleParts(moduleParts);
   }
 
-  const packageParts = splitPythonModuleName(
-    fileInfo.packageName,
-  );
+  const packageParts = splitPythonModuleName(fileInfo.packageName);
   const ascendCount = relativeLevel - 1;
   if (ascendCount > packageParts.length) {
     return null;
   }
 
   return joinPythonModuleParts([
-    ...packageParts.slice(
-      0,
-      packageParts.length - ascendCount,
-    ),
+    ...packageParts.slice(0, packageParts.length - ascendCount),
     ...moduleParts,
   ]);
 }
 
-function splitPythonModuleName(
-  moduleName: string,
-): string[] {
+function splitPythonModuleName(moduleName: string): string[] {
   return moduleName
     .split(".")
     .map((part) => part.trim())
     .filter((part) => part.length > 0);
 }
 
-function joinPythonModuleName(
-  baseModuleName: string,
-  suffix: string,
-): string {
+function joinPythonModuleName(baseModuleName: string, suffix: string): string {
   return joinPythonModuleParts([
     ...splitPythonModuleName(baseModuleName),
     ...splitPythonModuleName(suffix),
   ]);
 }
 
-function joinPythonModuleParts(
-  parts: string[],
-): string {
+function joinPythonModuleParts(parts: string[]): string {
   return parts.join(".");
 }
 
@@ -762,20 +568,13 @@ function resolvePythonModuleTarget(
   sourceFile: PythonFileInfo,
   context: PythonImportContext,
 ): string | null {
-  const entries =
-    context.moduleEntriesByName.get(
-      moduleName,
-    );
+  const entries = context.moduleEntriesByName.get(moduleName);
   if (!entries || entries.length === 0) {
     return null;
   }
 
   const bestMatch = [...entries].sort((a, b) =>
-    comparePythonModuleEntries(
-      a,
-      b,
-      sourceFile,
-    ),
+    comparePythonModuleEntries(a, b, sourceFile),
   )[0];
 
   return bestMatch?.fileId ?? null;
@@ -790,8 +589,7 @@ function comparePythonModuleEntries(
     Number(b.rootPath === sourceFile.rootPath) -
       Number(a.rootPath === sourceFile.rootPath) ||
     Number(a.isStub) - Number(b.isStub) ||
-    Number(a.isPackageInit) -
-      Number(b.isPackageInit) ||
+    Number(a.isPackageInit) - Number(b.isPackageInit) ||
     a.fileId.localeCompare(b.fileId)
   );
 }

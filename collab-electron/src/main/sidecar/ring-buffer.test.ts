@@ -106,7 +106,7 @@ describe("RingBuffer", () => {
   test("bytesWritten tracks total across wraps", () => {
     const buf = new RingBuffer(4);
     buf.write(Buffer.from("abcdef")); // 6 bytes
-    buf.write(Buffer.from("gh"));     // 2 bytes
+    buf.write(Buffer.from("gh")); // 2 bytes
     expect(buf.bytesWritten).toBe(8);
     expect(buf.snapshot().length).toBe(4);
   });

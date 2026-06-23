@@ -3,7 +3,11 @@
   --focus-bg: color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
 body {
   font-family: var(--font-sans);
@@ -15,9 +19,15 @@ body {
   user-select: none;
 }
 
-.tile-list { display: flex; flex-direction: column; padding: 4px 0; }
+.tile-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
 
-.tile-search { padding: 6px var(--nav-inset); }
+.tile-search {
+  padding: 6px var(--nav-inset);
+}
 
 .tile-search-input {
   width: 100%;
@@ -31,7 +41,9 @@ body {
   font-family: inherit;
 }
 
-.tile-search-input::placeholder { color: var(--muted-foreground); }
+.tile-search-input::placeholder {
+  color: var(--muted-foreground);
+}
 
 .tile-entry {
   display: flex;
@@ -43,8 +55,12 @@ body {
   transition: background 80ms ease;
 }
 
-.tile-entry:hover { background: var(--focus-bg); }
-.tile-entry.focused { background: var(--focus-bg); }
+.tile-entry:hover {
+  background: var(--focus-bg);
+}
+.tile-entry.focused {
+  background: var(--focus-bg);
+}
 
 .tile-icon {
   position: relative;
@@ -56,7 +72,9 @@ body {
   flex-shrink: 0;
 }
 
-.tile-icon svg { display: block; }
+.tile-icon svg {
+  display: block;
+}
 
 .tile-title {
   font-weight: 400;
@@ -83,7 +101,11 @@ body {
   height: 1.4em;
 }
 
-.tile-empty { padding: 12px var(--nav-inset); color: var(--muted-foreground); font-size: 11px; }
+.tile-empty {
+  padding: 12px var(--nav-inset);
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
 
 .tile-alias-icon {
   cursor: pointer;

@@ -27,12 +27,14 @@ function isIdle(entry: TerminalEntry): boolean {
 function isTerminalEntry(value: unknown): value is TerminalEntry {
   if (!value || typeof value !== "object") return false;
   const entry = value as Record<string, unknown>;
-  return typeof entry.sessionId === "string"
-    && typeof entry.displayName === "string"
-    && typeof entry.commandName === "string"
-    && typeof entry.cwd === "string"
-    && typeof entry.tileId === "string"
-    && (entry.foreground === null || typeof entry.foreground === "string");
+  return (
+    typeof entry.sessionId === "string" &&
+    typeof entry.displayName === "string" &&
+    typeof entry.commandName === "string" &&
+    typeof entry.cwd === "string" &&
+    typeof entry.tileId === "string" &&
+    (entry.foreground === null || typeof entry.foreground === "string")
+  );
 }
 
 function dedupeEntries(entries: TerminalEntry[]): TerminalEntry[] {
@@ -45,8 +47,7 @@ function dedupeEntries(entries: TerminalEntry[]): TerminalEntry[] {
 
 function App() {
   const [entries, setEntries] = useState<TerminalEntry[]>([]);
-  const [focusedSessionId, setFocusedSessionId] =
-    useState<string | null>(null);
+  const [focusedSessionId, setFocusedSessionId] = useState<string | null>(null);
   useEffect(() => {
     // Listen for messages from the shell renderer via webview.send()
     // These arrive on ipcRenderer.on() in the universal preload,
@@ -62,13 +63,14 @@ function App() {
           const entry = args[0];
           if (!isTerminalEntry(entry)) return;
           setEntries((prev) =>
-            dedupeEntries([...prev.filter((e) => e.tileId !== entry.tileId), entry])
+            dedupeEntries([
+              ...prev.filter((e) => e.tileId !== entry.tileId),
+              entry,
+            ]),
           );
         } else if (channel === "terminal-list:remove") {
           const sessionId = args[0] as string;
-          setEntries((prev) =>
-            prev.filter((e) => e.sessionId !== sessionId),
-          );
+          setEntries((prev) => prev.filter((e) => e.sessionId !== sessionId));
         } else if (channel === "terminal-list:focus") {
           const sessionId = args[0] as string | null;
           setFocusedSessionId(sessionId);
@@ -131,11 +133,7 @@ function App() {
         const idle = isIdle(entry);
         const focused = entry.sessionId === focusedSessionId;
         const stateClass = idle ? "idle" : "busy";
-        const classes = [
-          "terminal-entry",
-          stateClass,
-          focused ? "focused" : "",
-        ]
+        const classes = ["terminal-entry", stateClass, focused ? "focused" : ""]
           .filter(Boolean)
           .join(" ");
 
@@ -148,18 +146,12 @@ function App() {
             <div className={`status-dot ${stateClass}`} />
             <div className="entry-info">
               <div className="entry-top">
-                <span className="shell-name">
-                  {entry.displayName}
-                </span>
+                <span className="shell-name">{entry.displayName}</span>
                 <span className="status-label">
-                  {idle
-                    ? "idle"
-                    : entry.foreground || "running"}
+                  {idle ? "idle" : entry.foreground || "running"}
                 </span>
               </div>
-              <div className="entry-cwd">
-                {entry.cwd}
-              </div>
+              <div className="entry-cwd">{entry.cwd}</div>
             </div>
           </div>
         );

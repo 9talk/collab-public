@@ -36,17 +36,14 @@ export class SidecarClient {
 
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.socket = net.createConnection(
-        this.controlSocketPath,
-        () => {
-          // Replace the connect-time error handler with one that
-          // rejects all pending RPCs on unexpected socket errors.
-          this.socket!.removeListener("error", reject);
-          this.socket!.on("error", () => this.rejectAllPending());
-          this.socket!.on("close", () => this.rejectAllPending());
-          resolve();
-        },
-      );
+      this.socket = net.createConnection(this.controlSocketPath, () => {
+        // Replace the connect-time error handler with one that
+        // rejects all pending RPCs on unexpected socket errors.
+        this.socket!.removeListener("error", reject);
+        this.socket!.on("error", () => this.rejectAllPending());
+        this.socket!.on("close", () => this.rejectAllPending());
+        resolve();
+      });
       this.socket.on("error", reject);
       this.socket.on("data", (chunk) => this.handleData(chunk));
     });
@@ -178,10 +175,7 @@ export class SidecarClient {
     return result.command;
   }
 
-  async captureSession(
-    sessionId: string,
-    lines = 50,
-  ): Promise<string> {
+  async captureSession(sessionId: string, lines = 50): Promise<string> {
     const result = (await this.rpc("session.capture", {
       sessionId,
       lines,
@@ -189,10 +183,7 @@ export class SidecarClient {
     return result.output;
   }
 
-  async sendSignal(
-    sessionId: string,
-    signal: string,
-  ): Promise<void> {
+  async sendSignal(sessionId: string, signal: string): Promise<void> {
     await this.rpc("session.signal", { sessionId, signal });
   }
 

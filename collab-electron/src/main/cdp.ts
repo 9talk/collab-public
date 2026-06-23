@@ -25,9 +25,7 @@ export async function cdpSend(
 ): Promise<unknown> {
   const wc = webContentsModule.fromId(webContentsId);
   if (!wc || wc.isDestroyed()) {
-    throw new Error(
-      `webContents ${webContentsId} not found or destroyed`,
-    );
+    throw new Error(`webContents ${webContentsId} not found or destroyed`);
   }
 
   if (!attached.has(webContentsId)) {

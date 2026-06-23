@@ -5,9 +5,7 @@ import { toCollabFileUrl } from "@collab/shared/collab-file-url";
 import { isSubpath } from "@collab/shared/path-utils";
 import { IMAGE_EXTENSIONS, isImageFile } from "./file-filter";
 
-const NATIVE_EXTENSIONS = new Set([
-  ".png", ".jpg", ".jpeg", ".gif", ".webp",
-]);
+const NATIVE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
 
 interface Pending {
   resolve: (value: unknown) => void;
@@ -83,10 +81,7 @@ function isInsideCacheDir(path: string): boolean {
   return false;
 }
 
-export function getImageThumbnail(
-  path: string,
-  size: number,
-): Promise<string> {
+export function getImageThumbnail(path: string, size: number): Promise<string> {
   if (isInsideCacheDir(path)) return Promise.resolve("");
   return request("thumbnail", path, { size }) as Promise<string>;
 }
@@ -187,7 +182,7 @@ export async function resolveImagePath(
     if (
       isSubpath(workspacePath, fromNote) &&
       isImageFile(fromNote) &&
-      await fileExists(fromNote)
+      (await fileExists(fromNote))
     ) {
       return fromNote;
     }
@@ -195,7 +190,7 @@ export async function resolveImagePath(
     if (
       isSubpath(workspacePath, fromRoot) &&
       isImageFile(fromRoot) &&
-      await fileExists(fromRoot)
+      (await fileExists(fromRoot))
     ) {
       return fromRoot;
     }
@@ -203,9 +198,7 @@ export async function resolveImagePath(
   }
 
   const ext = reference.lastIndexOf(".");
-  if (ext === -1 || !IMAGE_EXTENSIONS.has(
-    reference.slice(ext).toLowerCase(),
-  )) {
+  if (ext === -1 || !IMAGE_EXTENSIONS.has(reference.slice(ext).toLowerCase())) {
     return null;
   }
 

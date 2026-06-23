@@ -1,5 +1,10 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { pushToHistory, goBack, goForward, resetHistory } from "./navigation-history";
+import {
+  pushToHistory,
+  goBack,
+  goForward,
+  resetHistory,
+} from "./navigation-history";
 
 beforeEach(() => {
   resetHistory();

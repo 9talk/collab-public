@@ -18,7 +18,8 @@ export function useTranslation(api: {
   const [locale, setLocale] = useState<SupportedLocale>("en");
 
   useEffect(() => {
-    api.getPref("locale")
+    api
+      .getPref("locale")
       .then((v) => {
         if (v === "en" || v === "zh") setLocale(v);
       })

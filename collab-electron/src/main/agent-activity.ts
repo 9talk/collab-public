@@ -98,24 +98,17 @@ export function sessionEnd(params: { session_id: string }): void {
   notifyFn?.({ kind: "session-ended", sessionId: params.session_id });
 }
 
-export function getSession(
-  sessionId: string,
-): AgentSession | undefined {
+export function getSession(sessionId: string): AgentSession | undefined {
   return sessions.get(sessionId);
 }
 
-export function linkPtySession(
-  sessionId: string,
-  ptySessionId: string,
-): void {
+export function linkPtySession(sessionId: string, ptySessionId: string): void {
   const session = sessions.get(sessionId);
   if (session) {
     session.ptySessionId = ptySessionId;
   }
 }
 
-export function getPtySessionId(
-  sessionId: string,
-): string | null {
+export function getPtySessionId(sessionId: string): string | null {
   return sessions.get(sessionId)?.ptySessionId ?? null;
 }

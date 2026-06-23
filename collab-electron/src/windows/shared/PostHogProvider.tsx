@@ -32,11 +32,7 @@ function initCrashReporting(): void {
   });
 }
 
-export function AnalyticsProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export function AnalyticsProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {

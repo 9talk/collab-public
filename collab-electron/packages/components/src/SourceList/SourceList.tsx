@@ -85,7 +85,13 @@ function Source({ sourceName, items, highlightText }: SourceProps) {
           ))}
         </div>
       ) : (
-        <div style={{ textAlign: "center", padding: "32px 16px", color: "var(--color-text-secondary)" }}>
+        <div
+          style={{
+            textAlign: "center",
+            padding: "32px 16px",
+            color: "var(--color-text-secondary)",
+          }}
+        >
           No items in this source
         </div>
       )}

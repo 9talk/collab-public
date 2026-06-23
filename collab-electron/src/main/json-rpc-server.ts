@@ -1,9 +1,5 @@
 import { createServer, type Server, type Socket } from "node:net";
-import {
-  mkdirSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { COLLAB_DIR } from "./paths";
@@ -21,9 +17,7 @@ const BASE_DIR = join(homedir(), ".collaborator");
 const SOCKET_PATH_FILE = join(BASE_DIR, "socket-path");
 const NODE_PATH_FILE = join(BASE_DIR, "node-path");
 
-type MethodHandler = (
-  params: unknown,
-) => unknown | Promise<unknown>;
+type MethodHandler = (params: unknown) => unknown | Promise<unknown>;
 
 interface MethodEntry {
   handler: MethodHandler;
@@ -79,9 +73,7 @@ function makeErrorResponse(
   return { jsonrpc: "2.0", id, error: { code, message } };
 }
 
-async function handleMessage(
-  raw: string,
-): Promise<JsonRpcResponse | null> {
+async function handleMessage(raw: string): Promise<JsonRpcResponse | null> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -107,8 +99,7 @@ async function handleMessage(
     const result = await handler(parsed.params);
     return { jsonrpc: "2.0", id: parsed.id, result };
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : String(err);
+    const message = err instanceof Error ? err.message : String(err);
     return makeErrorResponse(parsed.id, -32000, message);
   }
 }
@@ -166,11 +157,7 @@ export function registerMethod(
 ): void {
   methods.set(
     method,
-    makeMethodEntry(
-      handler,
-      meta?.description ?? "",
-      meta?.params,
-    ),
+    makeMethodEntry(handler, meta?.description ?? "", meta?.params),
   );
 }
 
@@ -186,18 +173,14 @@ export function startJsonRpcServer(): Promise<void> {
       reject(err);
     });
 
-    registerMethod(
-      "rpc.discover",
-      () => ({ methods: discoverMethods() }),
-      { description: "List all available RPC methods" },
-    );
+    registerMethod("rpc.discover", () => ({ methods: discoverMethods() }), {
+      description: "List all available RPC methods",
+    });
 
     server.listen(SOCKET_PATH, () => {
       writeFileSync(SOCKET_PATH_FILE, SOCKET_PATH, "utf-8");
       writeFileSync(NODE_PATH_FILE, process.execPath, "utf-8");
-      console.log(
-        `[json-rpc] Listening on ${SOCKET_PATH}`,
-      );
+      console.log(`[json-rpc] Listening on ${SOCKET_PATH}`);
       resolve();
     });
   });

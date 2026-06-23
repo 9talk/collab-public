@@ -6,25 +6,18 @@
   color: var(--foreground);
   text-decoration: underline;
   text-decoration-style: solid;
-  text-decoration-color: color-mix(
-    in srgb,
-    var(--foreground) 40%,
-    transparent
-  );
+  text-decoration-color: color-mix(in srgb, var(--foreground) 40%, transparent);
   text-underline-offset: 2px;
   cursor: pointer;
   border-radius: 2px;
-  transition: text-decoration-color 0.15s ease,
+  transition:
+    text-decoration-color 0.15s ease,
     background-color 0.15s ease;
 }
 
 .wiki-link:hover {
   text-decoration-color: var(--foreground);
-  background-color: color-mix(
-    in srgb,
-    var(--foreground) 8%,
-    transparent
-  );
+  background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
 }
 
 .wiki-link.dead {
@@ -79,11 +72,7 @@
 
 .wikilink-autocomplete-item:hover,
 .wikilink-autocomplete-item.selected {
-  background-color: color-mix(
-    in srgb,
-    var(--foreground) 8%,
-    transparent
-  );
+  background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
 }
 
 /* ============================================================================
@@ -115,11 +104,7 @@
 }
 
 .backlink-item:hover {
-  background-color: color-mix(
-    in srgb,
-    var(--foreground) 6%,
-    transparent
-  );
+  background-color: color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
 .backlink-title {

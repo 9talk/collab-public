@@ -10,9 +10,7 @@ import {
   Loader2,
 } from "lucide-react";
 
-const TOOL_ICONS: Record<
-  string, ComponentType<{ size: number }>
-> = {
+const TOOL_ICONS: Record<string, ComponentType<{ size: number }>> = {
   bash: Terminal,
   Bash: Terminal,
   read_file: FileText,
@@ -37,9 +35,7 @@ function getLabel(toolName: string, args: unknown): string {
   const a = args as Record<string, unknown>;
 
   if (a.command && typeof a.command === "string") {
-    return a.command.length > 60
-      ? a.command.slice(0, 57) + "..."
-      : a.command;
+    return a.command.length > 60 ? a.command.slice(0, 57) + "..." : a.command;
   }
   if (a.path && typeof a.path === "string") {
     const parts = (a.path as string).split("/");
@@ -72,21 +68,15 @@ export function ToolCallFallback({
   const isRunning = status.type === "running";
 
   return (
-    <details
-      className="my-1 rounded-lg border border-border bg-card text-xs"
-    >
-      <summary
-        className="flex cursor-pointer items-center gap-2 px-3 py-2 text-muted-foreground select-none"
-      >
+    <details className="my-1 rounded-lg border border-border bg-card text-xs">
+      <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-muted-foreground select-none">
         {isRunning ? (
           <Loader2 size={12} className="animate-spin" />
         ) : (
           <Check size={12} className="text-green-500" />
         )}
         <Icon size={12} />
-        <span className="font-mono truncate">
-          {label}
-        </span>
+        <span className="font-mono truncate">{label}</span>
       </summary>
       <div className="border-t border-border px-3 py-2">
         {args && (

@@ -22,8 +22,7 @@ export interface UpdateState {
 
 /** True when `offered` is a genuine upgrade over `current` (semver). */
 export function isNewer(offered: string, current: string): boolean {
-  const parse = (v: string) =>
-    v.replace(/-.+$/, "").split(".").map(Number);
+  const parse = (v: string) => v.replace(/-.+$/, "").split(".").map(Number);
   const [oMaj = 0, oMin = 0, oPat = 0] = parse(offered);
   const [cMaj = 0, cMin = 0, cPat = 0] = parse(current);
   if (oMaj !== cMaj) return oMaj > cMaj;
@@ -62,7 +61,10 @@ class UpdateManager {
     return true;
   }
 
-  init(opts?: { onBeforeQuit?: () => Promise<void>; autoCheckEnabled?: boolean }): void {
+  init(opts?: {
+    onBeforeQuit?: () => Promise<void>;
+    autoCheckEnabled?: boolean;
+  }): void {
     if (this.initialized) return;
     this.onBeforeQuit = opts?.onBeforeQuit ?? null;
     this.autoCheckEnabled = opts?.autoCheckEnabled ?? false;
@@ -84,7 +86,9 @@ class UpdateManager {
       warn: (msg: string) => console.warn(`[updater] ${msg}`),
       error: (msg: string) => {
         if (isMissingReleaseMetadataError(msg)) {
-          console.warn("[updater] Release metadata missing; skipping update check");
+          console.warn(
+            "[updater] Release metadata missing; skipping update check",
+          );
           return;
         }
         console.error(`[updater] ${msg}`);
@@ -110,9 +114,7 @@ class UpdateManager {
       }
 
       const releaseNotes =
-        typeof info.releaseNotes === "string"
-          ? info.releaseNotes
-          : undefined;
+        typeof info.releaseNotes === "string" ? info.releaseNotes : undefined;
       this.setState({
         status: "available",
         version: info.version,
@@ -134,9 +136,7 @@ class UpdateManager {
 
     autoUpdater.on("update-downloaded", (info) => {
       const releaseNotes =
-        typeof info.releaseNotes === "string"
-          ? info.releaseNotes
-          : undefined;
+        typeof info.releaseNotes === "string" ? info.releaseNotes : undefined;
       this.setState({
         status: "ready",
         version: info.version,

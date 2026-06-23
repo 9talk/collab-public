@@ -20,5 +20,9 @@
       "@collab/components/*": ["./packages/components/src/*"]
     }
   },
-  "include": ["src/windows/**/*", "packages/shared/src/**/*", "packages/components/src/**/*"]
+  "include": [
+    "src/windows/**/*",
+    "packages/shared/src/**/*",
+    "packages/components/src/**/*"
+  ]
 }

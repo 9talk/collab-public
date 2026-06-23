@@ -43,7 +43,9 @@ describe("splitFilepath", () => {
 describe("getTileLabel", () => {
   test("returns cwd basename for term tiles with cwd", () => {
     const label = getTileLabel({
-      type: "term", id: "t1", cwd: "/Users/me/projects/collab",
+      type: "term",
+      id: "t1",
+      cwd: "/Users/me/projects/collab",
     });
     expect(label.name).toBe("collab");
     expect(label.parent).toBe("/Users/me/projects/");
@@ -57,7 +59,8 @@ describe("getTileLabel", () => {
 
   test("userTitle wins over autoTitle and cwd", () => {
     const label = getTileLabel({
-      type: "term", id: "t1",
+      type: "term",
+      id: "t1",
       userTitle: "My Server",
       autoTitle: "/Users/me/projects/app",
       cwd: "/Users/me/projects/app",
@@ -68,7 +71,8 @@ describe("getTileLabel", () => {
 
   test("returns autoTitle split when no userTitle", () => {
     const label = getTileLabel({
-      type: "term", id: "t1",
+      type: "term",
+      id: "t1",
       autoTitle: "/Users/me/projects/app",
     });
     expect(label.name).toBe("app");
@@ -77,7 +81,8 @@ describe("getTileLabel", () => {
 
   test("falls back to cwd when no userTitle or autoTitle", () => {
     const label = getTileLabel({
-      type: "term", id: "t1",
+      type: "term",
+      id: "t1",
       cwd: "/Users/me/projects/fallback",
     });
     expect(label.name).toBe("fallback");
@@ -86,7 +91,8 @@ describe("getTileLabel", () => {
 
   test("empty userTitle falls through to autoTitle", () => {
     const label = getTileLabel({
-      type: "term", id: "t1",
+      type: "term",
+      id: "t1",
       userTitle: "",
       autoTitle: "/Users/me/projects/app",
     });
@@ -96,7 +102,8 @@ describe("getTileLabel", () => {
 
   test("returns hostname for browser tiles with URL", () => {
     const label = getTileLabel({
-      type: "browser", id: "t1",
+      type: "browser",
+      id: "t1",
       url: "https://example.com/page",
     });
     expect(label.name).toBe("example.com");
@@ -104,7 +111,8 @@ describe("getTileLabel", () => {
 
   test("returns raw URL for browser tiles with invalid URL", () => {
     const label = getTileLabel({
-      type: "browser", id: "t1",
+      type: "browser",
+      id: "t1",
       url: "not-a-url",
     });
     expect(label.name).toBe("not-a-url");
@@ -117,7 +125,8 @@ describe("getTileLabel", () => {
 
   test("returns folder name for graph tiles with folderPath", () => {
     const label = getTileLabel({
-      type: "graph", id: "t1",
+      type: "graph",
+      id: "t1",
       folderPath: "/Users/me/projects/myapp",
     });
     expect(label.name).toBe("myapp");
@@ -131,7 +140,8 @@ describe("getTileLabel", () => {
 
   test("returns filename for file-based tiles", () => {
     const label = getTileLabel({
-      type: "note", id: "t1",
+      type: "note",
+      id: "t1",
       filePath: "/Users/me/docs/readme.md",
     });
     expect(label.name).toBe("readme.md");
@@ -145,7 +155,8 @@ describe("getTileLabel", () => {
 
   test("returns filename for image tiles", () => {
     const label = getTileLabel({
-      type: "image", id: "t1",
+      type: "image",
+      id: "t1",
       filePath: "/photos/cat.png",
     });
     expect(label.name).toBe("cat.png");

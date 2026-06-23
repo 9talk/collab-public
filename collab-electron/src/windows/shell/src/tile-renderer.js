@@ -142,7 +142,9 @@ export function createTileDOM(tile, callbacks) {
       e.stopPropagation();
       navigator.clipboard.writeText(copyablePath);
       copyBtn.innerHTML = checkSvg;
-      setTimeout(() => { copyBtn.innerHTML = copySvg; }, 1000);
+      setTimeout(() => {
+        copyBtn.innerHTML = copySvg;
+      }, 1000);
     });
     btnGroup.appendChild(copyBtn);
   }
@@ -264,7 +266,19 @@ export function createTileDOM(tile, callbacks) {
     container.insertBefore(runIndicator, contentArea);
   }
 
-  return { container, titleBar, titleText, contentArea, contentOverlay, closeBtn, lockBtn, urlInput, navBack, navForward, navReload };
+  return {
+    container,
+    titleBar,
+    titleText,
+    contentArea,
+    contentOverlay,
+    closeBtn,
+    lockBtn,
+    urlInput,
+    navBack,
+    navForward,
+    navReload,
+  };
 }
 
 export function updateLockButton(lockBtn, locked) {
@@ -300,8 +314,11 @@ export function getTileLabel(tile, aliases) {
   }
   if (tile.type === "browser") {
     if (tile.url) {
-      try { return { parent: "", name: new URL(tile.url).hostname }; }
-      catch { return { parent: "", name: tile.url }; }
+      try {
+        return { parent: "", name: new URL(tile.url).hostname };
+      } catch {
+        return { parent: "", name: tile.url };
+      }
     }
     return { parent: "", name: "Browser" };
   }
@@ -319,9 +336,10 @@ export function splitFilepath(path) {
 
 function renderTileTitleContent(titleText, tile, aliases) {
   titleText.textContent = "";
-  const alias = (tile.type === "term" && !tile.userTitle && tile.cwd)
-    ? aliases?.[tile.cwd]
-    : null;
+  const alias =
+    tile.type === "term" && !tile.userTitle && tile.cwd
+      ? aliases?.[tile.cwd]
+      : null;
 
   if (alias) {
     const iconSpan = document.createElement("span");

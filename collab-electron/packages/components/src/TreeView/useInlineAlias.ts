@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface UseInlineAliasReturn {
   aliasingPath: string | null;
   aliasValue: string;
   inputRef: React.RefObject<HTMLInputElement | null>;
-  startAlias: (path: string, initialValue: string, existingAlias?: string) => void;
+  startAlias: (
+    path: string,
+    initialValue: string,
+    existingAlias?: string,
+  ) => void;
   cancelAlias: () => void;
   confirmAlias: () => void;
   setAliasValue: (value: string) => void;
@@ -14,16 +18,16 @@ export function useInlineAlias(
   onSaveAlias: (path: string, newAlias: string) => void,
 ): UseInlineAliasReturn {
   const [aliasingPath, setAliasingPath] = useState<string | null>(null);
-  const [aliasValue, setAliasValue] = useState('');
+  const [aliasValue, setAliasValue] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
   const pendingSelectRef = useRef(false);
-  const originalValueRef = useRef('');
+  const originalValueRef = useRef("");
 
   const startAlias = useCallback(
     (path: string, initialValue: string, existingAlias?: string) => {
       setAliasingPath(path);
       setAliasValue(initialValue);
-      originalValueRef.current = existingAlias ?? '';
+      originalValueRef.current = existingAlias ?? "";
       pendingSelectRef.current = true;
     },
     [],
@@ -31,7 +35,7 @@ export function useInlineAlias(
 
   const cancelAlias = useCallback(() => {
     setAliasingPath(null);
-    setAliasValue('');
+    setAliasValue("");
     pendingSelectRef.current = false;
   }, []);
 

@@ -11,23 +11,18 @@ const HTML_IMG_SRC_RE = /<img\s[^>]*?\bsrc=["']([^"']+)["'][^>]*?\/?>/i;
 
 function isAbsoluteLocalPath(path: string): boolean {
   return (
-    path.startsWith("/")
-    || WINDOWS_ABSOLUTE_RE.test(path)
-    || UNC_ABSOLUTE_RE.test(path)
+    path.startsWith("/") ||
+    WINDOWS_ABSOLUTE_RE.test(path) ||
+    UNC_ABSOLUTE_RE.test(path)
   );
 }
 
-function resolveRelativePath(
-  notePath: string,
-  imageRef: string,
-): string {
+function resolveRelativePath(notePath: string, imageRef: string): string {
   const kind = pathKind(notePath);
   const separator = kind === "windows" || kind === "wsl-unc" ? "\\" : "/";
   const baseDir = parentPath(notePath);
   const combined = `${baseDir}${separator}${imageRef}`;
-  const segments = combined
-    .split(/[\\/]+/)
-    .filter(Boolean);
+  const segments = combined.split(/[\\/]+/).filter(Boolean);
 
   const resolved: string[] = [];
   let minLength = 0;

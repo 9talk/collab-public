@@ -120,7 +120,9 @@ async function cmdTileList() {
 
 async function cmdTileCreate(args) {
   if (args.length === 0) {
-    die("tile create requires a type (term, note, code, image, graph, browser, pdf)");
+    die(
+      "tile create requires a type (term, note, code, image, graph, browser, pdf)",
+    );
   }
   const tileType = args.shift();
   const valid = ["term", "note", "code", "image", "graph", "browser", "pdf"];
@@ -248,7 +250,8 @@ async function cmdTerminalRead(args) {
     if (flag === "--lines") {
       if (args.length === 0) die("--lines requires a number");
       lines = Number(args.shift());
-      if (!Number.isInteger(lines) || lines <= 0) die("--lines must be a positive integer");
+      if (!Number.isInteger(lines) || lines <= 0)
+        die("--lines must be a positive integer");
     } else {
       die(`unknown option: ${flag}`);
     }
@@ -335,7 +338,8 @@ async function cmdBrowserEvaluate(args) {
   const tileId = args[0];
   const expression = args[1];
   const result = await rpcCall("canvas.browserEvaluate", {
-    tileId, expression,
+    tileId,
+    expression,
   });
   console.log(pretty(result));
 }
@@ -452,19 +456,36 @@ try {
       break;
     case "tile": {
       if (argv.length < 2) {
-        die("tile requires a subcommand (list, create, rm, move, resize, focus, notify)");
+        die(
+          "tile requires a subcommand (list, create, rm, move, resize, focus, notify)",
+        );
       }
       const sub = argv[1];
       const rest = argv.slice(2);
       switch (sub) {
-        case "list":   await cmdTileList(); break;
-        case "create": await cmdTileCreate(rest); break;
-        case "rm":     await cmdTileRm(rest); break;
-        case "move":   await cmdTileMove(rest); break;
-        case "resize": await cmdTileResize(rest); break;
-        case "focus":  await cmdTileFocus(rest); break;
-        case "notify": await cmdTileNotify(rest); break;
-        default: die(`unknown tile subcommand: ${sub}`);
+        case "list":
+          await cmdTileList();
+          break;
+        case "create":
+          await cmdTileCreate(rest);
+          break;
+        case "rm":
+          await cmdTileRm(rest);
+          break;
+        case "move":
+          await cmdTileMove(rest);
+          break;
+        case "resize":
+          await cmdTileResize(rest);
+          break;
+        case "focus":
+          await cmdTileFocus(rest);
+          break;
+        case "notify":
+          await cmdTileNotify(rest);
+          break;
+        default:
+          die(`unknown tile subcommand: ${sub}`);
       }
       break;
     }
@@ -475,29 +496,55 @@ try {
       const sub = argv[1];
       const rest = argv.slice(2);
       switch (sub) {
-        case "write": await cmdTerminalWrite(rest); break;
-        case "read":  await cmdTerminalRead(rest); break;
-        default: die(`unknown terminal subcommand: ${sub}`);
+        case "write":
+          await cmdTerminalWrite(rest);
+          break;
+        case "read":
+          await cmdTerminalRead(rest);
+          break;
+        default:
+          die(`unknown terminal subcommand: ${sub}`);
       }
       break;
     }
     case "browser": {
       if (argv.length < 2) {
-        die("browser requires a subcommand (navigate, screenshot, snapshot, click, type, scroll, eval, wait, info)");
+        die(
+          "browser requires a subcommand (navigate, screenshot, snapshot, click, type, scroll, eval, wait, info)",
+        );
       }
       const sub = argv[1];
       const rest = argv.slice(2);
       switch (sub) {
-        case "navigate":   await cmdBrowserNavigate(rest); break;
-        case "screenshot": await cmdBrowserScreenshot(rest); break;
-        case "snapshot":   await cmdBrowserSnapshot(rest); break;
-        case "click":      await cmdBrowserClick(rest); break;
-        case "type":       await cmdBrowserType(rest); break;
-        case "scroll":     await cmdBrowserScroll(rest); break;
-        case "eval":       await cmdBrowserEvaluate(rest); break;
-        case "wait":       await cmdBrowserWait(rest); break;
-        case "info":       await cmdBrowserInfo(rest); break;
-        default: die(`unknown browser subcommand: ${sub}`);
+        case "navigate":
+          await cmdBrowserNavigate(rest);
+          break;
+        case "screenshot":
+          await cmdBrowserScreenshot(rest);
+          break;
+        case "snapshot":
+          await cmdBrowserSnapshot(rest);
+          break;
+        case "click":
+          await cmdBrowserClick(rest);
+          break;
+        case "type":
+          await cmdBrowserType(rest);
+          break;
+        case "scroll":
+          await cmdBrowserScroll(rest);
+          break;
+        case "eval":
+          await cmdBrowserEvaluate(rest);
+          break;
+        case "wait":
+          await cmdBrowserWait(rest);
+          break;
+        case "info":
+          await cmdBrowserInfo(rest);
+          break;
+        default:
+          die(`unknown browser subcommand: ${sub}`);
       }
       break;
     }

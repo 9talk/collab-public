@@ -11,7 +11,7 @@ Origin (0,0) is top-left. X increases rightward, Y downward.
 ## Tile Types and Default Sizes
 
 | Type    | Default size (w x h) | Use for                          |
-|---------|-----------------------|----------------------------------|
+| ------- | -------------------- | -------------------------------- |
 | `term`  | 20 x 25              | Terminal / shell session         |
 | `note`  | 22 x 27              | Markdown files (.md, .txt)       |
 | `code`  | 22 x 27              | Source code files                |
@@ -72,8 +72,8 @@ collab-canvas viewport set --pan 0,0 --zoom 0.8
 
 ## Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | RPC error |
-| 2 | Connection failure (Collaborator not running) |
+| Code | Meaning                                       |
+| ---- | --------------------------------------------- |
+| 0    | Success                                       |
+| 1    | RPC error                                     |
+| 2    | Connection failure (Collaborator not running) |

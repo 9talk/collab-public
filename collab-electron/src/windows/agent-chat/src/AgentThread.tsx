@@ -48,17 +48,11 @@ function Composer({ ready }: { ready: boolean }) {
           Reconnecting...
         </div>
       )}
-      <ComposerPrimitive.Root
-        className="flex items-end gap-2 rounded-xl border border-border bg-card p-2"
-      >
+      <ComposerPrimitive.Root className="flex items-end gap-2 rounded-xl border border-border bg-card p-2">
         <ComposerPrimitive.Input
           autoFocus
           disabled={!ready}
-          placeholder={
-            ready
-              ? "Message the agent..."
-              : "Reconnecting..."
-          }
+          placeholder={ready ? "Message the agent..." : "Reconnecting..."}
           className="flex-1 resize-none bg-transparent px-2 py-1 text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
           rows={1}
         />
@@ -75,12 +69,8 @@ function Composer({ ready }: { ready: boolean }) {
 
 export function AgentThread({ ready }: { ready: boolean }) {
   return (
-    <ThreadPrimitive.Root
-      className="flex h-full flex-col px-4 pb-4 text-foreground"
-    >
-      <ThreadPrimitive.Viewport
-        className="scrollbar-hover min-h-0 flex flex-1 flex-col overflow-y-auto px-3 pt-4"
-      >
+    <ThreadPrimitive.Root className="flex h-full flex-col px-4 pb-4 text-foreground">
+      <ThreadPrimitive.Viewport className="scrollbar-hover min-h-0 flex flex-1 flex-col overflow-y-auto px-3 pt-4">
         <div className="flex flex-col gap-4">
           <ThreadPrimitive.Messages
             components={{

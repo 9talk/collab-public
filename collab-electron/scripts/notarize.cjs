@@ -12,7 +12,10 @@ function loadEnvLocal() {
     if (!trimmed || trimmed.startsWith("#")) continue;
     const [key, ...rest] = trimmed.split("=");
     if (key && rest.length > 0 && !(key.trim() in process.env)) {
-      process.env[key.trim()] = rest.join("=").trim().replace(/^["']|["']$/g, "");
+      process.env[key.trim()] = rest
+        .join("=")
+        .trim()
+        .replace(/^["']|["']$/g, "");
     }
   }
 }
@@ -35,8 +38,7 @@ async function notarizeApp(context) {
   const keychainProfile = process.env.KEYCHAIN_PROFILE;
   const appleId = process.env.APPLE_ID;
   const appleIdPassword =
-    process.env.APPLE_ID_PASSWORD ||
-    process.env.APPLE_APP_SPECIFIC_PASSWORD;
+    process.env.APPLE_ID_PASSWORD || process.env.APPLE_APP_SPECIFIC_PASSWORD;
   const appleTeamId = process.env.APPLE_TEAM_ID;
 
   if (!keychainProfile && !(appleId && appleIdPassword && appleTeamId)) {

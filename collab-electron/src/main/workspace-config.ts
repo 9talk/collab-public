@@ -17,21 +17,15 @@ export function workspaceConfigPath(workspacePath: string): string {
   return join(workspacePath, ".collaborator", "config.json");
 }
 
-export function loadWorkspaceConfig(
-  workspacePath: string,
-): WorkspaceConfig {
+export function loadWorkspaceConfig(workspacePath: string): WorkspaceConfig {
   try {
-    const raw = readFileSync(
-      workspaceConfigPath(workspacePath),
-      "utf-8",
-    );
+    const raw = readFileSync(workspaceConfigPath(workspacePath), "utf-8");
     const parsed = JSON.parse(raw) as Partial<WorkspaceConfig>;
     return {
       expanded_dirs: Array.isArray(parsed.expanded_dirs)
         ? parsed.expanded_dirs
         : [],
-      agent_skip_permissions:
-        parsed.agent_skip_permissions === true,
+      agent_skip_permissions: parsed.agent_skip_permissions === true,
     };
   } catch {
     return { ...DEFAULT_CONFIG };

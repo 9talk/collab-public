@@ -29,18 +29,12 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, "src/main/index.ts"),
           "pty-sidecar": resolve(__dirname, "src/main/sidecar/entry.ts"),
-          "watcher-worker": resolve(
-            __dirname,
-            "src/main/watcher-worker.ts",
-          ),
+          "watcher-worker": resolve(__dirname, "src/main/watcher-worker.ts"),
           "git-replay-worker": resolve(
             __dirname,
             "src/main/git-replay-worker.ts",
           ),
-          "image-worker": resolve(
-            __dirname,
-            "src/main/image-worker.ts",
-          ),
+          "image-worker": resolve(__dirname, "src/main/image-worker.ts"),
         },
       },
     },
@@ -67,10 +61,7 @@ export default defineConfig({
       alias: {
         "@collab/shared": resolve(__dirname, "packages/shared/src"),
         "@collab/theme": resolve(__dirname, "packages/theme/src"),
-        "@collab/components": resolve(
-          __dirname,
-          "packages/components/src",
-        ),
+        "@collab/components": resolve(__dirname, "packages/components/src"),
       },
     },
     build: {
@@ -86,15 +77,9 @@ export default defineConfig({
             __dirname,
             "src/windows/terminal-tile/index.html",
           ),
-          "graph-tile": resolve(
-            __dirname,
-            "src/windows/graph-tile/index.html",
-          ),
+          "graph-tile": resolve(__dirname, "src/windows/graph-tile/index.html"),
           "tile-list": resolve(__dirname, "src/windows/tile-list/index.html"),
-          "agent-chat": resolve(
-            __dirname,
-            "src/windows/agent-chat/index.html",
-          ),
+          "agent-chat": resolve(__dirname, "src/windows/agent-chat/index.html"),
         },
       },
     },

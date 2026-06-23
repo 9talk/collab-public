@@ -83,9 +83,7 @@ async function watchAdd(folderPath: string): Promise<void> {
       folderPath,
       (error, events) => {
         if (error) {
-          console.error(
-            `[watcher-worker] ${folderPath}: ${error.message}`,
-          );
+          console.error(`[watcher-worker] ${folderPath}: ${error.message}`);
           return;
         }
         if (events.length === 0) return;

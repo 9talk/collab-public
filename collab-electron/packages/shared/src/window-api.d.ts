@@ -1,8 +1,4 @@
-import type {
-  AppConfig,
-  FolderTableData,
-  TreeNode,
-} from "./types";
+import type { AppConfig, FolderTableData, TreeNode } from "./types";
 import type { ReplayMessage } from "./replay-types";
 
 type Unsubscribe = () => void;
@@ -80,12 +76,8 @@ interface TerminalTargetOption {
   isDefault?: boolean;
 }
 
-type PtyDataCb = (
-  payload: { sessionId: string; data: Uint8Array },
-) => void;
-type PtyExitCb = (
-  payload: { sessionId: string; exitCode: number },
-) => void;
+type PtyDataCb = (payload: { sessionId: string; data: Uint8Array }) => void;
+type PtyExitCb = (payload: { sessionId: string; exitCode: number }) => void;
 type CdToCb = (path: string) => void;
 type RunInTerminalCb = (command: string) => void;
 
@@ -135,25 +127,17 @@ export interface CollabApi {
 
   // Folder selection
   selectFolder: (path: string) => void;
-  readFolderTable: (
-    folderPath: string,
-  ) => Promise<FolderTableData>;
+  readFolderTable: (folderPath: string) => Promise<FolderTableData>;
 
   // File system (nav)
   readDir: (path: string) => Promise<DirEntry[]>;
   countFiles: (path: string) => Promise<number>;
   trashFile: (path: string) => Promise<void>;
   createDir: (path: string) => Promise<void>;
-  moveFile: (
-    oldPath: string,
-    newParentDir: string,
-  ) => Promise<string>;
+  moveFile: (oldPath: string, newParentDir: string) => Promise<string>;
 
   // Import
-  importWebArticle(
-    url: string,
-    targetDir: string,
-  ): Promise<{ path: string }>;
+  importWebArticle(url: string, targetDir: string): Promise<{ path: string }>;
 
   // File system (viewer)
   readFile: (path: string) => Promise<string>;
@@ -162,17 +146,11 @@ export interface CollabApi {
     content: string,
     expectedMtime?: string,
   ) => Promise<WriteResult>;
-  renameFile: (
-    oldPath: string,
-    newTitle: string,
-  ) => Promise<string>;
+  renameFile: (oldPath: string, newTitle: string) => Promise<string>;
   getFileStats: (path: string) => Promise<FileStats>;
 
   // Images
-  getImageThumbnail: (
-    path: string,
-    size: number,
-  ) => Promise<string>;
+  getImageThumbnail: (path: string, size: number) => Promise<string>;
   getImageFull: (path: string) => Promise<{
     url: string;
     width: number;
@@ -189,17 +167,11 @@ export interface CollabApi {
   ) => Promise<string>;
   openImageDialog: () => Promise<string | null>;
 
-  readTree: (params: {
-    root: string;
-  }) => Promise<TreeNode[]>;
+  readTree: (params: { root: string }) => Promise<TreeNode[]>;
 
   // Workspace
-  workspaceRemoveByPath: (
-    path: string,
-  ) => Promise<{ workspaces: string[] }>;
-  getWorkspaceGraph: (params: {
-    workspacePath: string;
-  }) => Promise<GraphData>;
+  workspaceRemoveByPath: (path: string) => Promise<{ workspaces: string[] }>;
+  getWorkspaceGraph: (params: { workspacePath: string }) => Promise<GraphData>;
   updateFrontmatter: (
     filePath: string,
     field: string,
@@ -207,15 +179,9 @@ export interface CollabApi {
   ) => Promise<{ ok: boolean; retried?: boolean }>;
 
   // Wikilinks
-  resolveWikilink: (
-    target: string,
-  ) => Promise<string | null>;
-  suggestWikilinks: (
-    partial: string,
-  ) => Promise<WikilinkSuggestion[]>;
-  getBacklinks: (
-    filePath: string,
-  ) => Promise<Backlink[]>;
+  resolveWikilink: (target: string) => Promise<string | null>;
+  suggestWikilinks: (partial: string) => Promise<WikilinkSuggestion[]>;
+  getBacklinks: (filePath: string) => Promise<Backlink[]>;
 
   // PTY
   ptyCreate: (
@@ -225,19 +191,9 @@ export interface CollabApi {
     target?: string,
     tileId?: string,
   ) => Promise<PtySession>;
-  ptyWrite: (
-    sessionId: string,
-    data: string,
-  ) => void;
-  ptySendRawKeys: (
-    sessionId: string,
-    data: string,
-  ) => void;
-  ptyResize: (
-    sessionId: string,
-    cols: number,
-    rows: number,
-  ) => Promise<void>;
+  ptyWrite: (sessionId: string, data: string) => void;
+  ptySendRawKeys: (sessionId: string, data: string) => void;
+  ptyResize: (sessionId: string, cols: number, rows: number) => Promise<void>;
   ptyKill: (sessionId: string) => Promise<void>;
   ptyReconnect: (
     sessionId: string,
@@ -266,7 +222,11 @@ export interface CollabApi {
     backend?: "sidecar";
   } | null>;
   notifyPtySessionId: (sessionId: string) => void;
-  notifyTerminalStatus: (sessionId: string, status: string, command?: string) => void;
+  notifyTerminalStatus: (
+    sessionId: string,
+    status: string,
+    command?: string,
+  ) => void;
   onPtyData: (sessionId: string, cb: PtyDataCb) => void;
   offPtyData: (sessionId: string, cb: PtyDataCb) => void;
   onPtyExit: (sessionId: string, cb: PtyExitCb) => void;
@@ -286,9 +246,7 @@ export interface CollabApi {
   setDragPaths: (paths: string[]) => void;
   clearDragPaths: () => void;
   getDragPaths: () => Promise<string[]>;
-  onNavDragActive: (
-    cb: (active: boolean) => void,
-  ) => Unsubscribe;
+  onNavDragActive: (cb: (active: boolean) => void) => Unsubscribe;
 
   // Settings
   openFolder: () => Promise<string | null>;
@@ -307,18 +265,12 @@ export interface CollabApi {
 
   // IPC event listeners
   onFocusSearch: (cb: () => void) => Unsubscribe;
-  onFileSelected: (
-    cb: (path: string | null) => void,
-  ) => Unsubscribe;
-  onFolderSelected: (
-    cb: (path: string) => void,
-  ) => Unsubscribe;
+  onFileSelected: (cb: (path: string | null) => void) => Unsubscribe;
+  onFolderSelected: (cb: (path: string) => void) => Unsubscribe;
   onFileRenamed: (
     cb: (oldPath: string, newPath: string) => void,
   ) => Unsubscribe;
-  onFilesDeleted: (
-    cb: (paths: string[]) => void,
-  ) => Unsubscribe;
+  onFilesDeleted: (cb: (paths: string[]) => void) => Unsubscribe;
   onFsChanged: (
     cb: (
       events: Array<{
@@ -327,31 +279,19 @@ export interface CollabApi {
       }>,
     ) => void,
   ) => Unsubscribe;
-  onWorkspaceAdded: (
-    cb: (path: string) => void,
-  ) => Unsubscribe;
-  onWorkspaceRemoved: (
-    cb: (path: string) => void,
-  ) => Unsubscribe;
-  onWikilinksUpdated: (
-    cb: (paths: string[]) => void,
-  ) => Unsubscribe;
-  onNavVisibility: (
-    cb: (visible: boolean) => void,
-  ) => Unsubscribe;
+  onWorkspaceAdded: (cb: (path: string) => void) => Unsubscribe;
+  onWorkspaceRemoved: (cb: (path: string) => void) => Unsubscribe;
+  onWikilinksUpdated: (cb: (paths: string[]) => void) => Unsubscribe;
+  onNavVisibility: (cb: (visible: boolean) => void) => Unsubscribe;
 
-  onScopeChanged: (
-    cb: (newPath: string) => void,
-  ) => Unsubscribe;
+  onScopeChanged: (cb: (newPath: string) => void) => Unsubscribe;
 
   // Auto-updater
   updateGetStatus: () => Promise<UpdateState>;
   updateCheck: () => Promise<UpdateState>;
   updateDownload: () => Promise<UpdateState>;
   updateInstall: () => void;
-  onUpdateStatus: (
-    cb: (state: UpdateState) => void,
-  ) => Unsubscribe;
+  onUpdateStatus: (cb: (state: UpdateState) => void) => Unsubscribe;
 
   // Agent activity
   onAgentEvent: (cb: (event: AgentEvent) => void) => Unsubscribe;
@@ -360,9 +300,7 @@ export interface CollabApi {
   // Git replay
   startReplay: (params: { workspacePath: string }) => Promise<boolean>;
   stopReplay: () => Promise<void>;
-  onReplayData: (
-    cb: (msg: ReplayMessage) => void,
-  ) => Unsubscribe;
+  onReplayData: (cb: (msg: ReplayMessage) => void) => Unsubscribe;
 
   // Terminal focus (receiving end)
   onFocusTab: (cb: (ptySessionId: string) => void) => Unsubscribe;

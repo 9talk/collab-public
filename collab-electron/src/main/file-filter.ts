@@ -112,10 +112,12 @@ export interface FileFilter {
 }
 
 export function hasTextBom(sample: Uint8Array): boolean {
-  if (sample.length >= 3 &&
+  if (
+    sample.length >= 3 &&
     sample[0] === 0xef &&
     sample[1] === 0xbb &&
-    sample[2] === 0xbf) {
+    sample[2] === 0xbf
+  ) {
     return true;
   }
 
@@ -145,9 +147,7 @@ export function isBinarySample(sample: Uint8Array): boolean {
       return true;
     }
 
-    const isControlChar = byte < 7 ||
-      (byte > 14 && byte < 32) ||
-      byte === 127;
+    const isControlChar = byte < 7 || (byte > 14 && byte < 32) || byte === 127;
     if (isControlChar) {
       suspiciousBytes++;
     }
@@ -161,12 +161,7 @@ async function detectBinaryFile(fullPath: string): Promise<boolean> {
   try {
     handle = await open(fullPath, "r");
     const buffer = Buffer.alloc(BINARY_SAMPLE_SIZE);
-    const { bytesRead } = await handle.read(
-      buffer,
-      0,
-      BINARY_SAMPLE_SIZE,
-      0,
-    );
+    const { bytesRead } = await handle.read(buffer, 0, BINARY_SAMPLE_SIZE, 0);
     return isBinarySample(buffer.subarray(0, bytesRead));
   } catch {
     return false;

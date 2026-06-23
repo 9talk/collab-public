@@ -64,8 +64,13 @@ describe("generateId", () => {
 describe("tile CRUD", () => {
   test("addTile appends to tiles array and returns the tile", () => {
     const tile = addTile({
-      id: "t1", type: "term", x: 0, y: 0,
-      width: 400, height: 500, zIndex: 0,
+      id: "t1",
+      type: "term",
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 500,
+      zIndex: 0,
     });
     expect(tiles).toHaveLength(1);
     expect(tile.id).toBe("t1");
@@ -73,24 +78,38 @@ describe("tile CRUD", () => {
 
   test("addTile assigns zIndex when not provided", () => {
     const tile = addTile({
-      id: "t1", type: "term", x: 0, y: 0,
-      width: 400, height: 500,
+      id: "t1",
+      type: "term",
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 500,
     });
     expect(tile.zIndex).toBeGreaterThan(0);
   });
 
   test("addTile preserves existing zIndex", () => {
     const tile = addTile({
-      id: "t1", type: "term", x: 0, y: 0,
-      width: 400, height: 500, zIndex: 42,
+      id: "t1",
+      type: "term",
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 500,
+      zIndex: 42,
     });
     expect(tile.zIndex).toBe(42);
   });
 
   test("getTile returns the tile by id", () => {
     addTile({
-      id: "t1", type: "term", x: 10, y: 20,
-      width: 400, height: 500, zIndex: 1,
+      id: "t1",
+      type: "term",
+      x: 10,
+      y: 20,
+      width: 400,
+      height: 500,
+      zIndex: 1,
     });
     const found = getTile("t1");
     expect(found).not.toBeNull();
@@ -103,8 +122,13 @@ describe("tile CRUD", () => {
 
   test("removeTile removes the tile by id", () => {
     addTile({
-      id: "t1", type: "term", x: 0, y: 0,
-      width: 400, height: 500, zIndex: 1,
+      id: "t1",
+      type: "term",
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 500,
+      zIndex: 1,
     });
     removeTile("t1");
     expect(tiles).toHaveLength(0);
@@ -113,17 +137,46 @@ describe("tile CRUD", () => {
 
   test("removeTile is a no-op for unknown id", () => {
     addTile({
-      id: "t1", type: "term", x: 0, y: 0,
-      width: 400, height: 500, zIndex: 1,
+      id: "t1",
+      type: "term",
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 500,
+      zIndex: 1,
     });
     removeTile("unknown");
     expect(tiles).toHaveLength(1);
   });
 
   test("multiple tiles are stored in insertion order", () => {
-    addTile({ id: "a", type: "term", x: 0, y: 0, width: 1, height: 1, zIndex: 1 });
-    addTile({ id: "b", type: "note", x: 0, y: 0, width: 1, height: 1, zIndex: 2 });
-    addTile({ id: "c", type: "code", x: 0, y: 0, width: 1, height: 1, zIndex: 3 });
+    addTile({
+      id: "a",
+      type: "term",
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+      zIndex: 1,
+    });
+    addTile({
+      id: "b",
+      type: "note",
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+      zIndex: 2,
+    });
+    addTile({
+      id: "c",
+      type: "code",
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+      zIndex: 3,
+    });
     expect(tiles.map((t) => t.id)).toEqual(["a", "b", "c"]);
   });
 });
@@ -133,12 +186,22 @@ describe("tile CRUD", () => {
 describe("bringToFront", () => {
   test("assigns a higher zIndex than previous tiles", () => {
     const t1 = addTile({
-      id: "t1", type: "term", x: 0, y: 0,
-      width: 400, height: 500, zIndex: 1,
+      id: "t1",
+      type: "term",
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 500,
+      zIndex: 1,
     });
     const t2 = addTile({
-      id: "t2", type: "term", x: 0, y: 0,
-      width: 400, height: 500, zIndex: 2,
+      id: "t2",
+      type: "term",
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 500,
+      zIndex: 2,
     });
     bringToFront(t1);
     expect(t1.zIndex).toBeGreaterThan(t2.zIndex);
@@ -146,8 +209,13 @@ describe("bringToFront", () => {
 
   test("successive calls produce increasing zIndex", () => {
     const t1 = addTile({
-      id: "t1", type: "term", x: 0, y: 0,
-      width: 400, height: 500, zIndex: 1,
+      id: "t1",
+      type: "term",
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 500,
+      zIndex: 1,
     });
     bringToFront(t1);
     const z1 = t1.zIndex;
@@ -240,18 +308,50 @@ describe("inferTileType", () => {
 
 describe("tileAtPoint", () => {
   test("returns tile when point is inside", () => {
-    addTile({ id: "t1", type: "term", x: 100, y: 100, width: 200, height: 200, zIndex: 1 });
+    addTile({
+      id: "t1",
+      type: "term",
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 200,
+      zIndex: 1,
+    });
     expect(tileAtPoint(150, 150)?.id).toBe("t1");
   });
 
   test("returns null when point is outside all tiles", () => {
-    addTile({ id: "t1", type: "term", x: 100, y: 100, width: 200, height: 200, zIndex: 1 });
+    addTile({
+      id: "t1",
+      type: "term",
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 200,
+      zIndex: 1,
+    });
     expect(tileAtPoint(50, 50)).toBeNull();
   });
 
   test("returns topmost tile when overlapping", () => {
-    addTile({ id: "t1", type: "term", x: 0, y: 0, width: 200, height: 200, zIndex: 1 });
-    addTile({ id: "t2", type: "note", x: 50, y: 50, width: 200, height: 200, zIndex: 5 });
+    addTile({
+      id: "t1",
+      type: "term",
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 200,
+      zIndex: 1,
+    });
+    addTile({
+      id: "t2",
+      type: "note",
+      x: 50,
+      y: 50,
+      width: 200,
+      height: 200,
+      zIndex: 5,
+    });
     expect(tileAtPoint(100, 100)?.id).toBe("t2");
   });
 
@@ -260,12 +360,28 @@ describe("tileAtPoint", () => {
   });
 
   test("point on left/top boundary is inside", () => {
-    addTile({ id: "t1", type: "term", x: 100, y: 100, width: 200, height: 200, zIndex: 1 });
+    addTile({
+      id: "t1",
+      type: "term",
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 200,
+      zIndex: 1,
+    });
     expect(tileAtPoint(100, 100)?.id).toBe("t1");
   });
 
   test("point on right/bottom boundary is outside", () => {
-    addTile({ id: "t1", type: "term", x: 100, y: 100, width: 200, height: 200, zIndex: 1 });
+    addTile({
+      id: "t1",
+      type: "term",
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 200,
+      zIndex: 1,
+    });
     expect(tileAtPoint(300, 300)).toBeNull();
   });
 });
@@ -274,9 +390,33 @@ describe("tileAtPoint", () => {
 
 describe("selection", () => {
   beforeEach(() => {
-    addTile({ id: "t1", type: "term", x: 0, y: 0, width: 1, height: 1, zIndex: 1 });
-    addTile({ id: "t2", type: "note", x: 0, y: 0, width: 1, height: 1, zIndex: 2 });
-    addTile({ id: "t3", type: "code", x: 0, y: 0, width: 1, height: 1, zIndex: 3 });
+    addTile({
+      id: "t1",
+      type: "term",
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+      zIndex: 1,
+    });
+    addTile({
+      id: "t2",
+      type: "note",
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+      zIndex: 2,
+    });
+    addTile({
+      id: "t3",
+      type: "code",
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+      zIndex: 3,
+    });
   });
 
   test("selectTile marks a tile as selected", () => {
@@ -332,9 +472,7 @@ describe("selection", () => {
   });
 });
 
-import {
-  findNearestAdjacentTile,
-} from "./canvas-state.js";
+import { findNearestAdjacentTile } from "./canvas-state.js";
 
 describe("findNearestAdjacentTile", () => {
   beforeEach(() => {
@@ -346,7 +484,16 @@ describe("findNearestAdjacentTile", () => {
   });
 
   test("finds tile to the left when clicking to its right", () => {
-    addTile({ id: "t1", type: "term", x: 0, y: 0, width: 400, height: 500, cwd: "/project", zIndex: 1 });
+    addTile({
+      id: "t1",
+      type: "term",
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 500,
+      cwd: "/project",
+      zIndex: 1,
+    });
     // click at x=450 (40px right of tile, within 60px influence), y=250 (vertically aligned)
     const result = findNearestAdjacentTile(450, 250);
     expect(result).not.toBeNull();
@@ -355,7 +502,16 @@ describe("findNearestAdjacentTile", () => {
   });
 
   test("finds tile above when clicking below it", () => {
-    addTile({ id: "t1", type: "term", x: 0, y: 0, width: 400, height: 500, cwd: "/project", zIndex: 1 });
+    addTile({
+      id: "t1",
+      type: "term",
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 500,
+      cwd: "/project",
+      zIndex: 1,
+    });
     // click at x=200 (horizontally aligned), y=550 (below tile)
     const result = findNearestAdjacentTile(200, 550);
     expect(result).not.toBeNull();
@@ -364,8 +520,26 @@ describe("findNearestAdjacentTile", () => {
   });
 
   test("picks closest tile when multiple are adjacent", () => {
-    addTile({ id: "t1", type: "term", x: 0, y: 0, width: 400, height: 500, cwd: "/a", zIndex: 1 });
-    addTile({ id: "t2", type: "term", x: 500, y: 0, width: 400, height: 500, cwd: "/b", zIndex: 1 });
+    addTile({
+      id: "t1",
+      type: "term",
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 500,
+      cwd: "/a",
+      zIndex: 1,
+    });
+    addTile({
+      id: "t2",
+      type: "term",
+      x: 500,
+      y: 0,
+      width: 400,
+      height: 500,
+      cwd: "/b",
+      zIndex: 1,
+    });
     // click between them, closer to t1
     const result = findNearestAdjacentTile(420, 250);
     expect(result).not.toBeNull();
@@ -374,7 +548,16 @@ describe("findNearestAdjacentTile", () => {
   });
 
   test("respects perpendicular influence tolerance", () => {
-    addTile({ id: "t1", type: "term", x: 0, y: 0, width: 400, height: 500, cwd: "/project", zIndex: 1 });
+    addTile({
+      id: "t1",
+      type: "term",
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 500,
+      cwd: "/project",
+      zIndex: 1,
+    });
     // click to the right AND far above — outside both influence axes
     const result = findNearestAdjacentTile(500, -70);
     expect(result).toBeNull();

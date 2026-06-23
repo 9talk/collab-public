@@ -18,11 +18,7 @@ export interface AppConfig {
   ui: Record<string, unknown>;
 }
 
-export type TerminalTarget =
-  | "auto"
-  | "powershell"
-  | "shell"
-  | `wsl:${string}`;
+export type TerminalTarget = "auto" | "powershell" | "shell" | `wsl:${string}`;
 
 const DEFAULT_CONFIG: AppConfig = {
   workspaces: [],
@@ -89,27 +85,22 @@ export function saveConfig(config: AppConfig): void {
   atomicWriteFileSync(filePath, JSON.stringify(config, null, 2));
 }
 
-export function getPref(
-  config: AppConfig,
-  key: string,
-): unknown {
+export function getPref(config: AppConfig, key: string): unknown {
   return config.ui[key] ?? null;
 }
 
-export function setPref(
-  config: AppConfig,
-  key: string,
-  value: unknown,
-): void {
+export function setPref(config: AppConfig, key: string, value: unknown): void {
   config.ui[key] = value;
   saveConfig(config);
 }
 
 export function isTerminalTarget(value: unknown): value is TerminalTarget {
-  return value === "auto"
-    || value === "powershell"
-    || value === "shell"
-    || (typeof value === "string" && value.startsWith("wsl:"));
+  return (
+    value === "auto" ||
+    value === "powershell" ||
+    value === "shell" ||
+    (typeof value === "string" && value.startsWith("wsl:"))
+  );
 }
 
 export function getTerminalTarget(): TerminalTarget {

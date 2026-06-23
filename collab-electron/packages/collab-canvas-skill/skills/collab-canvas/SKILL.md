@@ -20,15 +20,15 @@ Origin (0,0) is the top-left corner. X increases rightward, Y increases downward
 
 Type is inferred from the file when `--file` is used:
 
-* `.md`, `.txt` -> `note`
+- `.md`, `.txt` -> `note`
 
-* `.graph.json` -> `graph`
+- `.graph.json` -> `graph`
 
-* `.png`, `.jpg`, `.gif`, `.svg`, `.webp` -> `image`
+- `.png`, `.jpg`, `.gif`, `.svg`, `.webp` -> `image`
 
-* Directories -> `graph`
+- Directories -> `graph`
 
-* Everything else -> `code`
+- Everything else -> `code`
 
 ## Commands
 
@@ -48,13 +48,13 @@ Create a new tile on the canvas.
 collab-canvas tile create <type> [--file <path>] [--pos x,y] [--size w,h]
 ```
 
-* `<type>`: term, note, code, image, or graph
+- `<type>`: term, note, code, image, or graph
 
-* `--file <path>`: file to display (required for note, code, image, graph; omit for term)
+- `--file <path>`: file to display (required for note, code, image, graph; omit for term)
 
-* `--pos x,y`: position in grid units (default: viewport center)
+- `--pos x,y`: position in grid units (default: viewport center)
 
-* `--size w,h`: size in grid units (default: per-type default above)
+- `--size w,h`: size in grid units (default: per-type default above)
 
 Returns the new tile's ID on stdout.
 
@@ -139,7 +139,7 @@ Read recent output from a terminal tile. Returns raw terminal output from the PT
 collab-canvas terminal read <id> [--lines N]
 ```
 
-* `--lines N`: number of lines to capture (default: 50)
+- `--lines N`: number of lines to capture (default: 50)
 
 ## Composition Patterns
 

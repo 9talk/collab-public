@@ -17,14 +17,18 @@ if (existsSync(envLocalPath)) {
     if (!trimmed || trimmed.startsWith("#")) continue;
     const [key, ...rest] = trimmed.split("=");
     if (key && rest.length > 0 && !(key.trim() in env)) {
-      env[key.trim()] = rest.join("=").trim().replace(/^["']|["']$/g, "");
+      env[key.trim()] = rest
+        .join("=")
+        .trim()
+        .replace(/^["']|["']$/g, "");
     }
   }
 }
 
 // The renderer build (~7 700 modules) exceeds the default V8 heap limit.
 if (!env.NODE_OPTIONS?.includes("--max-old-space-size")) {
-  env.NODE_OPTIONS = `${env.NODE_OPTIONS ?? ""} --max-old-space-size=8192`.trim();
+  env.NODE_OPTIONS =
+    `${env.NODE_OPTIONS ?? ""} --max-old-space-size=8192`.trim();
 }
 
 const shouldPublish = args.includes("--publish");
@@ -51,15 +55,11 @@ if (args.includes("--no-sign")) {
 }
 
 function run(command, commandArgs, extraEnv = env) {
-  const result = spawnSync(
-    command,
-    commandArgs,
-    {
-      stdio: "inherit",
-      cwd,
-      env: extraEnv,
-    },
-  );
+  const result = spawnSync(command, commandArgs, {
+    stdio: "inherit",
+    cwd,
+    env: extraEnv,
+  });
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
@@ -140,7 +140,6 @@ function targetArchitectures() {
   return [process.arch];
 }
 
-
 const electronVite = detectMismatchedToolchain("electron-vite");
 const electronBuilder = detectMismatchedToolchain("electron-builder");
 const builtArches = targetArchitectures();
@@ -164,15 +163,16 @@ run(process.execPath, [electronBuilder, ...builderArgs]);
 // for the last target architecture. On a cross-compile (e.g. x64 pass on an
 // arm64 Mac) this leaves the wrong ABI in node_modules, breaking `bun run dev`.
 // Rebuild for the host arch to restore a working dev environment.
-const rebuildNeeded = process.platform !== "win32" && (
-  builtArches.length !== 1 || builtArches[0] !== process.arch
-);
+const rebuildNeeded =
+  process.platform !== "win32" &&
+  (builtArches.length !== 1 || builtArches[0] !== process.arch);
 if (rebuildNeeded) {
   console.log("• Restoring node-pty for host architecture…");
-  run(
-    join(cwd, "node_modules", ".bin", "electron-rebuild"),
-    ["-f", "-w", "node-pty"],
-  );
+  run(join(cwd, "node_modules", ".bin", "electron-rebuild"), [
+    "-f",
+    "-w",
+    "node-pty",
+  ]);
 }
 
 // Use upload-to-github.cjs instead of electron-builder's publisher to avoid

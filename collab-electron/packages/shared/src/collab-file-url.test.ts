@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  fromCollabFileUrl,
-  toCollabFileUrl,
-} from "./collab-file-url";
+import { fromCollabFileUrl, toCollabFileUrl } from "./collab-file-url";
 
 describe("collab-file-url", () => {
   test("encodes posix absolute paths", () => {

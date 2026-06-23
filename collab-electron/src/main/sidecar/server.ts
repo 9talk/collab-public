@@ -86,8 +86,7 @@ export class SidecarServer {
   }
 
   private windowsPathKey(env: Record<string, string>): string | null {
-    return Object.keys(env).find((key) => key.toLowerCase() === "path")
-      ?? null;
+    return Object.keys(env).find((key) => key.toLowerCase() === "path") ?? null;
   }
 
   private normalizeWindowsPathEntry(value: string): string {
@@ -121,17 +120,14 @@ export class SidecarServer {
     }
   }
 
-  private killWindowsProcessTree(
-    pid: number,
-    fallback: () => void,
-  ): void {
+  private killWindowsProcessTree(pid: number, fallback: () => void): void {
     try {
       const { execFileSync } = require("node:child_process");
-      execFileSync(
-        "taskkill.exe",
-        ["/PID", String(pid), "/T", "/F"],
-        { windowsHide: true, stdio: "ignore", timeout: 2000 },
-      );
+      execFileSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+        windowsHide: true,
+        stdio: "ignore",
+        timeout: 2000,
+      });
     } catch {
       fallback();
     }
@@ -150,7 +146,8 @@ export class SidecarServer {
       this.killWindowsProcessTree(ptyProcess.pid, () => originalKill());
     }) as typeof ptyProcess.kill;
 
-    return () => this.killWindowsProcessTree(ptyProcess.pid, () => originalKill());
+    return () =>
+      this.killWindowsProcessTree(ptyProcess.pid, () => originalKill());
   }
 
   async start(): Promise<void> {
@@ -164,10 +161,7 @@ export class SidecarServer {
       pid: process.pid,
       token: this.opts.token,
     };
-    fs.writeFileSync(
-      this.opts.pidFilePath,
-      JSON.stringify(pidData),
-    );
+    fs.writeFileSync(this.opts.pidFilePath, JSON.stringify(pidData));
 
     await new Promise<void>((resolve) => {
       this.controlServer = net.createServer((sock) =>
@@ -175,11 +169,9 @@ export class SidecarServer {
       );
       this.controlServer.listen(this.opts.controlSocketPath, resolve);
     });
-
   }
 
   async shutdown(): Promise<void> {
-
     // Shut down all sessions before closing the control server so tests and
     // non-exit-driven callers do not hang on still-open data servers.
     const ids = [...this.sessions.keys()];
@@ -199,7 +191,9 @@ export class SidecarServer {
 
     // Clean up files
     cleanupEndpoint(this.opts.controlSocketPath);
-    try { fs.unlinkSync(this.opts.pidFilePath); } catch {}
+    try {
+      fs.unlinkSync(this.opts.pidFilePath);
+    } catch {}
   }
 
   private shutdownSession(sessionId: string): Promise<void> {
@@ -278,34 +272,32 @@ export class SidecarServer {
         return;
       case "session.create":
         return this.handleCreate(
-          sock, id, params as unknown as SessionCreateParams,
+          sock,
+          id,
+          params as unknown as SessionCreateParams,
         );
       case "session.reconnect":
         return this.handleReconnect(
-          sock, id, params as unknown as SessionReconnectParams,
+          sock,
+          id,
+          params as unknown as SessionReconnectParams,
         );
       case "session.resize":
-        return this.handleResize(
-          sock, id, params as Record<string, unknown>,
-        );
+        return this.handleResize(sock, id, params as Record<string, unknown>);
       case "session.kill":
-        return this.handleKill(
-          sock, id, params as Record<string, unknown>,
-        );
+        return this.handleKill(sock, id, params as Record<string, unknown>);
       case "session.list":
         return this.handleList(sock, id);
       case "session.foreground":
         return this.handleForeground(
-          sock, id, params as Record<string, unknown>,
+          sock,
+          id,
+          params as Record<string, unknown>,
         );
       case "session.signal":
-        return this.handleSignal(
-          sock, id, params as Record<string, unknown>,
-        );
+        return this.handleSignal(sock, id, params as Record<string, unknown>);
       case "session.capture":
-        return this.handleCapture(
-          sock, id, params as Record<string, unknown>,
-        );
+        return this.handleCapture(sock, id, params as Record<string, unknown>);
       default:
         sock.write(makeError(id, -32601, `Unknown method: ${method}`));
     }
@@ -330,7 +322,7 @@ export class SidecarServer {
 
     const target = params.target || "shell";
     const env: Record<string, string> = {
-      ...process.env as Record<string, string>,
+      ...(process.env as Record<string, string>),
       ...params.env,
       COLLAB_PTY_SESSION_ID: sessionId,
     };
@@ -366,8 +358,8 @@ export class SidecarServer {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(
-        `pty.spawn failed: command=${command} args=${JSON.stringify(args)}`
-        + ` cwd=${params.cwd} error=${msg}\n`,
+        `pty.spawn failed: command=${command} args=${JSON.stringify(args)}` +
+          ` cwd=${params.cwd} error=${msg}\n`,
       );
       sock.write(makeError(id, -32000, `Failed to spawn: ${msg}`));
       return;
@@ -375,28 +367,31 @@ export class SidecarServer {
 
     const ringBuffer = new RingBuffer(this.opts.ringBufferBytes);
     const terminateProcess = this.createTerminateProcess(ptyProcess);
-    const session = this.withOptional({
-      id: sessionId,
-      pty: ptyProcess,
-      terminateProcess,
-      shell: command,
-      displayName,
-      target,
-      cwd: params.cwd,
-      cwdHostPath,
-      cwdGuestPath: params.cwdGuestPath,
-      createdAt: new Date().toISOString(),
-      ringBuffer,
-      dataServer: null!,
-      dataClient: null,
-      socketPath,
-      hasAttachedClient: false,
-      reconnectQueue: null,
-      exited: false,
-      terminating: false,
-    }, {
-      cwdGuestPath: params.cwdGuestPath,
-    }) as Session;
+    const session = this.withOptional(
+      {
+        id: sessionId,
+        pty: ptyProcess,
+        terminateProcess,
+        shell: command,
+        displayName,
+        target,
+        cwd: params.cwd,
+        cwdHostPath,
+        cwdGuestPath: params.cwdGuestPath,
+        createdAt: new Date().toISOString(),
+        ringBuffer,
+        dataServer: null!,
+        dataClient: null,
+        socketPath,
+        hasAttachedClient: false,
+        reconnectQueue: null,
+        exited: false,
+        terminating: false,
+      },
+      {
+        cwdGuestPath: params.cwdGuestPath,
+      },
+    ) as Session;
 
     // Listen for PTY output
     ptyProcess.onData((data: string | Buffer) => {
@@ -520,10 +515,7 @@ export class SidecarServer {
       sock.write(makeError(id, -32000, "Session not found"));
       return;
     }
-    session.pty.resize(
-      params.cols as number,
-      params.rows as number,
-    );
+    session.pty.resize(params.cols as number, params.rows as number);
     sock.write(makeResponse(id, { ok: true }));
   }
 
@@ -540,18 +532,23 @@ export class SidecarServer {
   private handleList(sock: net.Socket, id: number): void {
     const sessions: SessionInfo[] = [];
     for (const s of this.sessions.values()) {
-      sessions.push(this.withOptional({
-        sessionId: s.id,
-        shell: s.shell,
-        displayName: s.displayName,
-        target: s.target,
-        cwd: s.cwd,
-        cwdHostPath: s.cwdHostPath,
-        pid: s.pty.pid,
-        createdAt: s.createdAt,
-      }, {
-        cwdGuestPath: s.cwdGuestPath,
-      }) as SessionInfo);
+      sessions.push(
+        this.withOptional(
+          {
+            sessionId: s.id,
+            shell: s.shell,
+            displayName: s.displayName,
+            target: s.target,
+            cwd: s.cwd,
+            cwdHostPath: s.cwdHostPath,
+            pid: s.pty.pid,
+            createdAt: s.createdAt,
+          },
+          {
+            cwdGuestPath: s.cwdGuestPath,
+          },
+        ) as SessionInfo,
+      );
     }
     sock.write(makeResponse(id, { sessions }));
   }

@@ -1,6 +1,10 @@
 import { execFileSync } from "node:child_process";
 import * as os from "node:os";
-import { displayBasename, hostPathToGuestPath, parseWslUncPath } from "@collab/shared/path-utils";
+import {
+  displayBasename,
+  hostPathToGuestPath,
+  parseWslUncPath,
+} from "@collab/shared/path-utils";
 import { type TerminalTarget } from "./config";
 
 export interface TerminalTargetOption {
@@ -23,9 +27,7 @@ function withGuestPath(
   base: Omit<ResolvedTerminalTarget, "cwdGuestPath">,
   cwdGuestPath: string | null,
 ): ResolvedTerminalTarget {
-  return cwdGuestPath
-    ? { ...base, cwdGuestPath }
-    : base;
+  return cwdGuestPath ? { ...base, cwdGuestPath } : base;
 }
 
 interface WslDistro {
@@ -78,9 +80,7 @@ function listWslDistributions(): WslDistro[] {
 
 export function getDefaultWslDistro(): string | null {
   const distros = listWslDistributions();
-  return distros.find((d) => d.isDefault)?.name
-    ?? distros[0]?.name
-    ?? null;
+  return distros.find((d) => d.isDefault)?.name ?? distros[0]?.name ?? null;
 }
 
 export function listTerminalTargets(): TerminalTargetOption[] {
@@ -98,9 +98,7 @@ export function listTerminalTargets(): TerminalTargetOption[] {
   for (const distro of listWslDistributions()) {
     options.push({
       id: `wsl:${distro.name}`,
-      label: distro.isDefault
-        ? `${distro.name} (WSL default)`
-        : distro.name,
+      label: distro.isDefault ? `${distro.name} (WSL default)` : distro.name,
     });
   }
   return options;
@@ -139,10 +137,7 @@ export function resolveTerminalTarget(
   const initialCwd = cwdHostPath || os.homedir();
 
   if (process.platform === "win32") {
-    const target = resolveWindowsAutoTarget(
-      preferredTarget,
-      initialCwd,
-    );
+    const target = resolveWindowsAutoTarget(preferredTarget, initialCwd);
 
     if (target === "powershell") {
       const command = resolvePowerShellCommand();
@@ -163,14 +158,17 @@ export function resolveTerminalTarget(
       if (guestPath) {
         args.push("--cd", guestPath);
       }
-      return withGuestPath({
-        target,
-        command: "wsl.exe",
-        args,
-        displayName: distro || "WSL",
-        cwd: os.homedir(),
-        cwdHostPath: initialCwd,
-      }, guestPath);
+      return withGuestPath(
+        {
+          target,
+          command: "wsl.exe",
+          args,
+          displayName: distro || "WSL",
+          cwd: os.homedir(),
+          cwdHostPath: initialCwd,
+        },
+        guestPath,
+      );
     }
 
     const command = resolvePowerShellCommand();

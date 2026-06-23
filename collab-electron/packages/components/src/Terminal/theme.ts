@@ -49,7 +49,6 @@ export const lightTheme: ITheme = {
 };
 
 export function getTheme(): ITheme {
-  const prefersDark =
-    window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   return prefersDark ? darkTheme : lightTheme;
 }

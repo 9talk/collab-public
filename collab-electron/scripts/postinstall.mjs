@@ -14,19 +14,22 @@ if (process.platform === "win32") {
     "deps",
     "winpty",
     "src",
-    "winpty.gyp"
+    "winpty.gyp",
   );
   if (existsSync(winptyGyp)) {
     let content = readFileSync(winptyGyp, "utf8");
     content = content.replace(
       /&& GetCommitHash\.bat/g,
-      "&& .\\\\GetCommitHash.bat"
+      "&& .\\\\GetCommitHash.bat",
     );
     content = content.replace(
       /&& UpdateGenVersion\.bat/g,
-      "&& .\\\\UpdateGenVersion.bat"
+      "&& .\\\\UpdateGenVersion.bat",
     );
-    content = content.replace(/'SpectreMitigation': 'Spectre'/g, "'SpectreMitigation': 'false'");
+    content = content.replace(
+      /'SpectreMitigation': 'Spectre'/g,
+      "'SpectreMitigation': 'false'",
+    );
     writeFileSync(winptyGyp, content);
     console.log("Patched winpty.gyp");
   }
@@ -34,7 +37,10 @@ if (process.platform === "win32") {
   const bindingGyp = join("node_modules", "node-pty", "binding.gyp");
   if (existsSync(bindingGyp)) {
     let content = readFileSync(bindingGyp, "utf8");
-    content = content.replace(/'SpectreMitigation': 'Spectre'/g, "'SpectreMitigation': 'false'");
+    content = content.replace(
+      /'SpectreMitigation': 'Spectre'/g,
+      "'SpectreMitigation': 'false'",
+    );
     writeFileSync(bindingGyp, content);
     console.log("Patched binding.gyp");
   }
@@ -43,7 +49,7 @@ if (process.platform === "win32") {
     "node_modules",
     "node-pty",
     "src",
-    "conpty_console_list_agent.ts"
+    "conpty_console_list_agent.ts",
   );
   if (existsSync(conptyAgentTs)) {
     let content = readFileSync(conptyAgentTs, "utf8");
@@ -64,7 +70,7 @@ if (process.platform === "win32") {
         "}",
         "process.send!({ consoleProcessList });",
         "process.exit(0);",
-      ].join("\n")
+      ].join("\n"),
     );
     writeFileSync(conptyAgentTs, content);
     console.log("Patched conpty_console_list_agent.ts");
@@ -74,7 +80,7 @@ if (process.platform === "win32") {
     "node_modules",
     "node-pty",
     "lib",
-    "conpty_console_list_agent.js"
+    "conpty_console_list_agent.js",
   );
   if (existsSync(conptyAgentJs)) {
     let content = readFileSync(conptyAgentJs, "utf8");
@@ -96,7 +102,7 @@ if (process.platform === "win32") {
         "}",
         "process.send({ consoleProcessList: consoleProcessList });",
         "process.exit(0);",
-      ].join("\n")
+      ].join("\n"),
     );
     writeFileSync(conptyAgentJs, content);
     console.log("Patched conpty_console_list_agent.js");

@@ -11,7 +11,13 @@ const { cpSync, existsSync } = require("node:fs");
 const { join } = require("node:path");
 
 /** electron-builder Arch enum → Node.js arch string */
-const ARCH_MAP = { 0: "ia32", 1: "x64", 2: "armv7l", 3: "arm64", 4: "universal" };
+const ARCH_MAP = {
+  0: "ia32",
+  1: "x64",
+  2: "armv7l",
+  3: "arm64",
+  4: "universal",
+};
 
 exports.default = async function afterPackPty(context) {
   if (process.platform !== "win32") return;
@@ -39,7 +45,9 @@ exports.default = async function afterPackPty(context) {
   );
 
   if (!existsSync(dst)) {
-    console.warn(`Expected unpacked path not found: ${dst} – skipping prebuild install`);
+    console.warn(
+      `Expected unpacked path not found: ${dst} – skipping prebuild install`,
+    );
     return;
   }
 

@@ -12,15 +12,9 @@ import {
   type SessionMeta,
 } from "./session-meta";
 import { cleanupEndpoint } from "./ipc-endpoint";
-import {
-  getTerminalTarget,
-  type TerminalTarget,
-} from "./config";
+import { getTerminalTarget, type TerminalTarget } from "./config";
 import { SidecarClient } from "./sidecar/client";
-import {
-  SIDECAR_SOCKET_PATH,
-  SIDECAR_PID_PATH,
-} from "./sidecar/protocol";
+import { SIDECAR_SOCKET_PATH, SIDECAR_PID_PATH } from "./sidecar/protocol";
 import { COLLAB_DIR } from "./paths";
 import { resolveTerminalTarget } from "./terminal-target";
 
@@ -37,10 +31,7 @@ const dataSockets = new Map<string, net.Socket>();
 const sidecarSessionIds = new Set<string>();
 const sidecarPowerShellSessionIds = new Set<string>();
 const pendingPtyData = new Map<string, Buffer[]>();
-const pendingPtyDataTimers = new Map<
-  string,
-  ReturnType<typeof setTimeout>
->();
+const pendingPtyDataTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const WINDOWS_POWERSHELL_PTY_BATCH_MS = 16;
 
 /**
@@ -83,8 +74,7 @@ function sendToSender(
 
 function shouldBatchWindowsPowerShellOutput(sessionId: string): boolean {
   return (
-    process.platform === "win32"
-    && sidecarPowerShellSessionIds.has(sessionId)
+    process.platform === "win32" && sidecarPowerShellSessionIds.has(sessionId)
   );
 }
 
@@ -108,7 +98,7 @@ function countTrailingIncompleteUtf8Bytes(buf: Buffer): number {
   // Walk backwards to find the lead byte of the final character.
   // Continuation bytes are 10xxxxxx (0x80-0xBF).
   let leadIdx = n - 1;
-  while (leadIdx > 0 && (bytes[leadIdx]! & 0xC0) === 0x80) {
+  while (leadIdx > 0 && (bytes[leadIdx]! & 0xc0) === 0x80) {
     leadIdx--;
   }
   const lead = bytes[leadIdx]!;
@@ -118,13 +108,13 @@ function countTrailingIncompleteUtf8Bytes(buf: Buffer): number {
   if ((lead & 0x80) === 0) return 0;
 
   // Lone continuation byte (no lead byte in range) → all n bytes are orphaned.
-  if ((lead & 0xC0) === 0x80) return n;
+  if ((lead & 0xc0) === 0x80) return n;
 
   // Determine how many continuation bytes this lead expects.
   let expected: number;
-  if ((lead & 0xE0) === 0xC0) expected = 1;
-  else if ((lead & 0xF0) === 0xE0) expected = 2;
-  else if ((lead & 0xF8) === 0xF0) expected = 3;
+  if ((lead & 0xe0) === 0xc0) expected = 1;
+  else if ((lead & 0xf0) === 0xe0) expected = 2;
+  else if ((lead & 0xf8) === 0xf0) expected = 3;
   else return 0; // invalid lead (11111xxx)
 
   if (contCount >= expected) return 0; // complete sequence
@@ -151,9 +141,7 @@ function flushPendingPtyData(
   if (!chunks || chunks.length === 0) return;
   pendingPtyData.delete(sessionId);
 
-  const data = chunks.length === 1
-    ? chunks[0]
-    : Buffer.concat(chunks);
+  const data = chunks.length === 1 ? chunks[0] : Buffer.concat(chunks);
   sendToSender(senderWebContentsId, "pty:data", {
     sessionId,
     data: data.toString("utf-8"),
@@ -168,9 +156,7 @@ function forwardPtyData(
 ): void {
   // Prepend any incomplete UTF-8 bytes leftover from the previous chunk.
   const leftover = trailingUtf8Bytes.get(sessionId);
-  const full = leftover
-    ? Buffer.concat([leftover, data])
-    : data;
+  const full = leftover ? Buffer.concat([leftover, data]) : data;
 
   // Detect trailing incomplete UTF-8 bytes and save them for the next chunk.
   // Slice them off BEFORE decoding so Node.js doesn't replace them with .
@@ -190,11 +176,20 @@ function forwardPtyData(
     const ctxStart = Math.max(0, idx - 20);
     const ctx = text.substring(ctxStart, idx + 20);
     const rawStart = Math.max(0, safeLen - 30);
-    const rawBytes = Array.from(full.subarray(rawStart, Math.min(full.length, safeLen + 10)))
-      .map(b => b.toString(16).padStart(2, "0")).join(" ");
+    const rawBytes = Array.from(
+      full.subarray(rawStart, Math.min(full.length, safeLen + 10)),
+    )
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join(" ");
     console.error(
-      "[pty:utf8] session=" + sessionId + " U+FFFD at char " + idx +
-      " ctx=\"" + ctx + "\" rawBytes=" + rawBytes,
+      "[pty:utf8] session=" +
+        sessionId +
+        " U+FFFD at char " +
+        idx +
+        ' ctx="' +
+        ctx +
+        '" rawBytes=' +
+        rawBytes,
     );
   }
 
@@ -316,12 +311,16 @@ function fixSpawnHelperPerms(): void {
 async function spawnSidecar(): Promise<void> {
   fixSpawnHelperPerms();
   cleanupEndpoint(SIDECAR_SOCKET_PATH);
-  try { fs.unlinkSync(SIDECAR_PID_PATH); } catch {}
+  try {
+    fs.unlinkSync(SIDECAR_PID_PATH);
+  } catch {}
 
   const token = crypto.randomBytes(16).toString("hex");
 
   let app: typeof import("electron").app | undefined;
-  try { app = require("electron").app; } catch {}
+  try {
+    app = require("electron").app;
+  } catch {}
   if (!app) throw new Error("Cannot spawn sidecar outside Electron");
 
   const sidecarPath = app.isPackaged
@@ -384,14 +383,14 @@ function ensureZshIntegrationDir(): string | null {
 
     fs.writeFileSync(
       path.join(ZSH_INTEGRATION_DIR, ".zshenv"),
-      '[ -f "${_COLLAB_ZDOTDIR:-$HOME}/.zshenv" ] && '
-        + '. "${_COLLAB_ZDOTDIR:-$HOME}/.zshenv"\n',
+      '[ -f "${_COLLAB_ZDOTDIR:-$HOME}/.zshenv" ] && ' +
+        '. "${_COLLAB_ZDOTDIR:-$HOME}/.zshenv"\n',
     );
 
     fs.writeFileSync(
       path.join(ZSH_INTEGRATION_DIR, ".zprofile"),
-      '[ -f "${_COLLAB_ZDOTDIR:-$HOME}/.zprofile" ] && '
-        + '. "${_COLLAB_ZDOTDIR:-$HOME}/.zprofile"\n',
+      '[ -f "${_COLLAB_ZDOTDIR:-$HOME}/.zprofile" ] && ' +
+        '. "${_COLLAB_ZDOTDIR:-$HOME}/.zprofile"\n',
     );
 
     fs.writeFileSync(
@@ -410,8 +409,8 @@ function ensureZshIntegrationDir(): string | null {
 
     fs.writeFileSync(
       path.join(ZSH_INTEGRATION_DIR, ".zlogin"),
-      '[ -f "${ZDOTDIR:-$HOME}/.zlogin" ] && '
-        + '. "${ZDOTDIR:-$HOME}/.zlogin"\n',
+      '[ -f "${ZDOTDIR:-$HOME}/.zlogin" ] && ' +
+        '. "${ZDOTDIR:-$HOME}/.zlogin"\n',
     );
 
     return ZSH_INTEGRATION_DIR;
@@ -441,10 +440,7 @@ function osc7ShellHook(shell: string): string | null {
   return null;
 }
 
-function injectOsc7Hook(
-  sessionId: string,
-  shell: string,
-): void {
+function injectOsc7Hook(sessionId: string, shell: string): void {
   const hook = osc7ShellHook(shell);
   if (!hook) return;
   // Delay to let the shell start and show its first prompt
@@ -488,52 +484,55 @@ export async function createSession(
   if (path.basename(resolvedTarget.command) === "zsh") {
     const dir = ensureZshIntegrationDir();
     if (dir) {
-      sidecarEnv._COLLAB_ZDOTDIR = process.env.ZDOTDIR
-        || process.env.HOME || os.homedir();
+      sidecarEnv._COLLAB_ZDOTDIR =
+        process.env.ZDOTDIR || process.env.HOME || os.homedir();
       sidecarEnv.ZDOTDIR = dir;
       zshIntegrated = true;
     }
   }
 
-  const createParams = withOptionalFields({
-    command: resolvedTarget.command,
-    args: resolvedTarget.args,
-    shell: resolvedTarget.command,
-    displayName: resolvedTarget.displayName,
-    target: resolvedTarget.target,
-    cwd: resolvedTarget.cwd,
-    cwdHostPath: resolvedTarget.cwdHostPath,
-    cols: c,
-    rows: r,
-    env: sidecarEnv,
-  }, {
-    cwdGuestPath: resolvedTarget.cwdGuestPath,
-  });
-  const { sessionId, socketPath } = await client.createSession(createParams);
-
-  const dataSock = await client.attachDataSocket(
-    socketPath,
-    (data) => {
-      forwardPtyData(sessionId, senderWebContentsId, data);
+  const createParams = withOptionalFields(
+    {
+      command: resolvedTarget.command,
+      args: resolvedTarget.args,
+      shell: resolvedTarget.command,
+      displayName: resolvedTarget.displayName,
+      target: resolvedTarget.target,
+      cwd: resolvedTarget.cwd,
+      cwdHostPath: resolvedTarget.cwdHostPath,
+      cols: c,
+      rows: r,
+      env: sidecarEnv,
+    },
+    {
+      cwdGuestPath: resolvedTarget.cwdGuestPath,
     },
   );
+  const { sessionId, socketPath } = await client.createSession(createParams);
+
+  const dataSock = await client.attachDataSocket(socketPath, (data) => {
+    forwardPtyData(sessionId, senderWebContentsId, data);
+  });
   dataSockets.set(sessionId, dataSock);
 
   writeSessionMeta(
     sessionId,
-    withOptionalFields({
-      shell: resolvedTarget.command,
-      cwd: resolvedTarget.cwdHostPath,
-      createdAt: new Date().toISOString(),
-      target: resolvedTarget.target,
-      displayName: resolvedTarget.displayName,
-      command: resolvedTarget.command,
-      args: resolvedTarget.args,
-      cwdHostPath: resolvedTarget.cwdHostPath,
-      backend: "sidecar",
-    }, {
-      cwdGuestPath: resolvedTarget.cwdGuestPath,
-    }) as SessionMeta,
+    withOptionalFields(
+      {
+        shell: resolvedTarget.command,
+        cwd: resolvedTarget.cwdHostPath,
+        createdAt: new Date().toISOString(),
+        target: resolvedTarget.target,
+        displayName: resolvedTarget.displayName,
+        command: resolvedTarget.command,
+        args: resolvedTarget.args,
+        cwdHostPath: resolvedTarget.cwdHostPath,
+        backend: "sidecar",
+      },
+      {
+        cwdGuestPath: resolvedTarget.cwdGuestPath,
+      },
+    ) as SessionMeta,
   );
 
   sidecarSessionIds.add(sessionId);
@@ -545,17 +544,20 @@ export async function createSession(
     injectOsc7Hook(sessionId, resolvedTarget.command);
   }
 
-  return withOptionalFields({
-    sessionId,
-    shell: resolvedTarget.command,
-    displayName: resolvedTarget.displayName,
-    target: resolvedTarget.target,
-    command: resolvedTarget.command,
-    args: resolvedTarget.args,
-    cwdHostPath: resolvedTarget.cwdHostPath,
-  }, {
-    cwdGuestPath: resolvedTarget.cwdGuestPath,
-  });
+  return withOptionalFields(
+    {
+      sessionId,
+      shell: resolvedTarget.command,
+      displayName: resolvedTarget.displayName,
+      target: resolvedTarget.target,
+      command: resolvedTarget.command,
+      args: resolvedTarget.args,
+      cwdHostPath: resolvedTarget.cwdHostPath,
+    },
+    {
+      cwdGuestPath: resolvedTarget.cwdGuestPath,
+    },
+  );
 }
 
 export async function reconnectSession(
@@ -578,16 +580,11 @@ export async function reconnectSession(
   await ensureSidecar();
   const client = getSidecarClient();
   const meta = readSessionMeta(sessionId);
-  const { socketPath } = await client.reconnectSession(
-    sessionId, cols, rows,
-  );
+  const { socketPath } = await client.reconnectSession(sessionId, cols, rows);
 
-  const dataSock = await client.attachDataSocket(
-    socketPath,
-    (data) => {
-      forwardPtyData(sessionId, senderWebContentsId, data);
-    },
-  );
+  const dataSock = await client.attachDataSocket(socketPath, (data) => {
+    forwardPtyData(sessionId, senderWebContentsId, data);
+  });
 
   dataSockets.get(sessionId)?.destroy();
   dataSockets.set(sessionId, dataSock);
@@ -599,35 +596,32 @@ export async function reconnectSession(
     sidecarPowerShellSessionIds.add(sessionId);
   }
 
-  return withOptionalFields({
-    sessionId,
-    shell,
-    displayName,
-    meta,
-    scrollback: "",
-  }, {
-    target: meta?.target,
-    command: meta?.command,
-    args: meta?.args,
-    cwdHostPath: meta?.cwdHostPath ?? meta?.cwd,
-    cwdGuestPath: meta?.cwdGuestPath,
-  });
+  return withOptionalFields(
+    {
+      sessionId,
+      shell,
+      displayName,
+      meta,
+      scrollback: "",
+    },
+    {
+      target: meta?.target,
+      command: meta?.command,
+      args: meta?.args,
+      cwdHostPath: meta?.cwdHostPath ?? meta?.cwd,
+      cwdGuestPath: meta?.cwdGuestPath,
+    },
+  );
 }
 
-export function writeToSession(
-  sessionId: string,
-  data: string,
-): void {
+export function writeToSession(sessionId: string, data: string): void {
   const dataSock = dataSockets.get(sessionId);
   if (dataSock && !dataSock.destroyed) {
     dataSock.write(data);
   }
 }
 
-export function sendRawKeys(
-  sessionId: string,
-  data: string,
-): void {
+export function sendRawKeys(sessionId: string, data: string): void {
   writeToSession(sessionId, data);
 }
 
@@ -647,9 +641,7 @@ export async function resizeSession(
   }
 }
 
-export async function killSession(
-  sessionId: string,
-): Promise<void> {
+export async function killSession(sessionId: string): Promise<void> {
   clearForegroundCache(sessionId);
   dataSockets.get(sessionId)?.destroy();
   dataSockets.delete(sessionId);
@@ -706,10 +698,7 @@ export function killAllAndWait(): Promise<void> {
     killSession(sessionId);
   }
 
-  return Promise.race([
-    Promise.all(pending).then(() => {}),
-    timeout,
-  ]);
+  return Promise.race([Promise.all(pending).then(() => {}), timeout]);
 }
 
 export function destroyAll(): void {
@@ -741,21 +730,26 @@ export async function discoverSessions(): Promise<DiscoveredSession[]> {
     await ensureSidecar();
     const client = getSidecarClient();
     const list = await client.listSessions();
-    result.push(...list.map((s) => ({
-      sessionId: s.sessionId,
-      meta: withOptionalFields({
-        shell: s.shell,
-        cwd: s.cwdHostPath,
-        createdAt: s.createdAt,
-        backend: "sidecar",
-        target: s.target,
-        displayName: s.displayName,
-        command: s.shell,
-        cwdHostPath: s.cwdHostPath,
-      }, {
-        cwdGuestPath: s.cwdGuestPath,
-      }) as SessionMeta,
-    })));
+    result.push(
+      ...list.map((s) => ({
+        sessionId: s.sessionId,
+        meta: withOptionalFields(
+          {
+            shell: s.shell,
+            cwd: s.cwdHostPath,
+            createdAt: s.createdAt,
+            backend: "sidecar",
+            target: s.target,
+            displayName: s.displayName,
+            command: s.shell,
+            cwdHostPath: s.cwdHostPath,
+          },
+          {
+            cwdGuestPath: s.cwdGuestPath,
+          },
+        ) as SessionMeta,
+      })),
+    );
   } catch {
     // Sidecar not running
   }
@@ -763,9 +757,7 @@ export async function discoverSessions(): Promise<DiscoveredSession[]> {
   // Clean up orphaned meta files
   let metaFiles: string[];
   try {
-    metaFiles = fs
-      .readdirSync(SESSION_DIR)
-      .filter((f) => f.endsWith(".json"));
+    metaFiles = fs.readdirSync(SESSION_DIR).filter((f) => f.endsWith(".json"));
   } catch {
     metaFiles = [];
   }

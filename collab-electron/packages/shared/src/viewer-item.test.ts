@@ -1,8 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import {
-  parseFileToViewerItem,
-  serializeViewerItem,
-} from "./viewer-item";
+import { parseFileToViewerItem, serializeViewerItem } from "./viewer-item";
 
 describe("parseFileToViewerItem", () => {
   test("parses plain markdown without frontmatter", () => {
@@ -59,10 +56,7 @@ Body`;
 type: article
 ---
 Body`;
-    const item = parseFileToViewerItem(
-      "/project/.claude/skills/x.md",
-      content,
-    );
+    const item = parseFileToViewerItem("/project/.claude/skills/x.md", content);
     expect(item.type).toBe("skill");
   });
 

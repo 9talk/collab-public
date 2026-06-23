@@ -19,16 +19,12 @@ async function activateWikiLink(target: string): Promise<void> {
   }
 
   const config = await window.api.getConfig();
-  const wsPath =
-    config.workspaces?.[0];
+  const wsPath = config.workspaces?.[0];
   if (!wsPath) return;
 
   const newPath = `${wsPath}/${target}.md`;
   try {
-    await window.api.writeFile(
-      newPath,
-      `---\ntype: note\n---\n`,
-    );
+    await window.api.writeFile(newPath, `---\ntype: note\n---\n`);
     window.api.selectFile(newPath);
   } catch (err) {
     console.error("Failed to create file for dead link:", err);
@@ -117,9 +113,7 @@ interface BlockItem {
   children?: BlockItem[];
 }
 
-function processInlineContent(
-  content: InlineItem[],
-): InlineItem[] {
+function processInlineContent(content: InlineItem[]): InlineItem[] {
   const result: InlineItem[] = [];
 
   for (const item of content) {
@@ -176,26 +170,16 @@ function processInlineContent(
   return result;
 }
 
-export function insertWikilinksIntoBlocks(
-  blocks: BlockItem[],
-): BlockItem[] {
+export function insertWikilinksIntoBlocks(blocks: BlockItem[]): BlockItem[] {
   return blocks.map((block) => {
     const updated = { ...block };
 
-    if (
-      Array.isArray(updated.content) &&
-      updated.content.length > 0
-    ) {
+    if (Array.isArray(updated.content) && updated.content.length > 0) {
       updated.content = processInlineContent(updated.content);
     }
 
-    if (
-      Array.isArray(updated.children) &&
-      updated.children.length > 0
-    ) {
-      updated.children = insertWikilinksIntoBlocks(
-        updated.children,
-      );
+    if (Array.isArray(updated.children) && updated.children.length > 0) {
+      updated.children = insertWikilinksIntoBlocks(updated.children);
     }
 
     return updated;

@@ -1,9 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import {
-  hasTextBom,
-  isBinarySample,
-  getDefaultPatterns,
-} from "./file-filter";
+import { hasTextBom, isBinarySample, getDefaultPatterns } from "./file-filter";
 
 describe("hasTextBom", () => {
   test("detects UTF-8 BOM", () => {

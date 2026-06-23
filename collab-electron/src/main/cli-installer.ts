@@ -14,12 +14,15 @@ import { homedir } from "node:os";
 const IS_WIN = process.platform === "win32";
 const INSTALL_DIR = IS_WIN
   ? join(
-    process.env["LOCALAPPDATA"] || join(homedir(), "AppData", "Local"),
-    "Collaborator",
-    "bin",
-  )
+      process.env["LOCALAPPDATA"] || join(homedir(), "AppData", "Local"),
+      "Collaborator",
+      "bin",
+    )
   : join(homedir(), ".local", "bin");
-const WRAPPER_PATH = join(INSTALL_DIR, IS_WIN ? "collab-canvas.cmd" : "collab-canvas");
+const WRAPPER_PATH = join(
+  INSTALL_DIR,
+  IS_WIN ? "collab-canvas.cmd" : "collab-canvas",
+);
 const MJS_PATH = join(INSTALL_DIR, "collab-cli.mjs");
 
 function getMjsSource(): string {

@@ -58,10 +58,7 @@ export async function saveState(state: CanvasState): Promise<void> {
   if (!existsSync(STATE_DIR)) {
     await mkdir(STATE_DIR, { recursive: true });
   }
-  const tmp = join(
-    tmpdir(),
-    `canvas-state-${crypto.randomUUID()}.json`,
-  );
+  const tmp = join(tmpdir(), `canvas-state-${crypto.randomUUID()}.json`);
   const json = JSON.stringify(state, null, 2);
   await writeFile(tmp, json, "utf-8");
   await rename(tmp, STATE_FILE);

@@ -41,9 +41,7 @@ function extractWikilinks(content: string): string[] {
   return targets;
 }
 
-async function collectMdFiles(
-  dirPath: string,
-): Promise<string[]> {
+async function collectMdFiles(dirPath: string): Promise<string[]> {
   const files: string[] = [];
   let entries;
   try {
@@ -91,10 +89,7 @@ function removeFromStemIndex(filePath: string): void {
   }
 }
 
-function updateLinkMaps(
-  filePath: string,
-  targets: string[],
-): void {
+function updateLinkMaps(filePath: string, targets: string[]): void {
   const oldTargets = index.outgoing.get(filePath);
   if (oldTargets) {
     for (const t of oldTargets) {
@@ -126,9 +121,7 @@ function updateLinkMaps(
   }
 }
 
-export async function buildIndex(
-  wsPath: string,
-): Promise<void> {
+export async function buildIndex(wsPath: string): Promise<void> {
   workspacePath = wsPath;
   index.byStem.clear();
   index.outgoing.clear();
@@ -151,9 +144,7 @@ export async function buildIndex(
   }
 }
 
-export async function updateFile(
-  filePath: string,
-): Promise<void> {
+export async function updateFile(filePath: string): Promise<void> {
   if (!filePath.endsWith(".md")) return;
   if (suppressedPaths.delete(filePath)) return;
 
@@ -174,9 +165,7 @@ export function removeFile(filePath: string): void {
   updateLinkMaps(filePath, []);
 }
 
-export function resolve(
-  target: string,
-): string | null {
+export function resolve(target: string): string | null {
   const lower = target.toLowerCase();
 
   // Try exact stem match first
@@ -209,9 +198,7 @@ export interface WikilinkSuggestion {
   ambiguous: boolean;
 }
 
-export function suggest(
-  partial: string,
-): WikilinkSuggestion[] {
+export function suggest(partial: string): WikilinkSuggestion[] {
   if (partial.length === 0) {
     const all: Array<WikilinkSuggestion & { rank: number }> = [];
     for (const [stem, paths] of index.byStem) {
@@ -221,18 +208,15 @@ export function suggest(
       }
     }
     all.sort((a, b) => a.stem.localeCompare(b.stem));
-    return all
-      .slice(0, 20)
-      .map(({ stem, path, ambiguous }) => ({
-        stem,
-        path,
-        ambiguous,
-      }));
+    return all.slice(0, 20).map(({ stem, path, ambiguous }) => ({
+      stem,
+      path,
+      ambiguous,
+    }));
   }
 
   const lower = partial.toLowerCase();
-  const results: Array<WikilinkSuggestion & { rank: number }> =
-    [];
+  const results: Array<WikilinkSuggestion & { rank: number }> = [];
 
   for (const [stem, paths] of index.byStem) {
     if (paths.length === 0) continue;
@@ -255,19 +239,14 @@ export function suggest(
     return a.stem.localeCompare(b.stem);
   });
 
-  return results
-    .slice(0, 20)
-    .map(({ stem, path, ambiguous }) => ({
-      stem,
-      path,
-      ambiguous,
-    }));
+  return results.slice(0, 20).map(({ stem, path, ambiguous }) => ({
+    stem,
+    path,
+    ambiguous,
+  }));
 }
 
-function extractContext(
-  content: string,
-  target: string,
-): string {
+function extractContext(content: string, target: string): string {
   const lower = target.toLowerCase();
   const re = new RegExp(
     `\\[\\[[^\\]]*${escapeRegExp(lower)}[^\\]]*\\]\\]`,
@@ -349,12 +328,8 @@ export async function handleRename(
   for (const sourcePath of sources) {
     try {
       const content = await readFile(sourcePath, "utf-8");
-      const updated = content.replace(
-        pattern,
-        (_match, prefix?: string) =>
-          prefix
-            ? `[[${prefix}${newStemDisplay}]]`
-            : `[[${newStemDisplay}]]`,
+      const updated = content.replace(pattern, (_match, prefix?: string) =>
+        prefix ? `[[${prefix}${newStemDisplay}]]` : `[[${newStemDisplay}]]`,
       );
       if (updated !== content) {
         suppressNextUpdate(sourcePath);
@@ -371,8 +346,7 @@ export async function handleRename(
 
   // Move all backlinks from old stem to new stem
   index.incoming.delete(oldStem);
-  const newIncoming =
-    index.incoming.get(newStem) ?? new Set<string>();
+  const newIncoming = index.incoming.get(newStem) ?? new Set<string>();
   for (const f of sources) {
     newIncoming.add(f);
   }

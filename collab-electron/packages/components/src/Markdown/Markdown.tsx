@@ -30,9 +30,7 @@ export function Markdown({
     if (!container) return;
 
     const katexDisplays = enableKatex
-      ? Array.from(
-          container.querySelectorAll<HTMLElement>(".katex-display"),
-        )
+      ? Array.from(container.querySelectorAll<HTMLElement>(".katex-display"))
       : [];
 
     const codeBlocks = Array.from(
@@ -117,7 +115,9 @@ export function Markdown({
   return (
     <div
       ref={containerRef}
-      className={className ? `${className} markdown-content` : "markdown-content"}
+      className={
+        className ? `${className} markdown-content` : "markdown-content"
+      }
     >
       <ReactMarkdown
         remarkPlugins={remarkPlugins}

@@ -45,11 +45,19 @@ const mockAutoUpdater = {
   },
   downloadUpdate: () => Promise.resolve(),
   quitAndInstall: () => {},
-  set autoDownload(v: boolean) { autoDownloadValue = v; },
-  get autoDownload() { return autoDownloadValue; },
+  set autoDownload(v: boolean) {
+    autoDownloadValue = v;
+  },
+  get autoDownload() {
+    return autoDownloadValue;
+  },
   set autoInstallOnAppQuit(v: boolean) {},
-  set forceDevUpdateConfig(v: boolean) { forceDevUpdateConfigValue = v; },
-  get forceDevUpdateConfig() { return forceDevUpdateConfigValue; },
+  set forceDevUpdateConfig(v: boolean) {
+    forceDevUpdateConfigValue = v;
+  },
+  get forceDevUpdateConfig() {
+    return forceDevUpdateConfigValue;
+  },
   set logger(v: unknown) {},
 };
 
@@ -253,7 +261,9 @@ describe("UpdateManager", () => {
     fireEvent("update-available", { version: "0.6.1" });
 
     expect(getState().status).toBe("idle");
-    expect(trackedEvents.find((e) => e.event === "update_available")).toBeUndefined();
+    expect(
+      trackedEvents.find((e) => e.event === "update_available"),
+    ).toBeUndefined();
   });
 
   test("accepts update when offered version is higher than pre-release current", async () => {

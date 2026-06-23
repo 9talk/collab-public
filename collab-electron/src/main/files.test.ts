@@ -139,7 +139,10 @@ describe("atomicWriteFileSync", () => {
     const p = join(tmp, "clean.json");
     atomicWriteFileSync(p, "data");
 
-    const files = Bun.spawnSync(["ls", tmp]).stdout.toString().trim().split("\n");
+    const files = Bun.spawnSync(["ls", tmp])
+      .stdout.toString()
+      .trim()
+      .split("\n");
     expect(files).toEqual(["clean.json"]);
   });
 

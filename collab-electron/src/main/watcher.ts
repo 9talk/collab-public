@@ -42,15 +42,11 @@ export function startWorker(): void {
     if (stopping) return;
 
     if (restartCount >= MAX_RESTARTS) {
-      console.error(
-        `[watcher] Worker exited ${MAX_RESTARTS} times, giving up`,
-      );
+      console.error(`[watcher] Worker exited ${MAX_RESTARTS} times, giving up`);
       return;
     }
 
-    console.warn(
-      `[watcher] Worker exited with code ${code}, restarting`,
-    );
+    console.warn(`[watcher] Worker exited with code ${code}, restarting`);
     restartCount++;
     startWorker();
 

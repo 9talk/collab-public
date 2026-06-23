@@ -25,31 +25,33 @@ import {
 
 // Use short temp dir to stay under macOS 104-byte sun_path limit
 const TEST_DIR = path.join(os.tmpdir(), `sc-${process.pid}`);
-const CONTROL_SOCK = process.platform === "win32"
-  ? `\\\\.\\pipe\\sc-${process.pid}-ctrl`
-  : path.join(TEST_DIR, "ctrl.sock");
+const CONTROL_SOCK =
+  process.platform === "win32"
+    ? `\\\\.\\pipe\\sc-${process.pid}-ctrl`
+    : path.join(TEST_DIR, "ctrl.sock");
 const SESSION_DIR = path.join(TEST_DIR, "s");
 const PID_PATH = path.join(TEST_DIR, "pid");
 const TOKEN = "test-token-abc123";
 
 const TEST_CWD = process.platform === "win32" ? os.tmpdir() : "/tmp";
-const TEST_SHELL = process.platform === "win32"
-  ? {
-    command: "powershell.exe",
-    args: ["-NoLogo"],
-    displayName: "PowerShell",
-    target: "powershell",
-    echo: (marker: string) => `Write-Output '${marker}'\n`,
-    exit: "exit\r",
-  }
-  : {
-    command: "/bin/sh",
-    args: [],
-    displayName: "sh",
-    target: "shell",
-    echo: (marker: string) => `echo ${marker}\n`,
-    exit: "exit\n",
-  };
+const TEST_SHELL =
+  process.platform === "win32"
+    ? {
+        command: "powershell.exe",
+        args: ["-NoLogo"],
+        displayName: "PowerShell",
+        target: "powershell",
+        echo: (marker: string) => `Write-Output '${marker}'\n`,
+        exit: "exit\r",
+      }
+    : {
+        command: "/bin/sh",
+        args: [],
+        displayName: "sh",
+        target: "shell",
+        echo: (marker: string) => `echo ${marker}\n`,
+        exit: "exit\n",
+      };
 
 let server: SidecarServer | null = null;
 
@@ -182,12 +184,7 @@ function earlyOutputShell(marker: string): {
   if (process.platform === "win32") {
     return {
       command: "powershell.exe",
-      args: [
-        "-NoLogo",
-        "-NoExit",
-        "-Command",
-        `Write-Output '${marker}'`,
-      ],
+      args: ["-NoLogo", "-NoExit", "-Command", `Write-Output '${marker}'`],
       displayName: "PowerShell",
       target: "powershell",
     };
@@ -259,7 +256,7 @@ describe("SidecarServer", () => {
       sessionSocketDir: SESSION_DIR,
       pidFilePath: PID_PATH,
       token: TOKEN,
-      });
+    });
     await server.start();
 
     const sock = await connectControl();
@@ -282,7 +279,7 @@ describe("SidecarServer session lifecycle", () => {
       sessionSocketDir: SESSION_DIR,
       pidFilePath: PID_PATH,
       token: TOKEN,
-      });
+    });
     await server.start();
 
     const sock = await connectControl();
@@ -314,7 +311,7 @@ describe("SidecarServer session lifecycle", () => {
       sessionSocketDir: SESSION_DIR,
       pidFilePath: PID_PATH,
       token: TOKEN,
-      });
+    });
     await server.start();
 
     const ctrl = await connectControl();
@@ -328,8 +325,7 @@ describe("SidecarServer session lifecycle", () => {
       cols: 80,
       rows: 24,
     });
-    const { socketPath } =
-      createResp.result as SessionCreateResult;
+    const { socketPath } = createResp.result as SessionCreateResult;
 
     // Connect data socket
     const data = await new Promise<net.Socket>((resolve, reject) => {
@@ -343,9 +339,11 @@ describe("SidecarServer session lifecycle", () => {
       let buf = "";
       const timer = setTimeout(() => {
         data.off("data", onData);
-        reject(new Error(
-          `Timed out waiting for PTY output. Got: ${JSON.stringify(buf)}`,
-        ));
+        reject(
+          new Error(
+            `Timed out waiting for PTY output. Got: ${JSON.stringify(buf)}`,
+          ),
+        );
       }, 5000);
       const onData = (chunk: Buffer) => {
         buf += chunk.toString();
@@ -401,7 +399,7 @@ describe("SidecarServer session lifecycle", () => {
       sessionSocketDir: SESSION_DIR,
       pidFilePath: PID_PATH,
       token: TOKEN,
-      });
+    });
     await server.start();
 
     const sock = await connectControl();
@@ -417,8 +415,7 @@ describe("SidecarServer session lifecycle", () => {
     });
 
     const listResp = await rpcCall(sock, 2, "session.list");
-    const { sessions } =
-      listResp.result as { sessions: SessionInfo[] };
+    const { sessions } = listResp.result as { sessions: SessionInfo[] };
     assert.equal(sessions.length, 1);
     assert.equal(sessions[0].shell, TEST_SHELL.command);
 
@@ -432,7 +429,7 @@ describe("SidecarServer session lifecycle", () => {
       sessionSocketDir: SESSION_DIR,
       pidFilePath: PID_PATH,
       token: TOKEN,
-      });
+    });
     await server.start();
 
     const sock = await connectControl();
@@ -446,14 +443,12 @@ describe("SidecarServer session lifecycle", () => {
       cols: 80,
       rows: 24,
     });
-    const { sessionId } =
-      createResp.result as SessionCreateResult;
+    const { sessionId } = createResp.result as SessionCreateResult;
 
     await rpcCall(sock, 2, "session.kill", { sessionId });
 
     const listResp = await rpcCall(sock, 3, "session.list");
-    const { sessions } =
-      listResp.result as { sessions: SessionInfo[] };
+    const { sessions } = listResp.result as { sessions: SessionInfo[] };
     assert.equal(sessions.length, 0);
 
     sock.destroy();
@@ -466,7 +461,7 @@ describe("SidecarServer session lifecycle", () => {
       sessionSocketDir: SESSION_DIR,
       pidFilePath: PID_PATH,
       token: TOKEN,
-      });
+    });
     await server.start();
 
     const ctrl = await connectControl();
@@ -482,8 +477,7 @@ describe("SidecarServer session lifecycle", () => {
       cols: 80,
       rows: 24,
     });
-    const { sessionId, socketPath } =
-      createResp.result as SessionCreateResult;
+    const { sessionId, socketPath } = createResp.result as SessionCreateResult;
 
     // Connect, send command, wait for output, then disconnect
     const data1 = await new Promise<net.Socket>((resolve, reject) => {
@@ -603,7 +597,9 @@ describe("Last-attach-wins eviction", () => {
     // Verify A no longer receives new output.
     // After eviction, A should not get any data from a new command.
     let aGotNewData = false;
-    dataA.on("data", () => { aGotNewData = true; });
+    dataA.on("data", () => {
+      aGotNewData = true;
+    });
 
     // Verify B receives output
     dataB.write(TEST_SHELL.echo("socket-b-marker"));
@@ -717,10 +713,7 @@ describe("Reconnect queues output produced during gap", () => {
       const onData = (chunk: Buffer) => {
         buf += chunk.toString();
         // Wait until we see both markers or timeout
-        if (
-          buf.includes("first-cmd-aaa")
-          && buf.includes("second-cmd-bbb")
-        ) {
+        if (buf.includes("first-cmd-aaa") && buf.includes("second-cmd-bbb")) {
           data3.off("data", onData);
           resolve(buf);
         }
@@ -767,17 +760,22 @@ describe("Windows WSL smoke", () => {
   const runWslSmoke = process.env.RUN_WSL_SMOKE === "1";
   const defaultDistro = isWindows
     ? (() => {
-      try {
-        const out = execFileSync("wsl.exe", ["-l", "-q"], {
-          encoding: "utf8",
-          timeout: 5000,
-          windowsHide: true,
-        });
-        return out.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? null;
-      } catch {
-        return null;
-      }
-    })()
+        try {
+          const out = execFileSync("wsl.exe", ["-l", "-q"], {
+            encoding: "utf8",
+            timeout: 5000,
+            windowsHide: true,
+          });
+          return (
+            out
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .find(Boolean) ?? null
+          );
+        } catch {
+          return null;
+        }
+      })()
     : null;
 
   it("can spawn a WSL session when a distro is installed", async (t) => {

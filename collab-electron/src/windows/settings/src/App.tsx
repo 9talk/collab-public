@@ -18,11 +18,13 @@ type ThemeMode = "light" | "dark" | "system";
 interface SettingsApi {
   getPref: (key: string) => Promise<unknown>;
   setPref: (key: string, value: unknown) => Promise<void>;
-  listTerminalTargets: () => Promise<Array<{
-    id: string;
-    label: string;
-    isDefault?: boolean;
-  }>>;
+  listTerminalTargets: () => Promise<
+    Array<{
+      id: string;
+      label: string;
+      isDefault?: boolean;
+    }>
+  >;
   setTheme: (mode: string) => Promise<void>;
   getAppVersion: () => Promise<string>;
   getAgents: () => Promise<AgentStatus[]>;
@@ -62,7 +64,10 @@ function Slider({
       const track = trackRef.current;
       if (!track) return;
       const rect = track.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const ratio = Math.max(
+        0,
+        Math.min(1, (clientX - rect.left) / rect.width),
+      );
       onChange(Math.round(min + ratio * (max - min)));
     },
     [min, max, onChange],
@@ -165,9 +170,7 @@ function ThemeToggle({
             <Icon
               className="h-4 w-4 transition-colors duration-150"
               style={{
-                color: active
-                  ? "var(--foreground)"
-                  : "var(--muted-foreground)",
+                color: active ? "var(--foreground)" : "var(--muted-foreground)",
               }}
               weight={active ? "fill" : "regular"}
             />
@@ -185,27 +188,31 @@ function AppearancePane({ t }: { t: (key: TranslationKey) => string }) {
   const [rememberExpandedDirs, setRememberExpandedDirs] = useState(true);
 
   useEffect(() => {
-    api.getPref("theme")
+    api
+      .getPref("theme")
       .then((v) => {
         if (v === "light" || v === "dark") setTheme(v);
         else setTheme("system");
       })
-      .catch(() => { });
-    api.getPref("canvasOpacity")
+      .catch(() => {});
+    api
+      .getPref("canvasOpacity")
       .then((v) => {
         if (typeof v === "number") setCanvasOpacity(v);
       })
-      .catch(() => { });
-    api.getPref("locale")
+      .catch(() => {});
+    api
+      .getPref("locale")
       .then((v) => {
         if (v === "en" || v === "zh") setLocale(v);
       })
-      .catch(() => { });
-    api.getPref("rememberExpandedDirs")
+      .catch(() => {});
+    api
+      .getPref("rememberExpandedDirs")
       .then((v) => {
         if (typeof v === "boolean") setRememberExpandedDirs(v);
       })
-      .catch(() => { });
+      .catch(() => {});
   }, []);
 
   async function handleThemeChange(mode: ThemeMode) {
@@ -236,7 +243,9 @@ function AppearancePane({ t }: { t: (key: TranslationKey) => string }) {
         <p className="text-sm font-medium">{t("appearance.theme")}</p>
         <ThemeToggle
           value={theme}
-          onChange={(m) => { void handleThemeChange(m); }}
+          onChange={(m) => {
+            void handleThemeChange(m);
+          }}
         />
       </div>
 
@@ -251,7 +260,8 @@ function AppearancePane({ t }: { t: (key: TranslationKey) => string }) {
           }}
           className="rounded-md border bg-transparent px-2 py-1 text-sm cursor-pointer"
           style={{
-            borderColor: "color-mix(in srgb, var(--foreground) 15%, transparent)",
+            borderColor:
+              "color-mix(in srgb, var(--foreground) 15%, transparent)",
             color: "var(--foreground)",
           }}
         >
@@ -269,19 +279,27 @@ function AppearancePane({ t }: { t: (key: TranslationKey) => string }) {
         </div>
         <Slider
           value={canvasOpacity}
-          onChange={(v) => { void handleOpacityChange(v); }}
+          onChange={(v) => {
+            void handleOpacityChange(v);
+          }}
         />
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium">{t("appearance.rememberExpandedDirs")}</p>
-            <p className="text-xs text-muted-foreground">{t("appearance.rememberExpandedDirsDesc")}</p>
+            <p className="text-sm font-medium">
+              {t("appearance.rememberExpandedDirs")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t("appearance.rememberExpandedDirsDesc")}
+            </p>
           </div>
           <ToggleSwitch
             checked={rememberExpandedDirs}
-            onChange={(v) => { void handleRememberExpandedDirsChange(v); }}
+            onChange={(v) => {
+              void handleRememberExpandedDirsChange(v);
+            }}
           />
         </div>
       </div>
@@ -387,7 +405,10 @@ function ControlsPane({ t }: { t: (key: TranslationKey) => string }) {
     { label: t("mouse.panCanvas"), keys: t("mouse.middleClickDrag") },
     { label: t("mouse.panCanvas"), keys: t("mouse.spaceDrag") },
     { label: t("mouse.scrollVertically"), keys: t("mouse.scroll") },
-    { label: t("mouse.scrollHorizontally"), keys: `${SHIFT} ${t("mouse.scroll")}` },
+    {
+      label: t("mouse.scrollHorizontally"),
+      keys: `${SHIFT} ${t("mouse.scroll")}`,
+    },
     { label: t("mouse.zoom"), keys: `${CTRL} ${t("mouse.scroll")}` },
     ...(IS_MAC
       ? [{ label: t("mouse.zoom"), keys: `${MOD} ${t("mouse.scroll")}` }]
@@ -434,9 +455,11 @@ function RadioOption({
       onClick={onClick}
       className="flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left cursor-pointer"
       style={{
-        border: `1px solid ${selected
-          ? "var(--foreground)"
-          : "color-mix(in srgb, var(--foreground) 15%, transparent)"}`,
+        border: `1px solid ${
+          selected
+            ? "var(--foreground)"
+            : "color-mix(in srgb, var(--foreground) 15%, transparent)"
+        }`,
         backgroundColor: selected
           ? "color-mix(in srgb, var(--foreground) 6%, transparent)"
           : "transparent",
@@ -479,7 +502,11 @@ function MacTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
 }
 
 function TerminalPane(props: { t: (key: TranslationKey) => string }) {
-  return IS_MAC ? <MacTerminalPane {...props} /> : <WindowsTerminalPane {...props} />;
+  return IS_MAC ? (
+    <MacTerminalPane {...props} />
+  ) : (
+    <WindowsTerminalPane {...props} />
+  );
 }
 
 function WindowsTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
@@ -487,14 +514,16 @@ function WindowsTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
   const [options, setOptions] = useState<TerminalTargetOption[]>([]);
 
   useEffect(() => {
-    api.getPref("terminalTarget")
+    api
+      .getPref("terminalTarget")
       .then((v) => {
         if (typeof v === "string") setTarget(v);
       })
-      .catch(() => { });
-    api.listTerminalTargets()
+      .catch(() => {});
+    api
+      .listTerminalTargets()
       .then((items) => setOptions(items))
-      .catch(() => { });
+      .catch(() => {});
   }, []);
 
   async function handleTargetChange(value: TerminalTarget) {
@@ -518,11 +547,15 @@ function WindowsTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
             <RadioOption
               key={id}
               selected={target === id}
-              onClick={() => { void handleTargetChange(id); }}
+              onClick={() => {
+                void handleTargetChange(id);
+              }}
               label={label}
-              description={isDefault
-                ? t("terminal.target.default")
-                : t("terminal.target.available")}
+              description={
+                isDefault
+                  ? t("terminal.target.default")
+                  : t("terminal.target.available")
+              }
             />
           ))}
         </div>
@@ -544,7 +577,8 @@ function IntegrationsPane({ t }: { t: (key: TranslationKey) => string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.getAgents()
+    api
+      .getAgents()
       .then((a) => setAgents(a))
       .catch(() => {});
   }, []);
@@ -557,10 +591,14 @@ function IntegrationsPane({ t }: { t: (key: TranslationKey) => string }) {
         ? await api.uninstallSkill(agent.id)
         : await api.installSkill(agent.id);
       if (result && !result.ok) {
-        setError(`${agent.name}: ${(result as { error?: string }).error ?? "Unknown error"}`);
+        setError(
+          `${agent.name}: ${(result as { error?: string }).error ?? "Unknown error"}`,
+        );
       }
     } catch (err) {
-      setError(`${agent.name}: ${err instanceof Error ? err.message : String(err)}`);
+      setError(
+        `${agent.name}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
     const updated = await api.getAgents();
     setAgents(updated);
@@ -581,7 +619,9 @@ function IntegrationsPane({ t }: { t: (key: TranslationKey) => string }) {
       </div>
 
       {error && (
-        <p className="text-xs" style={{ color: "#ef4444" }}>{error}</p>
+        <p className="text-xs" style={{ color: "#ef4444" }}>
+          {error}
+        </p>
       )}
 
       <div className="space-y-1.5">
@@ -597,13 +637,17 @@ function IntegrationsPane({ t }: { t: (key: TranslationKey) => string }) {
             <div className="space-y-0.5">
               <p className="text-sm font-medium">{agent.name}</p>
               <p className="text-xs text-muted-foreground">
-                {agent.detected ? t("integrations.detected") : t("integrations.notFound")}
+                {agent.detected
+                  ? t("integrations.detected")
+                  : t("integrations.notFound")}
               </p>
             </div>
             <button
               type="button"
               disabled={busy.has(agent.id)}
-              onClick={() => { void toggle(agent); }}
+              onClick={() => {
+                void toggle(agent);
+              }}
               className="rounded-md px-3 py-1.5 text-xs font-medium cursor-pointer disabled:opacity-50"
               style={{
                 backgroundColor: agent.installed
@@ -614,7 +658,9 @@ function IntegrationsPane({ t }: { t: (key: TranslationKey) => string }) {
                   : "var(--background)",
               }}
             >
-              {agent.installed ? t("integrations.uninstall") : t("integrations.install")}
+              {agent.installed
+                ? t("integrations.uninstall")
+                : t("integrations.install")}
             </button>
           </div>
         ))}
@@ -629,11 +675,12 @@ function UpdatesPane({ t }: { t: (key: TranslationKey) => string }) {
   const [autoCheck, setAutoCheck] = useState(false);
 
   useEffect(() => {
-    api.getPref("autoCheckUpdates")
+    api
+      .getPref("autoCheckUpdates")
       .then((v) => {
         if (typeof v === "boolean") setAutoCheck(v);
       })
-      .catch(() => { });
+      .catch(() => {});
   }, []);
 
   async function handleAutoCheckChange(checked: boolean) {
@@ -654,7 +701,9 @@ function UpdatesPane({ t }: { t: (key: TranslationKey) => string }) {
         <p className="text-sm font-medium">{t("updates.autoCheck")}</p>
         <ToggleSwitch
           checked={autoCheck}
-          onChange={(v) => { void handleAutoCheckChange(v); }}
+          onChange={(v) => {
+            void handleAutoCheckChange(v);
+          }}
         />
       </div>
     </div>
@@ -695,12 +744,10 @@ function CloseButton({ onClick }: { onClick: () => void }) {
 }
 
 export default function App() {
-  const [activePane, setActivePane] =
-    useState<Pane>("appearance");
+  const [activePane, setActivePane] = useState<Pane>("appearance");
   const [appVersion, setAppVersion] = useState("");
   const { t } = useTranslation(api);
-  const paneRef =
-    useRef<HTMLDivElement>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const focusInitialControl = () => {
@@ -708,8 +755,7 @@ export default function App() {
     };
     focusInitialControl();
     window.addEventListener("focus", focusInitialControl);
-    return () =>
-      window.removeEventListener("focus", focusInitialControl);
+    return () => window.removeEventListener("focus", focusInitialControl);
   }, []);
 
   useEffect(() => {
@@ -719,14 +765,14 @@ export default function App() {
       }
     };
     window.addEventListener("keydown", handleKeyDown);
-    return () =>
-      window.removeEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   useEffect(() => {
-    api.getAppVersion()
+    api
+      .getAppVersion()
       .then((v) => setAppVersion(v))
-      .catch(() => { });
+      .catch(() => {});
   }, []);
 
   const navItems: { id: Pane; label: string; icon: typeof Palette }[] = [
@@ -762,15 +808,14 @@ export default function App() {
               key={id}
               type="button"
               onClick={() => setActivePane(id)}
-              className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium ${activePane === id
-                ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-                }`}
+              className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium ${
+                activePane === id
+                  ? "bg-accent text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
             >
               <Icon className="h-4 w-4" />
-              <span className="flex-1 text-left">
-                {label}
-              </span>
+              <span className="flex-1 text-left">{label}</span>
             </button>
           ))}
         </nav>

@@ -17,7 +17,10 @@ if (fs.existsSync(envLocalPath)) {
     if (!trimmed || trimmed.startsWith("#")) continue;
     const [key, ...rest] = trimmed.split("=");
     if (key && rest.length > 0 && !(key.trim() in process.env)) {
-      process.env[key.trim()] = rest.join("=").trim().replace(/^["']|["']$/g, "");
+      process.env[key.trim()] = rest
+        .join("=")
+        .trim()
+        .replace(/^["']|["']$/g, "");
     }
   }
 }
@@ -127,11 +130,17 @@ function collectMacArtifacts() {
       label: `ZIP (${arch})`,
       path: resolveArtifact(`ZIP (${arch})`, zipPath),
     });
-    const bm = resolveArtifact(`Blockmap (${arch})`, zipPath + ".blockmap", true);
+    const bm = resolveArtifact(
+      `Blockmap (${arch})`,
+      zipPath + ".blockmap",
+      true,
+    );
     if (bm) {
       list.push({ label: `Blockmap (${arch})`, path: bm });
     } else {
-      console.warn(`No blockmap for ${arch} — delta updates disabled for ${zipName}`);
+      console.warn(
+        `No blockmap for ${arch} — delta updates disabled for ${zipName}`,
+      );
     }
   }
 
@@ -160,15 +169,28 @@ function collectWindowsArtifacts() {
   const uploadName = `${product}-Setup-${version}.exe`;
   const exePath = path.join(distDir, diskName);
   const list = [
-    { label: "Installer", path: resolveArtifact("Installer", exePath), uploadName },
+    {
+      label: "Installer",
+      path: resolveArtifact("Installer", exePath),
+      uploadName,
+    },
   ];
   const bm = resolveArtifact("Blockmap", exePath + ".blockmap", true);
-  if (bm) list.push({ label: "Blockmap", path: bm, uploadName: uploadName + ".blockmap" });
+  if (bm)
+    list.push({
+      label: "Blockmap",
+      path: bm,
+      uploadName: uploadName + ".blockmap",
+    });
 
   // electron-builder generates latest.yml — copy it to latest-win.yml
   // (new canonical name, channel "latest-win") and keep latest.yml as a
   // bridge for old installs that still look for the default channel name.
-  const srcYml = resolveArtifact("latest.yml", path.join(distDir, "latest.yml"), true);
+  const srcYml = resolveArtifact(
+    "latest.yml",
+    path.join(distDir, "latest.yml"),
+    true,
+  );
   if (srcYml) {
     appendCommitToYml(srcYml);
     const winYmlPath = path.join(distDir, "latest-win.yml");
@@ -178,7 +200,11 @@ function collectWindowsArtifacts() {
     list.push({ label: "latest.yml (bridge)", path: srcYml });
   }
 
-  const sums = resolveArtifact("SHA256SUMS", path.join(distDir, "SHA256SUMS.txt"), true);
+  const sums = resolveArtifact(
+    "SHA256SUMS",
+    path.join(distDir, "SHA256SUMS.txt"),
+    true,
+  );
   if (sums) list.push({ label: "SHA256SUMS", path: sums });
   return list;
 }
@@ -188,9 +214,7 @@ function collectLinuxArtifacts() {
     "AppImage",
     path.join(distDir, `${product}-${version}.AppImage`),
   );
-  const list = [
-    { label: "AppImage", path: appImage },
-  ];
+  const list = [{ label: "AppImage", path: appImage }];
 
   const yml = resolveArtifact(
     "latest-linux.yml",
@@ -201,7 +225,9 @@ function collectLinuxArtifacts() {
     appendCommitToYml(yml);
     list.push({ label: "latest-linux.yml", path: yml });
   } else {
-    console.warn("No latest-linux.yml found — Linux auto-updates will not work");
+    console.warn(
+      "No latest-linux.yml found — Linux auto-updates will not work",
+    );
   }
 
   const sums = resolveArtifact(

@@ -34,8 +34,7 @@ export function initMainAnalytics(): void {
   }
 
   client = new PostHog(apiKey, {
-    host:
-      import.meta.env.MAIN_VITE_POSTHOG_HOST ?? "https://us.i.posthog.com",
+    host: import.meta.env.MAIN_VITE_POSTHOG_HOST ?? "https://us.i.posthog.com",
   });
 
   client.capture({

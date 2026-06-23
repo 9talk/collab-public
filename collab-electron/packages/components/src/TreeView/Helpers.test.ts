@@ -1,9 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import {
-  displayFileName,
-  getDateKey,
-  formatDateLabel,
-} from "./Helpers";
+import { displayFileName, getDateKey, formatDateLabel } from "./Helpers";
 
 describe("displayFileName", () => {
   test("splits name into stem and extension", () => {

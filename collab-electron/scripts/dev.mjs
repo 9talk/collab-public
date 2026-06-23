@@ -14,33 +14,34 @@ function normalizeWindowsPath(path) {
 
 const repoDir = normalizeWindowsPath(process.cwd());
 
-const child = process.platform === "win32"
-  ? spawn(
-      "powershell.exe",
-      [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        join(repoDir, "scripts", "dev.ps1"),
-      ],
-      {
+const child =
+  process.platform === "win32"
+    ? spawn(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          join(repoDir, "scripts", "dev.ps1"),
+        ],
+        {
+          stdio: "inherit",
+          cwd: repoDir,
+          env: {
+            ...process.env,
+            COLLAB_DEV_WORKTREE_ROOT: repoDir,
+          },
+        },
+      )
+    : spawn(process.execPath, ["x", "electron-vite", "dev"], {
         stdio: "inherit",
         cwd: repoDir,
         env: {
           ...process.env,
           COLLAB_DEV_WORKTREE_ROOT: repoDir,
         },
-      },
-    )
-  : spawn(process.execPath, ["x", "electron-vite", "dev"], {
-      stdio: "inherit",
-      cwd: repoDir,
-      env: {
-        ...process.env,
-        COLLAB_DEV_WORKTREE_ROOT: repoDir,
-      },
-    });
+      });
 
 const forwardSignal = (signal) => {
   if (!child.killed) {

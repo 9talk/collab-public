@@ -4,7 +4,11 @@ import { toCollabFileUrl } from "@collab/shared/collab-file-url";
 import { displayBasename } from "@collab/shared/path-utils";
 
 const NATIVE_IMAGE_EXTENSIONS = new Set([
-  ".png", ".jpg", ".jpeg", ".gif", ".webp",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
 ]);
 
 function nativeImageUrl(path: string): string | null {
@@ -122,10 +126,14 @@ export function ImageView({
           src={imageData.url}
           alt={filename}
           draggable={false}
-          style={dimensions ? {
-            width: dimensions.width / window.devicePixelRatio,
-            height: dimensions.height / window.devicePixelRatio,
-          } : { visibility: "hidden" }}
+          style={
+            dimensions
+              ? {
+                  width: dimensions.width / window.devicePixelRatio,
+                  height: dimensions.height / window.devicePixelRatio,
+                }
+              : { visibility: "hidden" }
+          }
           onLoad={(e) => {
             const img = e.currentTarget;
             if (img.naturalWidth > 0) {

@@ -1,5 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=IBM+Plex+Sans:ital,wght@0,100..700;1,100..700&family=IBM+Plex+Serif:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
-@import 'tailwindcss';
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=IBM+Plex+Sans:ital,wght@0,100..700;1,100..700&family=IBM+Plex+Serif:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap");
+@import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -11,45 +11,53 @@
    ============================================================================ */
 
 :root {
-	/* Base colors - used everywhere */
-	--background: rgb(248, 248, 248);
-	--foreground: rgb(32, 32, 32);
+  /* Base colors - used everywhere */
+  --background: rgb(248, 248, 248);
+  --foreground: rgb(32, 32, 32);
 
-	/* Font families - source of truth, referenced by @theme and body */
-	font-size: 16px;
-	--font-sans: 'Geist', system-ui, sans-serif;
-	--font-mono: 'Geist Mono';
+  /* Font families - source of truth, referenced by @theme and body */
+  font-size: 16px;
+  --font-sans: "Geist", system-ui, sans-serif;
+  --font-mono: "Geist Mono";
 
-	/* Universal semantic colors */
-	--border: rgb(206, 206, 206);
-	--muted-background: rgb(244, 244, 245);
-	--muted-foreground: rgb(113, 113, 123);
+  /* Universal semantic colors */
+  --border: rgb(206, 206, 206);
+  --muted-background: rgb(244, 244, 245);
+  --muted-foreground: rgb(113, 113, 123);
 
-	/* Layout & spacing */
-	--radius: 0.625rem;
+  /* Layout & spacing */
+  --radius: 0.625rem;
 
-	/* Scrollbar styling */
-	--scrollbar-width: 6px;
-	--scrollbar-thumb: color-mix(in srgb, var(--foreground) 10%, transparent);
-	--scrollbar-thumb-hover: color-mix(in srgb, var(--foreground) 18%, transparent);
+  /* Scrollbar styling */
+  --scrollbar-width: 6px;
+  --scrollbar-thumb: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --scrollbar-thumb-hover: color-mix(
+    in srgb,
+    var(--foreground) 18%,
+    transparent
+  );
 
-	/* Item type accent colors */
-	--item-type-note: oklch(76.8% 0.233 130.85);
-	--item-type-doc: oklch(79.5% 0.184 86.047);
-	--item-type-bookmark: oklch(70.5% 0.213 47.604);
-	--item-type-pdf: oklch(63.7% 0.237 25.331);
-	--item-type-concept: oklch(54.6% 0.245 262.881);
-	--item-type-default: #6b7280;
+  /* Item type accent colors */
+  --item-type-note: oklch(76.8% 0.233 130.85);
+  --item-type-doc: oklch(79.5% 0.184 86.047);
+  --item-type-bookmark: oklch(70.5% 0.213 47.604);
+  --item-type-pdf: oklch(63.7% 0.237 25.331);
+  --item-type-concept: oklch(54.6% 0.245 262.881);
+  --item-type-default: #6b7280;
 }
 
 .dark {
-	--background: rgb(18, 18, 18);
-	--foreground: rgb(220, 220, 220);
-	--border: rgb(255, 255, 255, 0.2);
-	--muted-background: rgb(24, 24, 27);
-	--muted-foreground: rgb(132, 132, 132);
-	--scrollbar-thumb: color-mix(in srgb, var(--foreground) 10%, transparent);
-	--scrollbar-thumb-hover: color-mix(in srgb, var(--foreground) 20%, transparent);
+  --background: rgb(18, 18, 18);
+  --foreground: rgb(220, 220, 220);
+  --border: rgb(255, 255, 255, 0.2);
+  --muted-background: rgb(24, 24, 27);
+  --muted-foreground: rgb(132, 132, 132);
+  --scrollbar-thumb: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --scrollbar-thumb-hover: color-mix(
+    in srgb,
+    var(--foreground) 20%,
+    transparent
+  );
 }
 
 /* ============================================================================
@@ -60,43 +68,43 @@
    ============================================================================ */
 
 :root {
-	/* Form input styling */
-	--input: rgb(238, 238, 238);
+  /* Form input styling */
+  --input: rgb(238, 238, 238);
 
-	/* Focus ring color - used for accessibility focus indicators on interactive elements */
-	/* Named "ring" to match Tailwind's ring-* utility naming convention */
-	--ring: rgb(182, 182, 182);
+  /* Focus ring color - used for accessibility focus indicators on interactive elements */
+  /* Named "ring" to match Tailwind's ring-* utility naming convention */
+  --ring: rgb(182, 182, 182);
 
-	/* Popover & overlay colors (used by popover, dropdown, tooltip, etc.) */
-	--popover: rgb(255, 255, 255);
-	--popover-foreground: rgb(9, 9, 11);
+  /* Popover & overlay colors (used by popover, dropdown, tooltip, etc.) */
+  --popover: rgb(255, 255, 255);
+  --popover-foreground: rgb(9, 9, 11);
 
-	/* Destructive actions (used by button destructive variant, form validation) */
-	--destructive: rgb(251, 44, 54);
-	--destructive-foreground: rgb(251, 44, 54);
+  /* Destructive actions (used by button destructive variant, form validation) */
+  --destructive: rgb(251, 44, 54);
+  --destructive-foreground: rgb(251, 44, 54);
 
-	/* Button & interactive element colors (used by UI component library) */
-	--primary: rgb(24, 24, 27);
-	--primary-foreground: rgb(250, 250, 250);
-	--secondary: rgb(244, 244, 245);
-	--secondary-foreground: rgb(24, 24, 27);
-	--accent: rgb(244, 244, 245);
-	--accent-foreground: rgb(24, 24, 27);
+  /* Button & interactive element colors (used by UI component library) */
+  --primary: rgb(24, 24, 27);
+  --primary-foreground: rgb(250, 250, 250);
+  --secondary: rgb(244, 244, 245);
+  --secondary-foreground: rgb(24, 24, 27);
+  --accent: rgb(244, 244, 245);
+  --accent-foreground: rgb(24, 24, 27);
 }
 
 .dark {
-	--input: rgb(36, 36, 36);
-	--ring: rgb(88, 88, 88);
-	--popover: rgb(9, 9, 11);
-	--popover-foreground: rgb(250, 250, 250);
-	--destructive: rgb(251, 44, 54);
-	--destructive-foreground: rgb(251, 44, 54);
-	--primary: rgb(250, 250, 250);
-	--primary-foreground: rgb(24, 24, 27);
-	--secondary: rgb(23, 23, 23, 0);
-	--secondary-foreground: rgb(250, 250, 250);
-	--accent: rgb(24, 24, 27);
-	--accent-foreground: rgb(250, 250, 250);
+  --input: rgb(36, 36, 36);
+  --ring: rgb(88, 88, 88);
+  --popover: rgb(9, 9, 11);
+  --popover-foreground: rgb(250, 250, 250);
+  --destructive: rgb(251, 44, 54);
+  --destructive-foreground: rgb(251, 44, 54);
+  --primary: rgb(250, 250, 250);
+  --primary-foreground: rgb(24, 24, 27);
+  --secondary: rgb(23, 23, 23, 0);
+  --secondary-foreground: rgb(250, 250, 250);
+  --accent: rgb(24, 24, 27);
+  --accent-foreground: rgb(250, 250, 250);
 }
 
 /* ============================================================================
@@ -104,90 +112,121 @@
    ============================================================================ */
 
 @layer base {
-	html {
-		--color-text-secondary: var(--muted-foreground);
-		--color-border-editable: color-mix(in srgb, var(--border) 55%, transparent);
-		--color-hover: color-mix(in srgb, var(--foreground) 6%, transparent);
-		--color-active: color-mix(in srgb, var(--foreground) 12%, transparent);
+  html {
+    --color-text-secondary: var(--muted-foreground);
+    --color-border-editable: color-mix(in srgb, var(--border) 55%, transparent);
+    --color-hover: color-mix(in srgb, var(--foreground) 6%, transparent);
+    --color-active: color-mix(in srgb, var(--foreground) 12%, transparent);
 
-		/* Viewer app-specific tokens */
-		--color-item-visible-bg: color-mix(in srgb, var(--selection-color) 18%, transparent);
-		--color-source-item: color-mix(in srgb, var(--selection-color) 14%, transparent);
+    /* Viewer app-specific tokens */
+    --color-item-visible-bg: color-mix(
+      in srgb,
+      var(--selection-color) 18%,
+      transparent
+    );
+    --color-source-item: color-mix(
+      in srgb,
+      var(--selection-color) 14%,
+      transparent
+    );
 
-		/* Card colors - used by Viewer app */
-		--card: rgb(242, 242, 242);
-		--card-foreground: rgb(9, 9, 11);
+    /* Card colors - used by Viewer app */
+    --card: rgb(242, 242, 242);
+    --card-foreground: rgb(9, 9, 11);
 
-		/* Background for editable content areas */
-		--background-editable: clear;
+    /* Background for editable content areas */
+    --background-editable: clear;
 
-		--color-modal-overlay: color-mix(in srgb, var(--foreground) 60%, transparent);
-		--color-image-fallback: color-mix(in srgb, var(--foreground) 6%, transparent);
-		--color-title-border: color-mix(in srgb, var(--border) 65%, transparent);
-		--color-codeblock-background: rgb(235, 235, 235);
-		--color-inline-code: rgb(160, 40, 40);
-		--color-border-excerpt: color-mix(in srgb, var(--border) 75%, transparent);
-	}
+    --color-modal-overlay: color-mix(
+      in srgb,
+      var(--foreground) 60%,
+      transparent
+    );
+    --color-image-fallback: color-mix(
+      in srgb,
+      var(--foreground) 6%,
+      transparent
+    );
+    --color-title-border: color-mix(in srgb, var(--border) 65%, transparent);
+    --color-codeblock-background: rgb(235, 235, 235);
+    --color-inline-code: rgb(160, 40, 40);
+    --color-border-excerpt: color-mix(in srgb, var(--border) 75%, transparent);
+  }
 
-	html.dark {
-		--color-item-visible-bg: color-mix(in srgb, var(--selection-color) 28%, transparent);
-		--color-modal-overlay: color-mix(in srgb, var(--foreground) 70%, transparent);
-		--color-title-border: color-mix(in srgb, var(--border) 55%, transparent);
-		--color-codeblock-background: rgb(45, 45, 50);
-		--color-inline-code: rgb(230, 100, 100);
-		--color-border-excerpt: color-mix(in srgb, var(--border) 85%, transparent);
-		--card: rgb(24, 24, 24);
-		--card-foreground: rgb(250, 250, 250);
-		--background-editable: clear;
-	}
+  html.dark {
+    --color-item-visible-bg: color-mix(
+      in srgb,
+      var(--selection-color) 28%,
+      transparent
+    );
+    --color-modal-overlay: color-mix(
+      in srgb,
+      var(--foreground) 70%,
+      transparent
+    );
+    --color-title-border: color-mix(in srgb, var(--border) 55%, transparent);
+    --color-codeblock-background: rgb(45, 45, 50);
+    --color-inline-code: rgb(230, 100, 100);
+    --color-border-excerpt: color-mix(in srgb, var(--border) 85%, transparent);
+    --card: rgb(24, 24, 24);
+    --card-foreground: rgb(250, 250, 250);
+    --background-editable: clear;
+  }
 
-	html.platform-win,
-	html.platform-win.dark {
-		--background-editable: var(--background);
-	}
+  html.platform-win,
+  html.platform-win.dark {
+    --background-editable: var(--background);
+  }
 
-	body {
-		background: transparent;
-		color: var(--foreground);
-	}
+  body {
+    background: transparent;
+    color: var(--foreground);
+  }
 
-	html {
-		will-change: auto;
-	}
+  html {
+    will-change: auto;
+  }
 
-	html,
-	body,
-	.app,
-	.main-content,
-	.item-card,
-	.source-items-card,
-	.source-item,
-	.item-title,
-	.item-readonly-content,
-	.source-item-name,
-	.source-item-summary,
-	.summary-header,
-	.summary-label,
-	.summary-content,
-	.quotes-header,
-	.section-label,
-	.quotes-container,
-	.metadata-value,
-	.excerpt-item,
-	.concept-item {
-		transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
-	}
+  html,
+  body,
+  .app,
+  .main-content,
+  .item-card,
+  .source-items-card,
+  .source-item,
+  .item-title,
+  .item-readonly-content,
+  .source-item-name,
+  .source-item-summary,
+  .summary-header,
+  .summary-label,
+  .summary-content,
+  .quotes-header,
+  .section-label,
+  .quotes-container,
+  .metadata-value,
+  .excerpt-item,
+  .concept-item {
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease,
+      border-color 0.3s ease;
+  }
 
-	.source-item-name.clickable,
-	.concept-item,
-	button,
-	a {
-		transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
-	}
+  .source-item-name.clickable,
+  .concept-item,
+  button,
+  a {
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease,
+      border-color 0.2s ease,
+      transform 0.2s ease;
+  }
 
-	* {
-		cursor: default !important;
-	}
+  * {
+    cursor: default !important;
+  }
 }
 
 /* ============================================================================
@@ -198,37 +237,37 @@
    ============================================================================ */
 
 @theme inline {
-	/* Core global tokens */
-	--font-family-sans: var(--font-sans);
-	--font-family-mono: var(--font-mono);
-	--color-background: var(--background);
-	--color-foreground: var(--foreground);
-	--color-border: var(--border);
-	--color-muted-background: var(--muted-background);
-	--color-muted-foreground: var(--muted-foreground);
-	--radius-sm: calc(var(--radius) - 4px);
-	--radius-md: calc(var(--radius) - 2px);
-	--radius-lg: var(--radius);
-	--radius-xl: calc(var(--radius) + 4px);
+  /* Core global tokens */
+  --font-family-sans: var(--font-sans);
+  --font-family-mono: var(--font-mono);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-border: var(--border);
+  --color-muted-background: var(--muted-background);
+  --color-muted-foreground: var(--muted-foreground);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 
-	/* UI component library tokens */
-	--color-input: var(--input);
-	--color-ring: var(--ring);
-	--color-popover: var(--popover);
-	--color-popover-foreground: var(--popover-foreground);
-	--color-destructive: var(--destructive);
-	--color-destructive-foreground: var(--destructive-foreground);
-	--color-primary: var(--primary);
-	--color-primary-foreground: var(--primary-foreground);
-	--color-secondary: var(--secondary);
-	--color-secondary-foreground: var(--secondary-foreground);
-	--color-accent: var(--accent);
-	--color-accent-foreground: var(--accent-foreground);
+  /* UI component library tokens */
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
 
-	/* App-specific tokens */
-	/* Note: --card is defined in each app's stylesheet, but we map it here for Tailwind */
-	--color-card: var(--card);
-	--color-card-foreground: var(--card-foreground);
+  /* App-specific tokens */
+  /* Note: --card is defined in each app's stylesheet, but we map it here for Tailwind */
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
 }
 
 /* ============================================================================
@@ -238,60 +277,60 @@
    ============================================================================ */
 
 @layer base {
-	* {
-		@apply border-border outline-ring/50;
-	}
+  * {
+    @apply border-border outline-ring/50;
+  }
 
-	body {
-		background-color: transparent;
-		@apply text-foreground;
-		font-family: var(--font-sans);
-	}
+  body {
+    background-color: transparent;
+    @apply text-foreground;
+    font-family: var(--font-sans);
+  }
 
-	.scrollbar-hover {
-		scrollbar-width: thin;
-		scrollbar-color: transparent transparent;
-	}
+  .scrollbar-hover {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
 
-	.scrollbar-hover::-webkit-scrollbar {
-		width: var(--scrollbar-width);
-		height: var(--scrollbar-width);
-		background-color: transparent;
-	}
+  .scrollbar-hover::-webkit-scrollbar {
+    width: var(--scrollbar-width);
+    height: var(--scrollbar-width);
+    background-color: transparent;
+  }
 
-	.scrollbar-hover::-webkit-scrollbar-track {
-		background-color: transparent;
-	}
+  .scrollbar-hover::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
 
-	.scrollbar-hover::-webkit-scrollbar-corner {
-		background-color: transparent;
-	}
+  .scrollbar-hover::-webkit-scrollbar-corner {
+    background-color: transparent;
+  }
 
-	.scrollbar-hover::-webkit-scrollbar-thumb {
-		background: transparent;
-		border-radius: 4px;
-	}
+  .scrollbar-hover::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 4px;
+  }
 
-	.scrollbar-hover:hover {
-		scrollbar-color: var(--scrollbar-thumb) transparent;
-	}
+  .scrollbar-hover:hover {
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
 
-	.scrollbar-hover:hover::-webkit-scrollbar-thumb {
-		background: var(--scrollbar-thumb);
-	}
+  .scrollbar-hover:hover::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+  }
 
-	.scrollbar-hover:hover::-webkit-scrollbar-thumb:hover {
-		background: var(--scrollbar-thumb-hover);
-	}
+  .scrollbar-hover:hover::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
 
-	/* Text selection styling - applied globally across all apps */
-	::selection {
-		background: var(--foreground);
-		color: var(--background);
-	}
+  /* Text selection styling - applied globally across all apps */
+  ::selection {
+    background: var(--foreground);
+    color: var(--background);
+  }
 
-	::-moz-selection {
-		background: var(--foreground);
-		color: var(--background);
-	}
+  ::-moz-selection {
+    background: var(--foreground);
+    color: var(--background);
+  }
 }

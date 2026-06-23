@@ -187,19 +187,14 @@ function App() {
         } else if (channel === "tile-list:add") {
           const tile = args[0];
           if (!isTileEntry(tile)) return;
-          setEntries((prev) => [
-            ...prev.filter((e) => e.id !== tile.id),
-            tile,
-          ]);
+          setEntries((prev) => [...prev.filter((e) => e.id !== tile.id), tile]);
         } else if (channel === "tile-list:remove") {
           const id = args[0] as string;
           setEntries((prev) => prev.filter((e) => e.id !== id));
         } else if (channel === "tile-list:update") {
           const tile = args[0];
           if (!isTileEntry(tile)) return;
-          setEntries((prev) =>
-            prev.map((e) => (e.id === tile.id ? tile : e)),
-          );
+          setEntries((prev) => prev.map((e) => (e.id === tile.id ? tile : e)));
         } else if (channel === "tile-list:focus") {
           setFocusedId(args[0] as string | null);
         }
@@ -290,9 +285,7 @@ function App() {
         />
       ))}
       {entries.length === 0 && (
-        <div className="tile-empty">
-          No tiles on canvas
-        </div>
+        <div className="tile-empty">No tiles on canvas</div>
       )}
     </div>
   );

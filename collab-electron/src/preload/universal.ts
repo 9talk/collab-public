@@ -8,12 +8,14 @@ import type { ReplayMessage } from "@collab/shared/replay-types";
 
 // -- PTY listener sets (terminal) ------------------------------------
 
-type PtyDataCallback = (
-  payload: { sessionId: string; data: Uint8Array },
-) => void;
-type PtyExitCallback = (
-  payload: { sessionId: string; exitCode: number },
-) => void;
+type PtyDataCallback = (payload: {
+  sessionId: string;
+  data: Uint8Array;
+}) => void;
+type PtyExitCallback = (payload: {
+  sessionId: string;
+  exitCode: number;
+}) => void;
 type CdToCallback = (path: string) => void;
 
 const dataListeners = new Map<string, Set<PtyDataCallback>>();
@@ -133,18 +135,12 @@ ipcRenderer.on("replay:data", (_event, msg) => {
 // -- Canvas opacity ---------------------------------------------------
 // The shell forwards canvas-opacity so webview backgrounds can match.
 ipcRenderer.on("canvas-opacity", (_event: unknown, value: number) => {
-  document.documentElement.style.setProperty(
-    "--canvas-opacity",
-    String(value),
-  );
+  document.documentElement.style.setProperty("--canvas-opacity", String(value));
 });
 
 // -- Nav-visibility buffer -------------------------------------------
 let bufferedNavVisible: boolean | null = null;
-const navVisBuffer = (
-  _event: unknown,
-  visible: boolean,
-) => {
+const navVisBuffer = (_event: unknown, visible: boolean) => {
   bufferedNavVisible = visible;
 };
 ipcRenderer.on("nav-visibility", navVisBuffer);
@@ -156,13 +152,11 @@ contextBridge.exposeInMainWorld("api", {
   getPlatform: (): NodeJS.Platform => process.platform,
   getConfig: () => ipcRenderer.invoke("config:get"),
   getAppVersion: () => ipcRenderer.invoke("app:version"),
-  getDeviceId: () =>
-    ipcRenderer.invoke("analytics:get-device-id"),
+  getDeviceId: () => ipcRenderer.invoke("analytics:get-device-id"),
   getPref: (key: string) => ipcRenderer.invoke("pref:get", key),
   setPref: (key: string, value: unknown) =>
     ipcRenderer.invoke("pref:set", key, value),
-  listTerminalTargets: () =>
-    ipcRenderer.invoke("terminal:list-targets"),
+  listTerminalTargets: () => ipcRenderer.invoke("terminal:list-targets"),
   getWorkspacePref: (key: string, workspacePath: string) =>
     ipcRenderer.invoke("workspace-pref:get", { key, workspacePath }),
   setWorkspacePref: (key: string, value: unknown, workspacePath: string) =>
@@ -173,18 +167,13 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.send("nav:select-file", path),
 
   // Nav
-  readDir: (path: string) =>
-    ipcRenderer.invoke("fs:readdir", path),
-  countFiles: (path: string) =>
-    ipcRenderer.invoke("fs:count-files", path),
-  trashFile: (path: string) =>
-    ipcRenderer.invoke("fs:trash", path),
-  createDir: (path: string) =>
-    ipcRenderer.invoke("fs:mkdir", path),
+  readDir: (path: string) => ipcRenderer.invoke("fs:readdir", path),
+  countFiles: (path: string) => ipcRenderer.invoke("fs:count-files", path),
+  trashFile: (path: string) => ipcRenderer.invoke("fs:trash", path),
+  createDir: (path: string) => ipcRenderer.invoke("fs:mkdir", path),
   moveFile: (oldPath: string, newParentDir: string) =>
     ipcRenderer.invoke("fs:move", oldPath, newParentDir),
-  selectFolder: (path: string) =>
-    ipcRenderer.send("nav:select-folder", path),
+  selectFolder: (path: string) => ipcRenderer.send("nav:select-folder", path),
   readFolderTable: (folderPath: string) =>
     ipcRenderer.invoke("fs:read-folder-table", folderPath),
   importWebArticle: (url: string, targetDir: string) =>
@@ -201,45 +190,22 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.send("viewer:run-in-terminal", command),
 
   // Viewer
-  readFile: (path: string) =>
-    ipcRenderer.invoke("fs:readfile", path),
+  readFile: (path: string) => ipcRenderer.invoke("fs:readfile", path),
   renameFile: (oldPath: string, newTitle: string) =>
     ipcRenderer.invoke("fs:rename", oldPath, newTitle),
-  getFileStats: (path: string) =>
-    ipcRenderer.invoke("fs:stat", path),
+  getFileStats: (path: string) => ipcRenderer.invoke("fs:stat", path),
   getImageThumbnail: (path: string, size: number) =>
     ipcRenderer.invoke("image:thumbnail", path, size),
-  getImageFull: (path: string) =>
-    ipcRenderer.invoke("image:full", path),
+  getImageFull: (path: string) => ipcRenderer.invoke("image:full", path),
   resolveImagePath: (reference: string, fromNotePath: string) =>
     ipcRenderer.invoke("image:resolve-path", reference, fromNotePath),
-  saveDroppedImage: (
-    noteDir: string,
-    fileName: string,
-    buffer: ArrayBuffer,
-  ) =>
-    ipcRenderer.invoke(
-      "image:save-dropped",
-      noteDir,
-      fileName,
-      buffer,
-    ),
-  openImageDialog: () =>
-    ipcRenderer.invoke("dialog:open-image"),
-  getWorkspaceGraph: (
-    params: { workspacePath: string },
-  ) => ipcRenderer.invoke("workspace:get-graph", params),
-  updateFrontmatter: (
-    filePath: string,
-    field: string,
-    value: unknown,
-  ) =>
-    ipcRenderer.invoke(
-      "workspace:update-frontmatter",
-      filePath,
-      field,
-      value,
-    ),
+  saveDroppedImage: (noteDir: string, fileName: string, buffer: ArrayBuffer) =>
+    ipcRenderer.invoke("image:save-dropped", noteDir, fileName, buffer),
+  openImageDialog: () => ipcRenderer.invoke("dialog:open-image"),
+  getWorkspaceGraph: (params: { workspacePath: string }) =>
+    ipcRenderer.invoke("workspace:get-graph", params),
+  updateFrontmatter: (filePath: string, field: string, value: unknown) =>
+    ipcRenderer.invoke("workspace:update-frontmatter", filePath, field, value),
   resolveWikilink: (target: string) =>
     ipcRenderer.invoke("wikilink:resolve", target),
   suggestWikilinks: (partial: string) =>
@@ -259,39 +225,19 @@ contextBridge.exposeInMainWorld("api", {
     rows?: number,
     target?: string,
     tileId?: string,
-  ) =>
-    ipcRenderer.invoke(
-      "pty:create",
-      { cwd, cols, rows, target, tileId },
-    ),
+  ) => ipcRenderer.invoke("pty:create", { cwd, cols, rows, target, tileId }),
   ptyWrite: (sessionId: string, data: string) => {
     ipcRenderer.send("pty:write", { sessionId, data });
   },
   ptySendRawKeys: (sessionId: string, data: string) => {
     ipcRenderer.send("pty:send-raw-keys", { sessionId, data });
   },
-  ptyResize: (
-    sessionId: string,
-    cols: number,
-    rows: number,
-  ) =>
-    ipcRenderer.invoke(
-      "pty:resize",
-      { sessionId, cols, rows },
-    ),
-  ptyKill: (sessionId: string) =>
-    ipcRenderer.invoke("pty:kill", { sessionId }),
-  ptyReconnect: (
-    sessionId: string,
-    cols: number,
-    rows: number,
-  ) =>
-    ipcRenderer.invoke(
-      "pty:reconnect",
-      { sessionId, cols, rows },
-    ),
-  ptyDiscover: () =>
-    ipcRenderer.invoke("pty:discover"),
+  ptyResize: (sessionId: string, cols: number, rows: number) =>
+    ipcRenderer.invoke("pty:resize", { sessionId, cols, rows }),
+  ptyKill: (sessionId: string) => ipcRenderer.invoke("pty:kill", { sessionId }),
+  ptyReconnect: (sessionId: string, cols: number, rows: number) =>
+    ipcRenderer.invoke("pty:reconnect", { sessionId, cols, rows }),
+  ptyDiscover: () => ipcRenderer.invoke("pty:discover"),
   ptyReadMeta: (sessionId: string) =>
     ipcRenderer.invoke("pty:read-meta", sessionId),
   onPtyData: (sessionId: string, cb: PtyDataCallback) => {
@@ -341,12 +287,9 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.invoke("fs:is-directory", filePath),
 
   // Cross-webview drag-and-drop
-  setDragPaths: (paths: string[]) =>
-    ipcRenderer.send("drag:set-paths", paths),
-  clearDragPaths: () =>
-    ipcRenderer.send("drag:clear-paths"),
-  getDragPaths: () =>
-    ipcRenderer.invoke("drag:get-paths"),
+  setDragPaths: (paths: string[]) => ipcRenderer.send("drag:set-paths", paths),
+  clearDragPaths: () => ipcRenderer.send("drag:clear-paths"),
+  getDragPaths: () => ipcRenderer.invoke("drag:get-paths"),
   onNavDragActive: (cb: (active: boolean) => void) => {
     const handler = (_event: unknown, active: boolean) => cb(active);
     ipcRenderer.on("nav-drag-active", handler);
@@ -359,12 +302,10 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.invoke("workspace:remove-by-path", path),
 
   // Theme
-  setTheme: (mode: string) =>
-    ipcRenderer.invoke("theme:set", mode),
+  setTheme: (mode: string) => ipcRenderer.invoke("theme:set", mode),
 
   // Settings
-  openFolder: () =>
-    ipcRenderer.invoke("dialog:open-folder"),
+  openFolder: () => ipcRenderer.invoke("dialog:open-folder"),
   showContextMenu: (
     items: Array<{
       id: string;
@@ -374,20 +315,16 @@ contextBridge.exposeInMainWorld("api", {
   ) => ipcRenderer.invoke("context-menu:show", items),
   close: () => ipcRenderer.send("settings:close"),
 
-  openExternal: (url: string) =>
-    ipcRenderer.send("shell:open-external", url),
-  openPath: (path: string) =>
-    ipcRenderer.send("shell:open-path", path),
+  openExternal: (url: string) => ipcRenderer.send("shell:open-external", url),
+  openPath: (path: string) => ipcRenderer.send("shell:open-path", path),
 
   // Integrations
-  getAgents: () =>
-    ipcRenderer.invoke("integrations:get-agents"),
+  getAgents: () => ipcRenderer.invoke("integrations:get-agents"),
   installSkill: (agentId: string) =>
     ipcRenderer.invoke("integrations:install-skill", agentId),
   uninstallSkill: (agentId: string) =>
     ipcRenderer.invoke("integrations:uninstall-skill", agentId),
-  hasOfferedPlugin: () =>
-    ipcRenderer.invoke("integrations:has-offered-plugin"),
+  hasOfferedPlugin: () => ipcRenderer.invoke("integrations:has-offered-plugin"),
   markPluginOffered: () =>
     ipcRenderer.invoke("integrations:mark-plugin-offered"),
 
@@ -395,47 +332,28 @@ contextBridge.exposeInMainWorld("api", {
   onFocusSearch: (cb: () => void) => {
     const handler = () => cb();
     ipcRenderer.on("focus-search", handler);
-    return () =>
-      ipcRenderer.removeListener("focus-search", handler);
+    return () => ipcRenderer.removeListener("focus-search", handler);
   },
   onFileSelected: (cb: (path: string | null) => void) => {
-    const handler = (
-      _event: unknown,
-      path: string | null,
-    ) => cb(path);
+    const handler = (_event: unknown, path: string | null) => cb(path);
     ipcRenderer.on("file-selected", handler);
-    return () =>
-      ipcRenderer.removeListener("file-selected", handler);
+    return () => ipcRenderer.removeListener("file-selected", handler);
   },
   onFolderSelected: (cb: (path: string) => void) => {
-    const handler = (
-      _event: unknown,
-      path: string,
-    ) => cb(path);
+    const handler = (_event: unknown, path: string) => cb(path);
     ipcRenderer.on("folder-selected", handler);
-    return () =>
-      ipcRenderer.removeListener("folder-selected", handler);
+    return () => ipcRenderer.removeListener("folder-selected", handler);
   },
-  onFileRenamed: (
-    cb: (oldPath: string, newPath: string) => void,
-  ) => {
-    const handler = (
-      _event: unknown,
-      oldPath: string,
-      newPath: string,
-    ) => cb(oldPath, newPath);
+  onFileRenamed: (cb: (oldPath: string, newPath: string) => void) => {
+    const handler = (_event: unknown, oldPath: string, newPath: string) =>
+      cb(oldPath, newPath);
     ipcRenderer.on("file-renamed", handler);
-    return () =>
-      ipcRenderer.removeListener("file-renamed", handler);
+    return () => ipcRenderer.removeListener("file-renamed", handler);
   },
   onFilesDeleted: (cb: (paths: string[]) => void) => {
-    const handler = (
-      _event: unknown,
-      paths: string[],
-    ) => cb(paths);
+    const handler = (_event: unknown, paths: string[]) => cb(paths);
     ipcRenderer.on("files-deleted", handler);
-    return () =>
-      ipcRenderer.removeListener("files-deleted", handler);
+    return () => ipcRenderer.removeListener("files-deleted", handler);
   },
   onFsChanged: (
     cb: (
@@ -453,35 +371,22 @@ contextBridge.exposeInMainWorld("api", {
         }>,
       );
     ipcRenderer.on("fs-changed", handler);
-    return () =>
-      ipcRenderer.removeListener("fs-changed", handler);
+    return () => ipcRenderer.removeListener("fs-changed", handler);
   },
   onWorkspaceAdded: (cb: (path: string) => void) => {
-    const handler = (
-      _event: unknown,
-      path: string,
-    ) => cb(path);
+    const handler = (_event: unknown, path: string) => cb(path);
     ipcRenderer.on("workspace-added", handler);
-    return () =>
-      ipcRenderer.removeListener("workspace-added", handler);
+    return () => ipcRenderer.removeListener("workspace-added", handler);
   },
   onWorkspaceRemoved: (cb: (path: string) => void) => {
-    const handler = (
-      _event: unknown,
-      path: string,
-    ) => cb(path);
+    const handler = (_event: unknown, path: string) => cb(path);
     ipcRenderer.on("workspace-removed", handler);
-    return () =>
-      ipcRenderer.removeListener("workspace-removed", handler);
+    return () => ipcRenderer.removeListener("workspace-removed", handler);
   },
   onWikilinksUpdated: (cb: (paths: string[]) => void) => {
-    const handler = (
-      _event: unknown,
-      paths: string[],
-    ) => cb(paths);
+    const handler = (_event: unknown, paths: string[]) => cb(paths);
     ipcRenderer.on("wikilinks-updated", handler);
-    return () =>
-      ipcRenderer.removeListener("wikilinks-updated", handler);
+    return () => ipcRenderer.removeListener("wikilinks-updated", handler);
   },
   onNavVisibility: (cb: (visible: boolean) => void) => {
     if (bufferedNavVisible !== null) {
@@ -489,40 +394,25 @@ contextBridge.exposeInMainWorld("api", {
       bufferedNavVisible = null;
     }
     ipcRenderer.removeListener("nav-visibility", navVisBuffer);
-    const handler = (
-      _event: unknown,
-      visible: boolean,
-    ) => cb(visible);
+    const handler = (_event: unknown, visible: boolean) => cb(visible);
     ipcRenderer.on("nav-visibility", handler);
-    return () =>
-      ipcRenderer.removeListener("nav-visibility", handler);
+    return () => ipcRenderer.removeListener("nav-visibility", handler);
   },
 
   onScopeChanged: (cb: (newPath: string) => void) => {
-    const handler = (
-      _event: IpcRendererEvent,
-      path: string,
-    ) => cb(path);
+    const handler = (_event: IpcRendererEvent, path: string) => cb(path);
     ipcRenderer.on("scope-changed", handler);
-    return () =>
-      ipcRenderer.removeListener("scope-changed", handler);
+    return () => ipcRenderer.removeListener("scope-changed", handler);
   },
 
   // Auto-updater
-  updateGetStatus: () =>
-    ipcRenderer.invoke("update:getStatus"),
-  updateCheck: () =>
-    ipcRenderer.invoke("update:check"),
-  updateInstall: () =>
-    ipcRenderer.send("update:install"),
+  updateGetStatus: () => ipcRenderer.invoke("update:getStatus"),
+  updateCheck: () => ipcRenderer.invoke("update:check"),
+  updateInstall: () => ipcRenderer.send("update:install"),
   onUpdateStatus: (cb: (state: unknown) => void) => {
-    const handler = (
-      _event: IpcRendererEvent,
-      state: unknown,
-    ) => cb(state);
+    const handler = (_event: IpcRendererEvent, state: unknown) => cb(state);
     ipcRenderer.on("update:status", handler);
-    return () =>
-      ipcRenderer.removeListener("update:status", handler);
+    return () => ipcRenderer.removeListener("update:status", handler);
   },
 
   // Agent activity
@@ -538,11 +428,12 @@ contextBridge.exposeInMainWorld("api", {
   // Git replay
   startReplay: (params: { workspacePath: string }) =>
     ipcRenderer.invoke("replay:start", params),
-  stopReplay: () =>
-    ipcRenderer.invoke("replay:stop"),
+  stopReplay: () => ipcRenderer.invoke("replay:stop"),
   onReplayData: (cb: ReplayDataCb) => {
     replayDataListeners.add(cb);
-    return () => { replayDataListeners.delete(cb); };
+    return () => {
+      replayDataListeners.delete(cb);
+    };
   },
 
   // Terminal focus
@@ -576,9 +467,7 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.sendToHost(channel, ...args),
 
   // Terminal list channels (shell renderer → webview via webview.send)
-  onTileListMessage: (
-    cb: (channel: string, ...args: unknown[]) => void,
-  ) => {
+  onTileListMessage: (cb: (channel: string, ...args: unknown[]) => void) => {
     const channels = [
       "tile-list:init",
       "tile-list:add",
@@ -587,8 +476,7 @@ contextBridge.exposeInMainWorld("api", {
       "tile-list:focus",
     ];
     const handlers = channels.map((ch) => {
-      const handler = (_event: unknown, ...args: unknown[]) =>
-        cb(ch, ...args);
+      const handler = (_event: unknown, ...args: unknown[]) => cb(ch, ...args);
       ipcRenderer.on(ch, handler);
       return { ch, handler };
     });
@@ -605,120 +493,75 @@ contextBridge.exposeInMainWorld("api", {
     sessionId: string;
     resumed: boolean;
     cachedMessages: unknown[];
-  }> =>
-    ipcRenderer.invoke("agent:spawn", { cwd }),
+  }> => ipcRenderer.invoke("agent:spawn", { cwd }),
 
-  agentPrompt: (
-    sessionId: string, text: string,
-  ): Promise<void> =>
+  agentPrompt: (sessionId: string, text: string): Promise<void> =>
     ipcRenderer.invoke("agent:prompt", { sessionId, text }),
 
-  agentCancel: (
-    sessionId: string,
-  ): Promise<void> =>
+  agentCancel: (sessionId: string): Promise<void> =>
     ipcRenderer.invoke("agent:cancel", { sessionId }),
 
-  agentKill: (
-    sessionId: string,
-  ): Promise<void> =>
+  agentKill: (sessionId: string): Promise<void> =>
     ipcRenderer.invoke("agent:kill", { sessionId }),
 
-  agentSaveMessages: (
-    messages: unknown[],
-  ): Promise<void> =>
-    ipcRenderer.invoke(
-      "agent:save-messages", { messages },
-    ),
+  agentSaveMessages: (messages: unknown[]): Promise<void> =>
+    ipcRenderer.invoke("agent:save-messages", { messages }),
 
-  onAgentUpdate: (
-    cb: (params: unknown) => void,
-  ) => {
-    const handler = (
-      _event: unknown, params: unknown,
-    ) => cb(params);
+  onAgentUpdate: (cb: (params: unknown) => void) => {
+    const handler = (_event: unknown, params: unknown) => cb(params);
     ipcRenderer.on("agent:update", handler);
-    return () =>
-      ipcRenderer.removeListener("agent:update", handler);
+    return () => ipcRenderer.removeListener("agent:update", handler);
   },
 
   onAgentPromptComplete: (
-    cb: (data: {
-      sessionId: string;
-      stopReason: string;
-    }) => void,
+    cb: (data: { sessionId: string; stopReason: string }) => void,
   ) => {
     const handler = (
       _event: unknown,
       data: { sessionId: string; stopReason: string },
     ) => cb(data);
     ipcRenderer.on("agent:prompt-complete", handler);
-    return () =>
-      ipcRenderer.removeListener(
-        "agent:prompt-complete", handler,
-      );
+    return () => ipcRenderer.removeListener("agent:prompt-complete", handler);
   },
 
   onAgentPromptError: (
-    cb: (data: {
-      sessionId: string; error: string;
-    }) => void,
+    cb: (data: { sessionId: string; error: string }) => void,
   ) => {
     const handler = (
       _event: unknown,
       data: { sessionId: string; error: string },
     ) => cb(data);
     ipcRenderer.on("agent:prompt-error", handler);
-    return () =>
-      ipcRenderer.removeListener(
-        "agent:prompt-error", handler,
-      );
+    return () => ipcRenderer.removeListener("agent:prompt-error", handler);
   },
 
-  onAgentExit: (
-    cb: (data: { sessionId: string }) => void,
-  ) => {
-    const handler = (
-      _event: unknown,
-      data: { sessionId: string },
-    ) => cb(data);
+  onAgentExit: (cb: (data: { sessionId: string }) => void) => {
+    const handler = (_event: unknown, data: { sessionId: string }) => cb(data);
     ipcRenderer.on("agent:exit", handler);
-    return () =>
-      ipcRenderer.removeListener("agent:exit", handler);
+    return () => ipcRenderer.removeListener("agent:exit", handler);
   },
 
-  onAgentSessionReady: (
-    cb: (data: { sessionId: string }) => void,
-  ) => {
-    const handler = (
-      _event: unknown,
-      data: { sessionId: string },
-    ) => cb(data);
+  onAgentSessionReady: (cb: (data: { sessionId: string }) => void) => {
+    const handler = (_event: unknown, data: { sessionId: string }) => cb(data);
     ipcRenderer.on("agent:session-ready", handler);
-    return () =>
-      ipcRenderer.removeListener(
-        "agent:session-ready", handler,
-      );
+    return () => ipcRenderer.removeListener("agent:session-ready", handler);
   },
 
-  onAgentSessionFailed: (
-    cb: (data: { sessionId: string }) => void,
-  ) => {
-    const handler = (
-      _event: unknown,
-      data: { sessionId: string },
-    ) => cb(data);
+  onAgentSessionFailed: (cb: (data: { sessionId: string }) => void) => {
+    const handler = (_event: unknown, data: { sessionId: string }) => cb(data);
     ipcRenderer.on("agent:session-failed", handler);
-    return () =>
-      ipcRenderer.removeListener(
-        "agent:session-failed", handler,
-      );
+    return () => ipcRenderer.removeListener("agent:session-failed", handler);
   },
 });
 
 // Forward ctrl+wheel (trackpad pinch) from tile webviews to the canvas
-window.addEventListener("wheel", (e) => {
-  if (e.ctrlKey) {
-    e.preventDefault();
-    ipcRenderer.send("canvas:forward-pinch", e.deltaY);
-  }
-}, { passive: false });
+window.addEventListener(
+  "wheel",
+  (e) => {
+    if (e.ctrlKey) {
+      e.preventDefault();
+      ipcRenderer.send("canvas:forward-pinch", e.deltaY);
+    }
+  },
+  { passive: false },
+);

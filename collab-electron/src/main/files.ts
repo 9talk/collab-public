@@ -40,14 +40,13 @@ export function shouldIncludeEntry(
     return true;
   }
 
-  const prefix = dirPath.length > rootPath.length
-    ? dirPath.slice(rootPath.length + 1) + "/"
-    : "";
+  const prefix =
+    dirPath.length > rootPath.length
+      ? dirPath.slice(rootPath.length + 1) + "/"
+      : "";
   const relPath = prefix + entry.name;
 
-  return !filter.isIgnored(
-    isDirectory ? `${relPath}/` : relPath,
-  );
+  return !filter.isIgnored(isDirectory ? `${relPath}/` : relPath);
 }
 
 export async function shouldIncludeEntryWithContent(
@@ -82,11 +81,7 @@ export async function countTreeFiles(
     }
 
     if (e.isDirectory()) {
-      count += await countTreeFiles(
-        join(dirPath, e.name),
-        filter,
-        rootPath,
-      );
+      count += await countTreeFiles(join(dirPath, e.name), filter, rootPath);
     } else {
       count += 1;
     }
@@ -175,10 +170,7 @@ export async function fsWriteFile(
   return { ok: true, mtime: after.mtime.toISOString() };
 }
 
-export function atomicWriteFileSync(
-  filePath: string,
-  data: string,
-): void {
+export function atomicWriteFileSync(filePath: string, data: string): void {
   const tmpPath = `${filePath}.${randomUUID()}.tmp`;
   writeFileSync(tmpPath, data, "utf-8");
   renameSync(tmpPath, filePath);

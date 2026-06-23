@@ -17,30 +17,32 @@ import { makeNotification } from "./protocol";
 
 // Short temp dir to stay under macOS 104-byte sun_path limit
 const TEST_DIR = path.join(os.tmpdir(), `cc-${process.pid}`);
-const CONTROL_SOCK = process.platform === "win32"
-  ? `\\\\.\\pipe\\cc-${process.pid}-ctrl`
-  : path.join(TEST_DIR, "ctrl.sock");
+const CONTROL_SOCK =
+  process.platform === "win32"
+    ? `\\\\.\\pipe\\cc-${process.pid}-ctrl`
+    : path.join(TEST_DIR, "ctrl.sock");
 const SESSION_DIR = path.join(TEST_DIR, "s");
 const PID_PATH = path.join(TEST_DIR, "pid");
 const TOKEN = "client-test-token";
 const TEST_CWD = process.platform === "win32" ? os.tmpdir() : "/tmp";
-const TEST_SHELL = process.platform === "win32"
-  ? {
-    command: "powershell.exe",
-    args: ["-NoLogo"],
-    displayName: "PowerShell",
-    target: "powershell",
-    echo: (marker: string) => `Write-Output '${marker}'\n`,
-    exit: "exit\r",
-  }
-  : {
-    command: "/bin/sh",
-    args: [],
-    displayName: "sh",
-    target: "shell",
-    echo: (marker: string) => `echo ${marker}\n`,
-    exit: "exit\n",
-  };
+const TEST_SHELL =
+  process.platform === "win32"
+    ? {
+        command: "powershell.exe",
+        args: ["-NoLogo"],
+        displayName: "PowerShell",
+        target: "powershell",
+        echo: (marker: string) => `Write-Output '${marker}'\n`,
+        exit: "exit\r",
+      }
+    : {
+        command: "/bin/sh",
+        args: [],
+        displayName: "sh",
+        target: "shell",
+        echo: (marker: string) => `echo ${marker}\n`,
+        exit: "exit\n",
+      };
 
 let server: SidecarServer | null = null;
 let client: SidecarClient | null = null;
@@ -83,8 +85,8 @@ async function waitForExitNotification(
 ): Promise<{ method: string; params: Record<string, unknown> } | undefined> {
   const deadline = Date.now() + timeoutMs;
   while (
-    !notifications.some((n) => n.method === "session.exited")
-    && Date.now() < deadline
+    !notifications.some((n) => n.method === "session.exited") &&
+    Date.now() < deadline
   ) {
     await sleep(50);
   }
@@ -126,9 +128,8 @@ describe("SidecarClient", () => {
     assert.match(sessionId, /^[0-9a-f]{16}$/);
 
     const chunks: DataChunk[] = [];
-    const dataSock = await client.attachDataSocket(
-      socketPath,
-      (data) => chunks.push(data),
+    const dataSock = await client.attachDataSocket(socketPath, (data) =>
+      chunks.push(data),
     );
 
     dataSock.write(TEST_SHELL.echo("client-test"));
@@ -136,8 +137,8 @@ describe("SidecarClient", () => {
     // Wait until we see the expected output or timeout
     const deadline = Date.now() + 5000;
     while (
-      !chunksToString(chunks).includes("client-test")
-      && Date.now() < deadline
+      !chunksToString(chunks).includes("client-test") &&
+      Date.now() < deadline
     ) {
       await sleep(50);
     }
@@ -205,9 +206,9 @@ describe("SidecarClient", () => {
       () => client!.ping(),
       (err: Error) => {
         assert.ok(
-          err.message.includes("Sidecar connection lost")
-          || err.message.includes("RPC timeout")
-          || err.message.includes("Not connected"),
+          err.message.includes("Sidecar connection lost") ||
+            err.message.includes("RPC timeout") ||
+            err.message.includes("Not connected"),
           `Unexpected error: ${err.message}`,
         );
         return true;
@@ -243,9 +244,10 @@ describe("SidecarClient", () => {
 
   it("malformed JSON from server does not crash", async () => {
     // Create a fake server that sends garbage over the control socket
-    const fakeSockPath = process.platform === "win32"
-      ? `\\\\.\\pipe\\cc-${process.pid}-fake`
-      : path.join(TEST_DIR, "fake.sock");
+    const fakeSockPath =
+      process.platform === "win32"
+        ? `\\\\.\\pipe\\cc-${process.pid}-fake`
+        : path.join(TEST_DIR, "fake.sock");
     fs.mkdirSync(TEST_DIR, { recursive: true });
 
     const fakeServer = net.createServer((conn) => {
@@ -263,15 +265,17 @@ describe("SidecarClient", () => {
         conn.write("{broken\n");
         // Then send a valid response
         if (msg.method === "sidecar.ping") {
-          conn.write(JSON.stringify({
-            jsonrpc: "2.0",
-            id: msg.id,
-            result: {
-              pid: process.pid,
-              uptime: 0,
-              token: TOKEN,
-            },
-          }) + "\n");
+          conn.write(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: msg.id,
+              result: {
+                pid: process.pid,
+                uptime: 0,
+                token: TOKEN,
+              },
+            }) + "\n",
+          );
         }
       });
     });
@@ -290,9 +294,7 @@ describe("SidecarClient", () => {
       assert.ok(result.token);
       fakeClient.disconnect();
     } finally {
-      await new Promise<void>((resolve) =>
-        fakeServer.close(() => resolve()),
-      );
+      await new Promise<void>((resolve) => fakeServer.close(() => resolve()));
     }
   });
 
@@ -314,16 +316,15 @@ describe("SidecarClient", () => {
 
     // Attach and write a marker
     const chunks1: DataChunk[] = [];
-    const dataSock1 = await client.attachDataSocket(
-      socketPath,
-      (data) => chunks1.push(data),
+    const dataSock1 = await client.attachDataSocket(socketPath, (data) =>
+      chunks1.push(data),
     );
     dataSock1.write(TEST_SHELL.echo("RECONNECT_MARKER"));
 
     const deadline1 = Date.now() + 5000;
     while (
-      !chunksToString(chunks1).includes("RECONNECT_MARKER")
-      && Date.now() < deadline1
+      !chunksToString(chunks1).includes("RECONNECT_MARKER") &&
+      Date.now() < deadline1
     ) {
       await sleep(50);
     }
@@ -334,9 +335,7 @@ describe("SidecarClient", () => {
     await sleep(100);
 
     // Reconnect the session
-    const reconnResult = await client.reconnectSession(
-      sessionId, 80, 24,
-    );
+    const reconnResult = await client.reconnectSession(sessionId, 80, 24);
     assert.equal(reconnResult.sessionId, sessionId);
 
     // Attach a new data socket — it should receive the scrollback
@@ -348,8 +347,8 @@ describe("SidecarClient", () => {
 
     const deadline2 = Date.now() + 5000;
     while (
-      !chunksToString(chunks2).includes("RECONNECT_MARKER")
-      && Date.now() < deadline2
+      !chunksToString(chunks2).includes("RECONNECT_MARKER") &&
+      Date.now() < deadline2
     ) {
       await sleep(50);
     }
@@ -362,9 +361,10 @@ describe("SidecarClient", () => {
   });
 
   it("notification handler receives session.exited", async () => {
-    const fakeSockPath = process.platform === "win32"
-      ? `\\\\.\\pipe\\cc-${process.pid}-notify`
-      : path.join(TEST_DIR, "notify.sock");
+    const fakeSockPath =
+      process.platform === "win32"
+        ? `\\\\.\\pipe\\cc-${process.pid}-notify`
+        : path.join(TEST_DIR, "notify.sock");
     fs.mkdirSync(TEST_DIR, { recursive: true });
     let controlConn: net.Socket | null = null;
 
@@ -373,20 +373,24 @@ describe("SidecarClient", () => {
       conn.on("data", (data) => {
         const line = data.toString().trim();
         const msg = JSON.parse(line) as { id?: number; method?: string };
-        conn.write(makeNotification("session.exited", {
-          sessionId: "fake-session",
-          exitCode: 0,
-        }));
+        conn.write(
+          makeNotification("session.exited", {
+            sessionId: "fake-session",
+            exitCode: 0,
+          }),
+        );
         if (msg.method === "sidecar.ping") {
-          conn.write(JSON.stringify({
-            jsonrpc: "2.0",
-            id: msg.id,
-            result: {
-              pid: process.pid,
-              uptime: 0,
-              token: TOKEN,
-            },
-          }) + "\n");
+          conn.write(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: msg.id,
+              result: {
+                pid: process.pid,
+                uptime: 0,
+                token: TOKEN,
+              },
+            }) + "\n",
+          );
         }
       });
     });
@@ -398,7 +402,8 @@ describe("SidecarClient", () => {
     client = new SidecarClient(fakeSockPath);
     await client.connect();
 
-    const notifications: { method: string; params: Record<string, unknown> }[] = [];
+    const notifications: { method: string; params: Record<string, unknown> }[] =
+      [];
     client.onNotification((method, params) => {
       notifications.push({ method, params });
     });
@@ -415,9 +420,7 @@ describe("SidecarClient", () => {
       client = null;
       controlConn?.end();
       controlConn?.destroy();
-      await new Promise<void>((resolve) =>
-        fakeServer.close(() => resolve()),
-      );
+      await new Promise<void>((resolve) => fakeServer.close(() => resolve()));
     }
   });
 });

@@ -55,10 +55,7 @@ function diskCacheName(hash: string, mtimeMs: number): string {
   return `${hash}_${mtimeMs}.png`;
 }
 
-function readDiskCache(
-  hash: string,
-  mtimeMs: number,
-): string | null {
+function readDiskCache(hash: string, mtimeMs: number): string | null {
   if (!cacheDir) return null;
   const filePath = join(cacheDir, diskCacheName(hash, mtimeMs));
   try {
@@ -96,10 +93,7 @@ function writeDiskCache(
   }
 }
 
-async function thumbnail(
-  path: string,
-  size: number,
-): Promise<string> {
+async function thumbnail(path: string, size: number): Promise<string> {
   const memKey = `${path}\0${size}`;
   const cached = memCache.get(memKey);
   if (cached) return cached;
@@ -204,8 +198,7 @@ parentPort.on("message", async (msg: Request) => {
         resp.error = `Unknown op: ${msg.op}`;
     }
   } catch (err) {
-    resp.error =
-      err instanceof Error ? err.message : String(err);
+    resp.error = err instanceof Error ? err.message : String(err);
   }
 
   parentPort!.postMessage(resp);

@@ -14,35 +14,25 @@ function estimateTermSize(): { cols: number; rows: number } {
 }
 
 function App() {
-  const [sessionId, setSessionId] = useState<string | null>(
-    null,
-  );
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [exited, setExited] = useState(false);
   const [restored, setRestored] = useState(false);
-  const [scrollbackData, setScrollbackData] =
-    useState<string | null>(null);
+  const [scrollbackData, setScrollbackData] = useState<string | null>(null);
 
   useEffect(() => {
-    const params = new URLSearchParams(
-      window.location.search,
-    );
+    const params = new URLSearchParams(window.location.search);
     const existingSessionId = params.get("sessionId");
     const isRestored = params.get("restored") === "1";
     const cwd = params.get("cwd") || undefined;
     const tileId = params.get("tileId") || undefined;
 
-    const createFreshSession = (
-      target?: string,
-      nextCwd?: string,
-    ) => {
+    const createFreshSession = (target?: string, nextCwd?: string) => {
       const est = estimateTermSize();
       window.api
         .ptyCreate(nextCwd ?? cwd, est.cols, est.rows, target, tileId)
         .then((result) => {
           setSessionId(result.sessionId);
-          window.api.notifyPtySessionId(
-            result.sessionId,
-          );
+          window.api.notifyPtySessionId(result.sessionId);
         })
         .catch(() => {
           setExited(true);
@@ -62,11 +52,7 @@ function App() {
           if (!found) {
             throw new Error("Missing restored session");
           }
-          return window.api.ptyReconnect(
-            existingSessionId,
-            cols,
-            rows,
-          );
+          return window.api.ptyReconnect(existingSessionId, cols, rows);
         })
         .then((result) => {
           if (result.scrollback) {
@@ -82,9 +68,7 @@ function App() {
           let fallbackTarget: string | undefined;
           if (existingSessionId) {
             try {
-              const meta = await window.api.ptyReadMeta(
-                existingSessionId,
-              );
+              const meta = await window.api.ptyReadMeta(existingSessionId);
               if (!fallbackCwd && meta?.cwd) fallbackCwd = meta.cwd;
               if (meta?.target) fallbackTarget = meta.target;
             } catch {
@@ -107,10 +91,7 @@ function App() {
 
   useEffect(() => {
     if (!sessionId) return;
-    const handleExit = (payload: {
-      sessionId: string;
-      exitCode: number;
-    }) => {
+    const handleExit = (payload: { sessionId: string; exitCode: number }) => {
       if (payload.sessionId === sessionId) {
         setExited(true);
       }
@@ -120,19 +101,11 @@ function App() {
   }, [sessionId]);
 
   if (exited) {
-    return (
-      <div className="terminal-tile-exited">
-        Session ended
-      </div>
-    );
+    return <div className="terminal-tile-exited">Session ended</div>;
   }
 
   if (!sessionId) {
-    return (
-      <div className="terminal-tile-loading">
-        Connecting...
-      </div>
-    );
+    return <div className="terminal-tile-loading">Connecting...</div>;
   }
 
   return (

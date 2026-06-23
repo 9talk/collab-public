@@ -14,10 +14,7 @@ const REQUEST_TIMEOUT_MS = 10_000;
 
 let shellWindow: BrowserWindow | null = null;
 
-function sendToShell(
-  method: string,
-  params: unknown,
-): Promise<unknown> {
+function sendToShell(method: string, params: unknown): Promise<unknown> {
   if (!shellWindow || shellWindow.isDestroyed()) {
     return Promise.reject(new Error("Shell window not available"));
   }
@@ -45,11 +42,14 @@ export function registerCanvasRpc(win: BrowserWindow): void {
 
   ipcMain.on(
     "canvas:rpc-response",
-    (_event, response: {
-      requestId: string;
-      result?: unknown;
-      error?: { code: number; message: string };
-    }) => {
+    (
+      _event,
+      response: {
+        requestId: string;
+        result?: unknown;
+        error?: { code: number; message: string };
+      },
+    ) => {
       const entry = pending.get(response.requestId);
       if (!entry) return;
 
@@ -211,8 +211,7 @@ export function registerCanvasRpc(win: BrowserWindow): void {
     "canvas.browserScreenshot",
     (params) => sendToShell("browserScreenshot", params),
     {
-      description:
-        "Capture a screenshot of a browser tile (base64 PNG)",
+      description: "Capture a screenshot of a browser tile (base64 PNG)",
       params: { tileId: "ID of the browser tile" },
     },
   );
@@ -221,8 +220,7 @@ export function registerCanvasRpc(win: BrowserWindow): void {
     "canvas.browserSnapshot",
     (params) => sendToShell("browserSnapshot", params),
     {
-      description:
-        "Get DOM tree snapshot of a browser tile",
+      description: "Get DOM tree snapshot of a browser tile",
       params: { tileId: "ID of the browser tile" },
     },
   );
@@ -234,8 +232,7 @@ export function registerCanvasRpc(win: BrowserWindow): void {
       description: "Click an element in a browser tile",
       params: {
         tileId: "ID of the browser tile",
-        selector:
-          "CSS selector for the element to click",
+        selector: "CSS selector for the element to click",
       },
     },
   );
@@ -244,12 +241,10 @@ export function registerCanvasRpc(win: BrowserWindow): void {
     "canvas.browserType",
     (params) => sendToShell("browserType", params),
     {
-      description:
-        "Type text into an element in a browser tile",
+      description: "Type text into an element in a browser tile",
       params: {
         tileId: "ID of the browser tile",
-        selector:
-          "CSS selector for the element",
+        selector: "CSS selector for the element",
         text: "Text to type",
       },
     },
@@ -272,8 +267,7 @@ export function registerCanvasRpc(win: BrowserWindow): void {
     "canvas.browserEvaluate",
     (params) => sendToShell("browserEvaluate", params),
     {
-      description:
-        "Run JavaScript in a browser tile and return the result",
+      description: "Run JavaScript in a browser tile and return the result",
       params: {
         tileId: "ID of the browser tile",
         expression: "JavaScript expression to evaluate",
@@ -285,12 +279,10 @@ export function registerCanvasRpc(win: BrowserWindow): void {
     "canvas.browserWait",
     (params) => sendToShell("browserWait", params),
     {
-      description:
-        "Wait for a browser tile to finish loading",
+      description: "Wait for a browser tile to finish loading",
       params: {
         tileId: "ID of the browser tile",
-        timeout:
-          "(optional) Max wait in ms (default 10000)",
+        timeout: "(optional) Max wait in ms (default 10000)",
       },
     },
   );
@@ -300,8 +292,7 @@ export function registerCanvasRpc(win: BrowserWindow): void {
     (params) => sendToShell("browserInfo", params),
     {
       description:
-        "Get current URL, title, and loading state of a " +
-        "browser tile",
+        "Get current URL, title, and loading state of a " + "browser tile",
       params: { tileId: "ID of the browser tile" },
     },
   );

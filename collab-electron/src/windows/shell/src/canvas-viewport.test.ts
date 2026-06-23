@@ -122,7 +122,10 @@ describe("computeZoomStep", () => {
     expect(result.zoom).toBeGreaterThan(1.05);
     // Damping means it grows much less than undamped would
     const undamped = computeZoomStep(
-      { panX: 0, panY: 0, zoom: 0.5 }, -100, 500, 400,
+      { panX: 0, panY: 0, zoom: 0.5 },
+      -100,
+      500,
+      400,
     );
     const undampedRatio = undamped.zoom / 0.5;
     const dampedRatio = result.zoom / 1.05;
@@ -131,15 +134,18 @@ describe("computeZoomStep", () => {
 
   test("rubber-band damping limits zoom below ZOOM_MIN", () => {
     // Start slightly below min so damping is active
-    const state: ViewportState = { panX: 0, panY: 0, zoom: 0.30 };
+    const state: ViewportState = { panX: 0, panY: 0, zoom: 0.3 };
     const result = computeZoomStep(state, 100, 500, 400);
-    expect(result.zoom).toBeLessThan(0.30);
+    expect(result.zoom).toBeLessThan(0.3);
     // Damping means it shrinks less than undamped would
     const undamped = computeZoomStep(
-      { panX: 0, panY: 0, zoom: 0.5 }, 100, 500, 400,
+      { panX: 0, panY: 0, zoom: 0.5 },
+      100,
+      500,
+      400,
     );
     const undampedRatio = undamped.zoom / 0.5;
-    const dampedRatio = result.zoom / 0.30;
+    const dampedRatio = result.zoom / 0.3;
     expect(dampedRatio).toBeGreaterThan(undampedRatio);
   });
 

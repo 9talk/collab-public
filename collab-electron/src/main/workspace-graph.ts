@@ -42,21 +42,14 @@ interface WorkspaceGraphData {
 
 const WIKILINK_PATTERN = /\[\[([^\]]+)\]\]/g;
 
-const JS_TS_CODE_EXTENSIONS = new Set([
-  ".ts",
-  ".tsx",
-  ".js",
-  ".jsx",
-]);
+const JS_TS_CODE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 const CODE_EXTENSIONS = new Set([
   ...Array.from(JS_TS_CODE_EXTENSIONS),
   ...Array.from(PYTHON_CODE_EXTENSIONS),
 ]);
 const EXTRA_IMPORT_SCAN_EXTENSIONS = [".css", ".json"];
-const CONFIG_NAME_PATTERN =
-  /^(?:ts|js)config(?:\.[^.]+)*\.json$/;
-const CRUISE_IGNORE_PATTERN =
-  "(^|/)(node_modules|dist|build|out)/";
+const CONFIG_NAME_PATTERN = /^(?:ts|js)config(?:\.[^.]+)*\.json$/;
+const CRUISE_IGNORE_PATTERN = "(^|/)(node_modules|dist|build|out)/";
 const CONFIG_SEARCH_IGNORED_DIRS = new Set([
   ".git",
   "node_modules",
@@ -94,22 +87,16 @@ interface DependencyCruiserContext {
   tsConfig?: ReturnType<typeof extractTSConfig>;
 }
 
-type DependencyCruiserResolveOptions =
-  Partial<IResolveOptions> & {
-    tsConfig?: string;
-  };
+type DependencyCruiserResolveOptions = Partial<IResolveOptions> & {
+  tsConfig?: string;
+};
 
 export async function buildWorkspaceGraph(
   workspacePath: string,
   filter: FileFilter | null = null,
 ): Promise<WorkspaceGraphData> {
-  const activeFilter =
-    filter ?? createFileFilter();
-  const files = await collectFiles(
-    workspacePath,
-    workspacePath,
-    activeFilter,
-  );
+  const activeFilter = filter ?? createFileFilter();
+  const files = await collectFiles(workspacePath, workspacePath, activeFilter);
 
   const mdFiles = files.filter(
     (
@@ -177,19 +164,11 @@ export async function buildWorkspaceGraph(
   }
 
   // Imports from code files
-  let importLinks: Array<{ source: string; target: string }> =
-    [];
+  let importLinks: Array<{ source: string; target: string }> = [];
   try {
-    importLinks = await buildCodeImportLinks(
-      codeFiles,
-      workspacePath,
-      nodeIds,
-    );
+    importLinks = await buildCodeImportLinks(codeFiles, workspacePath, nodeIds);
   } catch (error) {
-    console.warn(
-      "Failed to build code import links:",
-      error,
-    );
+    console.warn("Failed to build code import links:", error);
   }
 
   for (const link of importLinks) {
@@ -222,7 +201,9 @@ async function collectFiles(
     const relPath = relative(rootPath, fullPath);
 
     if (entry.isDirectory()) {
-      if (!(await shouldIncludeEntryWithContent(dirPath, entry, filter, rootPath))) {
+      if (
+        !(await shouldIncludeEntryWithContent(dirPath, entry, filter, rootPath))
+      ) {
         continue;
       }
       const children = await collectFiles(fullPath, rootPath, filter);
@@ -230,7 +211,9 @@ async function collectFiles(
       continue;
     }
 
-    if (!(await shouldIncludeEntryWithContent(dirPath, entry, filter, rootPath))) {
+    if (
+      !(await shouldIncludeEntryWithContent(dirPath, entry, filter, rootPath))
+    ) {
       continue;
     }
 
@@ -287,27 +270,15 @@ async function buildCodeImportLinks(
   }
 
   const jsTsFiles = codeFiles.filter((file) =>
-    JS_TS_CODE_EXTENSIONS.has(
-      extname(file.path),
-    ),
+    JS_TS_CODE_EXTENSIONS.has(extname(file.path)),
   );
   const pythonFiles = codeFiles.filter((file) =>
-    PYTHON_CODE_EXTENSIONS.has(
-      extname(file.path),
-    ),
+    PYTHON_CODE_EXTENSIONS.has(extname(file.path)),
   );
 
   const results = await Promise.allSettled([
-    buildJavaScriptTypeScriptImportLinks(
-      jsTsFiles,
-      workspacePath,
-      nodeIds,
-    ),
-    buildPythonImportLinks(
-      pythonFiles,
-      workspacePath,
-      nodeIds,
-    ),
+    buildJavaScriptTypeScriptImportLinks(jsTsFiles, workspacePath, nodeIds),
+    buildPythonImportLinks(pythonFiles, workspacePath, nodeIds),
   ]);
 
   const links: Array<{
@@ -319,19 +290,13 @@ async function buildCodeImportLinks(
   if (jsTsResult?.status === "fulfilled") {
     links.push(...jsTsResult.value);
   } else if (jsTsResult) {
-    console.warn(
-      "Failed to build JS/TS import links:",
-      jsTsResult.reason,
-    );
+    console.warn("Failed to build JS/TS import links:", jsTsResult.reason);
   }
 
   if (pythonResult?.status === "fulfilled") {
     links.push(...pythonResult.value);
   } else if (pythonResult) {
-    console.warn(
-      "Failed to build Python import links:",
-      pythonResult.reason,
-    );
+    console.warn("Failed to build Python import links:", pythonResult.reason);
   }
 
   return links;
@@ -355,14 +320,8 @@ async function buildJavaScriptTypeScriptImportLinks(
     target: string;
   }> = [];
   const seenLinks = new Set<string>();
-  const codeIds = new Set(
-    codeFiles.map((file) => file.id),
-  );
-  const groups =
-    await groupCodeFilesByCruiserContext(
-      codeFiles,
-      workspacePath,
-    );
+  const codeIds = new Set(codeFiles.map((file) => file.id));
+  const groups = await groupCodeFilesByCruiserContext(codeFiles, workspacePath);
 
   for (const group of groups) {
     const cruiseOptions: ICruiseOptions = {
@@ -370,8 +329,7 @@ async function buildJavaScriptTypeScriptImportLinks(
       doNotFollow: CRUISE_IGNORE_PATTERN,
       exclude: CRUISE_IGNORE_PATTERN,
       tsPreCompilationDeps: true,
-      extraExtensionsToScan:
-        EXTRA_IMPORT_SCAN_EXTENSIONS,
+      extraExtensionsToScan: EXTRA_IMPORT_SCAN_EXTENSIONS,
     };
     if (group.context.tsConfigFileName) {
       cruiseOptions.tsConfig = {
@@ -396,12 +354,9 @@ async function buildJavaScriptTypeScriptImportLinks(
       mainFields: ["module", "main"],
     };
     if (group.context.tsConfigFileName) {
-      resolveOptions.tsConfig =
-        group.context.tsConfigFileName;
+      resolveOptions.tsConfig = group.context.tsConfigFileName;
     }
-    if (
-      Object.keys(group.context.alias).length > 0
-    ) {
+    if (Object.keys(group.context.alias).length > 0) {
       resolveOptions.alias = group.context.alias;
     }
 
@@ -422,10 +377,7 @@ async function buildJavaScriptTypeScriptImportLinks(
     }
 
     for (const module of cruiseResult.modules) {
-      const source = normalizeCruiserPath(
-        module.source,
-        workspacePath,
-      );
+      const source = normalizeCruiserPath(module.source, workspacePath);
       if (!source) {
         continue;
       }
@@ -438,15 +390,8 @@ async function buildJavaScriptTypeScriptImportLinks(
           continue;
         }
 
-        const target = normalizeCruiserPath(
-          dependency.resolved,
-          workspacePath,
-        );
-        if (
-          !target ||
-          !nodeIds.has(target) ||
-          target === source
-        ) {
+        const target = normalizeCruiserPath(dependency.resolved, workspacePath);
+        if (!target || !nodeIds.has(target) || target === source) {
           continue;
         }
 
@@ -480,8 +425,7 @@ async function groupCodeFilesByCruiserContext(
     >;
   }>
 > {
-  const candidates =
-    await listConfigCandidates(workspacePath);
+  const candidates = await listConfigCandidates(workspacePath);
   const groups = new Map<
     string,
     {
@@ -495,12 +439,8 @@ async function groupCodeFilesByCruiserContext(
   >();
 
   for (const file of codeFiles) {
-    const context = getDependencyCruiserContext(
-      file.path,
-      candidates,
-    );
-    const key =
-      context.tsConfigFileName ?? "__default__";
+    const context = getDependencyCruiserContext(file.path, candidates);
+    const key = context.tsConfigFileName ?? "__default__";
     const existing = groups.get(key);
     if (existing) {
       existing.files.push(file);
@@ -518,8 +458,7 @@ async function groupCodeFilesByCruiserContext(
 async function listConfigCandidates(
   workspacePath: string,
 ): Promise<ConfigCandidate[]> {
-  const configPaths =
-    await listTypeScriptConfigPaths(workspacePath);
+  const configPaths = await listTypeScriptConfigPaths(workspacePath);
 
   return configPaths
     .map((configPath) => {
@@ -529,21 +468,13 @@ async function listConfigCandidates(
           configPath,
           configDir: dirname(configPath),
           parsed,
-          score: scoreConfigCandidate(
-            configPath,
-            parsed,
-          ),
+          score: scoreConfigCandidate(configPath, parsed),
         };
       } catch {
         return null;
       }
     })
-    .filter(
-      (
-        candidate,
-      ): candidate is ConfigCandidate =>
-        candidate !== null,
-    )
+    .filter((candidate): candidate is ConfigCandidate => candidate !== null)
     .sort(compareConfigCandidates);
 }
 
@@ -551,15 +482,10 @@ function getDependencyCruiserContext(
   filePath: string,
   candidates: ConfigCandidate[],
 ): DependencyCruiserContext {
-  const relevantCandidates = candidates.filter(
-    (candidate) =>
-      isPathWithinDirectory(
-        filePath,
-        candidate.configDir,
-      ),
+  const relevantCandidates = candidates.filter((candidate) =>
+    isPathWithinDirectory(filePath, candidate.configDir),
   );
-  const bestCandidate =
-    relevantCandidates[0] ?? candidates[0];
+  const bestCandidate = relevantCandidates[0] ?? candidates[0];
 
   if (!bestCandidate) {
     return { alias: {} };
@@ -579,8 +505,7 @@ function getDependencyCruiserContext(
 
   return {
     alias,
-    tsConfigFileName:
-      bestCandidate.configPath,
+    tsConfigFileName: bestCandidate.configPath,
     tsConfig: bestCandidate.parsed,
   };
 }
@@ -590,10 +515,7 @@ async function listTypeScriptConfigPaths(
 ): Promise<string[]> {
   const configPaths: string[] = [];
 
-  await collectTypeScriptConfigPaths(
-    workspacePath,
-    configPaths,
-  );
+  await collectTypeScriptConfigPaths(workspacePath, configPaths);
 
   return configPaths;
 }
@@ -614,24 +536,14 @@ async function collectTypeScriptConfigPaths(
   for (const entry of entries) {
     const fullPath = join(dirPath, entry.name);
     if (entry.isDirectory()) {
-      if (
-        CONFIG_SEARCH_IGNORED_DIRS.has(
-          entry.name,
-        )
-      ) {
+      if (CONFIG_SEARCH_IGNORED_DIRS.has(entry.name)) {
         continue;
       }
-      await collectTypeScriptConfigPaths(
-        fullPath,
-        configPaths,
-      );
+      await collectTypeScriptConfigPaths(fullPath, configPaths);
       continue;
     }
 
-    if (
-      entry.isFile() &&
-      CONFIG_NAME_PATTERN.test(entry.name)
-    ) {
+    if (entry.isFile() && CONFIG_NAME_PATTERN.test(entry.name)) {
       configPaths.push(fullPath);
     }
   }
@@ -642,9 +554,7 @@ function scoreConfigCandidate(
   parsed: ReturnType<typeof extractTSConfig>,
 ): number {
   const fileName = basename(configPath);
-  const pathCount = Object.keys(
-    parsed.options.paths ?? {},
-  ).length;
+  const pathCount = Object.keys(parsed.options.paths ?? {}).length;
 
   return (
     (CONFIG_NAME_PRIORITIES.get(fileName) ?? 0) +
@@ -671,44 +581,25 @@ function extractAliasEntries(
 
   return Object.entries(paths)
     .map(([key, values]) => {
-      if (
-        key.includes("*") ||
-        values.length !== 1
-      ) {
+      if (key.includes("*") || values.length !== 1) {
         return null;
       }
 
       const firstValue = values[0];
-      if (
-        !firstValue ||
-        firstValue.includes("*")
-      ) {
+      if (!firstValue || firstValue.includes("*")) {
         return null;
       }
 
-      return [
-        key,
-        resolve(
-          baseUrl,
-          firstValue,
-        ),
-      ] as [string, string];
+      return [key, resolve(baseUrl, firstValue)] as [string, string];
     })
-    .filter(
-      (
-        entry,
-      ): entry is [string, string] => entry !== null,
-    );
+    .filter((entry): entry is [string, string] => entry !== null);
 }
 
 function compareConfigCandidates(
   a: ConfigCandidate,
   b: ConfigCandidate,
 ): number {
-  return (
-    b.score - a.score ||
-    b.configDir.length - a.configDir.length
-  );
+  return b.score - a.score || b.configDir.length - a.configDir.length;
 }
 
 export function isPathWithinDirectory(
@@ -717,11 +608,7 @@ export function isPathWithinDirectory(
 ): boolean {
   const relPath = relative(dirPath, filePath);
 
-  return (
-    relPath === "" ||
-    (!relPath.startsWith("..") &&
-      !isAbsolute(relPath))
-  );
+  return relPath === "" || (!relPath.startsWith("..") && !isAbsolute(relPath));
 }
 
 function normalizeCruiserPath(
@@ -732,18 +619,13 @@ function normalizeCruiserPath(
     return null;
   }
 
-  let normalized = value
-    .replaceAll("\\", "/")
-    .replace(/^\.\/+/, "");
+  let normalized = value.replaceAll("\\", "/").replace(/^\.\/+/, "");
   if (workspacePath) {
-    const resolvedPath = resolve(
-      workspacePath,
-      normalized,
+    const resolvedPath = resolve(workspacePath, normalized);
+    const relativePath = relative(workspacePath, resolvedPath).replaceAll(
+      "\\",
+      "/",
     );
-    const relativePath = relative(
-      workspacePath,
-      resolvedPath,
-    ).replaceAll("\\", "/");
     if (
       relativePath !== "" &&
       !relativePath.startsWith("../") &&

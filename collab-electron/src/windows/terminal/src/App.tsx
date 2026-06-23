@@ -32,19 +32,13 @@ const IS_MAC = window.api.getPlatform() === "darwin";
 
 function waitForSessionReady(sessionId: string): Promise<boolean> {
   return new Promise((resolve) => {
-    const onData = (p: {
-      sessionId: string;
-      data: Uint8Array;
-    }) => {
+    const onData = (p: { sessionId: string; data: Uint8Array }) => {
       if (p.sessionId === sessionId) {
         cleanup();
         resolve(true);
       }
     };
-    const onExit = (p: {
-      sessionId: string;
-      exitCode: number;
-    }) => {
+    const onExit = (p: { sessionId: string; exitCode: number }) => {
       if (p.sessionId === sessionId) {
         cleanup();
         resolve(false);
@@ -69,14 +63,14 @@ function App() {
 
   const createTab = useCallback(async (): Promise<Session> => {
     const config = await window.api.getConfig();
-    const cwd =
-      config?.workspaces?.[0] || undefined;
+    const cwd = config?.workspaces?.[0] || undefined;
     const { cols, rows } = estimateTermSize();
     const result = await window.api.ptyCreate(cwd, cols, rows);
     const session: Session = {
       id: result.sessionId,
       title: result.displayName,
-      commandName: normalizeCommandName(result.command || result.shell) || "shell",
+      commandName:
+        normalizeCommandName(result.command || result.shell) || "shell",
       target: result.target,
     };
     setSessions((prev) => [...prev, session]);
@@ -108,14 +102,9 @@ function App() {
 
   useEffect(() => {
     if (!activeId) return;
-    const handleExit = (payload: {
-      sessionId: string;
-      exitCode: number;
-    }) => {
+    const handleExit = (payload: { sessionId: string; exitCode: number }) => {
       setSessions((prev) => {
-        const next = prev.filter(
-          (s) => s.id !== payload.sessionId,
-        );
+        const next = prev.filter((s) => s.id !== payload.sessionId);
         if (activeId === payload.sessionId && next.length > 0) {
           setActiveId(next[next.length - 1].id);
         } else if (next.length === 0) {
@@ -132,9 +121,7 @@ function App() {
 
   const ensureTab = useCallback(async (): Promise<Session> => {
     const id = activeIdRef.current;
-    const found = id
-      ? sessionsRef.current.find((s) => s.id === id)
-      : null;
+    const found = id ? sessionsRef.current.find((s) => s.id === id) : null;
     if (found) return found;
 
     if (!pendingTab.current) {
@@ -230,8 +217,7 @@ function App() {
 
       const session = await createReadyTab();
       if (!session) return;
-      const alive = () =>
-        sessionsRef.current.some((s) => s.id === session.id);
+      const alive = () => sessionsRef.current.some((s) => s.id === session.id);
 
       // Type command as-is, aborting if tab is closed mid-type
       const fullCmd = `${command}\r`;
@@ -251,9 +237,7 @@ function App() {
 
   useEffect(() => {
     return window.api.onFocusTab((ptySessionId: string) => {
-      const found = sessionsRef.current.find(
-        (s) => s.id === ptySessionId,
-      );
+      const found = sessionsRef.current.find((s) => s.id === ptySessionId);
       if (found) {
         setActiveId(found.id);
       }

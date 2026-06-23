@@ -74,8 +74,7 @@ process.on("uncaughtException", (error) => {
 });
 
 process.on("unhandledRejection", (reason) => {
-  const error =
-    reason instanceof Error ? reason : new Error(String(reason));
+  const error = reason instanceof Error ? reason : new Error(String(reason));
   trackEvent("app_crash", {
     type: "unhandledRejection",
     message: error.message,
@@ -116,11 +115,10 @@ if (!app.isPackaged) {
 if (app.isPackaged && process.platform === "darwin") {
   try {
     const shell = process.env["SHELL"] || "/bin/zsh";
-    const output = execFileSync(
-      shell,
-      ["-l", "-c", 'printf "%s" "$PATH"'],
-      { encoding: "utf8", timeout: 5000 },
-    );
+    const output = execFileSync(shell, ["-l", "-c", 'printf "%s" "$PATH"'], {
+      encoding: "utf8",
+      timeout: 5000,
+    });
     const resolved = output.split("\n").pop()!;
     if (resolved.includes("/")) {
       process.env["PATH"] = resolved;
@@ -235,8 +233,9 @@ function normalizeShortcutKey(key: string | undefined): string | null {
 function resolveToggleShortcut(
   input: Electron.Input,
 ): ShortcutEntry | undefined {
-  const candidates = TOGGLE_SHORTCUTS[input.code]
-    ?? (normalizeShortcutKey(input.key)
+  const candidates =
+    TOGGLE_SHORTCUTS[input.code] ??
+    (normalizeShortcutKey(input.key)
       ? TOGGLE_SHORTCUT_KEYS[normalizeShortcutKey(input.key)!]
       : undefined);
   return candidates?.find((s) => s.modifier(input));
@@ -279,9 +278,7 @@ function attachBrowserShortcuts(
 
     if (input.code === "KeyL" || input.key === "l") {
       event.preventDefault();
-      hostWindow.webContents.send(
-        "browser-tile:focus-url", wc.id,
-      );
+      hostWindow.webContents.send("browser-tile:focus-url", wc.id);
     } else if (input.code === "BracketLeft" || input.key === "[") {
       event.preventDefault();
       if (wc.canGoBack()) wc.goBack();
@@ -461,10 +458,7 @@ function buildAppMenu(): void {
         { role: "minimize" },
         { role: "zoom" },
         ...(isMac
-          ? [
-              { type: "separator" as const },
-              { role: "front" as const },
-            ]
+          ? [{ type: "separator" as const }, { role: "front" as const }]
           : [{ role: "close" as const }]),
       ],
     },
@@ -481,16 +475,13 @@ function getRendererURL(name: string): string {
   if (!app.isPackaged && process.env["ELECTRON_RENDERER_URL"]) {
     return `${process.env["ELECTRON_RENDERER_URL"]}/${name}/index.html`;
   }
-  return pathToFileURL(
-    join(__dirname, `../renderer/${name}/index.html`),
-  ).href;
+  return pathToFileURL(join(__dirname, `../renderer/${name}/index.html`)).href;
 }
 
 function createWindow(): void {
   const saved = config.window_state;
   const useSaved =
-    saved !== null &&
-    (saved.isMaximized || boundsVisibleOnAnyDisplay(saved));
+    saved !== null && (saved.isMaximized || boundsVisibleOnAnyDisplay(saved));
   const state = useSaved ? saved : DEFAULT_STATE;
 
   const windowOptions: Electron.BrowserWindowConstructorOptions = {
@@ -553,10 +544,7 @@ function createWindow(): void {
   registerCanvasRpc(mainWindow);
 }
 
-ipcMain.handle(
-  "analytics:get-device-id",
-  () => getDeviceId(),
-);
+ipcMain.handle("analytics:get-device-id", () => getDeviceId());
 
 ipcMain.on("analytics:track-event", (_event, name, properties) => {
   trackEvent(name, properties);
@@ -567,9 +555,7 @@ ipcMain.on("get-home-path", (event) => {
 });
 
 ipcMain.handle("shell:get-view-config", () => {
-  const preload = pathToFileURL(
-    getPreloadPath("universal"),
-  ).href;
+  const preload = pathToFileURL(getPreloadPath("universal")).href;
 
   return {
     nav: { src: getRendererURL("nav"), preload },
@@ -583,37 +569,25 @@ ipcMain.handle("shell:get-view-config", () => {
   };
 });
 
-ipcMain.handle(
-  "pref:get",
-  (_event, key: string) => getPref(config, key),
-);
+ipcMain.handle("pref:get", (_event, key: string) => getPref(config, key));
 
-ipcMain.handle(
-  "pref:set",
-  (_event, key: string, value: unknown) => {
-    setPref(config, key, value);
-    if (key === "autoCheckUpdates" && typeof value === "boolean") {
-      updateManager.setAutoCheckEnabled(value);
-    }
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("pref:changed", key, value);
-    }
-  },
-);
+ipcMain.handle("pref:set", (_event, key: string, value: unknown) => {
+  setPref(config, key, value);
+  if (key === "autoCheckUpdates" && typeof value === "boolean") {
+    updateManager.setAutoCheckEnabled(value);
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("pref:changed", key, value);
+  }
+});
 
-ipcMain.handle(
-  "terminal:list-targets",
-  () => listTerminalTargets(),
-);
+ipcMain.handle("terminal:list-targets", () => listTerminalTargets());
 
-ipcMain.handle(
-  "theme:set",
-  (_event, mode: string) => {
-    const valid = mode === "light" || mode === "dark" ? mode : "system";
-    nativeTheme.themeSource = valid;
-    setPref(config, "theme", valid);
-  },
-);
+ipcMain.handle("theme:set", (_event, mode: string) => {
+  const valid = mode === "light" || mode === "dark" ? mode : "system";
+  nativeTheme.themeSource = valid;
+  setPref(config, "theme", valid);
+});
 
 ipcMain.handle(
   "pty:create",
@@ -637,10 +611,7 @@ ipcMain.handle(
     ),
 );
 
-function handlePtyWrite(
-  sessionId: string,
-  data: string,
-): void {
+function handlePtyWrite(sessionId: string, data: string): void {
   pty.writeToSession(sessionId, data);
 }
 
@@ -657,10 +628,7 @@ ipcMain.on(
   },
 );
 
-function handlePtySendRawKeys(
-  sessionId: string,
-  data: string,
-): void {
+function handlePtySendRawKeys(sessionId: string, data: string): void {
   pty.sendRawKeys(sessionId, data);
 }
 
@@ -689,10 +657,8 @@ ipcMain.handle(
   ) => pty.resizeSession(sessionId, cols, rows),
 );
 
-ipcMain.handle(
-  "pty:kill",
-  (_event, { sessionId }: { sessionId: string }) =>
-    pty.killSession(sessionId),
+ipcMain.handle("pty:kill", (_event, { sessionId }: { sessionId: string }) =>
+  pty.killSession(sessionId),
 );
 
 ipcMain.handle(
@@ -704,42 +670,29 @@ ipcMain.handle(
       cols,
       rows,
     }: { sessionId: string; cols: number; rows: number },
-  ) =>
-    pty.reconnectSession(
-      sessionId, cols, rows, event.sender.id,
-    ),
+  ) => pty.reconnectSession(sessionId, cols, rows, event.sender.id),
 );
 
-ipcMain.handle(
-  "pty:discover",
-  () => pty.discoverSessions(),
+ipcMain.handle("pty:discover", () => pty.discoverSessions());
+
+ipcMain.handle("pty:read-meta", (_event, sessionId: string) =>
+  readSessionMeta(sessionId),
 );
 
-ipcMain.handle(
-  "pty:read-meta",
-  (_event, sessionId: string) => readSessionMeta(sessionId),
-);
-
-ipcMain.handle(
-  "pty:foreground-process",
-  (_event, sessionId: string) => pty.getForegroundProcess(sessionId),
+ipcMain.handle("pty:foreground-process", (_event, sessionId: string) =>
+  pty.getForegroundProcess(sessionId),
 );
 
 ipcMain.handle(
   "pty:capture",
-  (
-    _event,
-    { sessionId, lines }: { sessionId: string; lines?: number },
-  ) => pty.captureSession(sessionId, lines),
+  (_event, { sessionId, lines }: { sessionId: string; lines?: number }) =>
+    pty.captureSession(sessionId, lines),
 );
 
 // Terminal screenshot: capturePage and copy to clipboard
 ipcMain.handle(
   "term:screenshot",
-  async (
-    _event,
-    { webContentsId }: { webContentsId: number },
-  ) => {
+  async (_event, { webContentsId }: { webContentsId: number }) => {
     const wc = webContentsModule.fromId(webContentsId);
     if (!wc || wc.isDestroyed()) {
       throw new Error("Terminal webview not found");
@@ -807,7 +760,10 @@ app.on("open-file", (event, path) => {
   event.preventDefault();
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(
-      "shell:forward", "viewer", "file-selected", path,
+      "shell:forward",
+      "viewer",
+      "file-selected",
+      path,
     );
   } else {
     pendingFilePath = path;
@@ -837,9 +793,15 @@ app.on("web-contents-created", (_event, contents) => {
 
   contents.setWindowOpenHandler(({ url, disposition }) => {
     if (isBrowserTileWebview(contents)) {
-      if (disposition === "foreground-tab" || disposition === "background-tab") {
+      if (
+        disposition === "foreground-tab" ||
+        disposition === "background-tab"
+      ) {
         mainWindow?.webContents.send(
-          "shell:forward", "canvas", "open-browser-tile", url,
+          "shell:forward",
+          "canvas",
+          "open-browser-tile",
+          url,
           contents.id,
         );
         return { action: "deny" };
@@ -871,9 +833,7 @@ app.whenReady().then(async () => {
   // (especially Google OAuth) treat it as a real browser, not an embedded webview.
   const browserSession = session.fromPartition("persist:browser");
   const electronUA = browserSession.getUserAgent();
-  browserSession.setUserAgent(
-    electronUA.replace(/\s*Electron\/\S+/, ""),
-  );
+  browserSession.setUserAgent(electronUA.replace(/\s*Electron\/\S+/, ""));
 
   protocol.handle("collab-file", (request) => {
     const filePath = fromCollabFileUrl(request.url);
@@ -889,7 +849,9 @@ app.whenReady().then(async () => {
   registerBrowserIpc();
   registerIntegrationsIpc();
   setupUpdateIPC();
-  const autoCheckUpdates = getPref(config, "autoCheckUpdates") as boolean | null;
+  const autoCheckUpdates = getPref(config, "autoCheckUpdates") as
+    | boolean
+    | null;
   updateManager.init({
     onBeforeQuit: () => shutdownBackgroundServices(),
     autoCheckEnabled: autoCheckUpdates ?? false,
@@ -922,7 +884,8 @@ app.whenReady().then(async () => {
     dialog.showMessageBox({
       type: "warning",
       title: "全局快捷键注册失败",
-      message: "F1 全局快捷键注册失败，可能被其他应用占用或缺少辅助功能权限。\n\n请前往 系统设置 > 隐私与安全性 > 辅助功能 中授予 Collaborator 权限。",
+      message:
+        "F1 全局快捷键注册失败，可能被其他应用占用或缺少辅助功能权限。\n\n请前往 系统设置 > 隐私与安全性 > 辅助功能 中授予 Collaborator 权限。",
       buttons: ["确定"],
     });
   }
@@ -934,7 +897,10 @@ app.whenReady().then(async () => {
     sendLoadingDone();
     if (pendingFilePath) {
       mainWindow!.webContents.send(
-        "shell:forward", "viewer", "file-selected", pendingFilePath,
+        "shell:forward",
+        "viewer",
+        "file-selected",
+        pendingFilePath,
       );
       pendingFilePath = null;
     }

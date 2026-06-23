@@ -1,8 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { Writable, Readable } from "node:stream";
-import {
-  readFile, writeFile, mkdir,
-} from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { app, ipcMain, type BrowserWindow } from "electron";
 import {
@@ -17,9 +15,7 @@ import {
   type WriteTextFileResponse,
   type SessionNotification,
 } from "@agentclientprotocol/sdk";
-import {
-  getPref, setPref, type AppConfig,
-} from "./config";
+import { getPref, setPref, type AppConfig } from "./config";
 
 type AgentSession = {
   sessionId: string;
@@ -35,27 +31,19 @@ let shellWindow: BrowserWindow | null = null;
 let appConfig: AppConfig | null = null;
 
 function getMessageCachePath(): string {
-  return resolve(
-    app.getPath("home"),
-    ".collaborator",
-    "agent-messages.json",
-  );
+  return resolve(app.getPath("home"), ".collaborator", "agent-messages.json");
 }
 
 async function loadCachedMessages(): Promise<unknown[]> {
   try {
-    const raw = await readFile(
-      getMessageCachePath(), "utf-8",
-    );
+    const raw = await readFile(getMessageCachePath(), "utf-8");
     return JSON.parse(raw);
   } catch {
     return [];
   }
 }
 
-async function saveCachedMessages(
-  messages: unknown[],
-): Promise<void> {
+async function saveCachedMessages(messages: unknown[]): Promise<void> {
   const path = getMessageCachePath();
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(messages));
@@ -69,9 +57,7 @@ async function clearCachedMessages(): Promise<void> {
   }
 }
 
-function sendToRenderer(
-  channel: string, ...args: unknown[]
-): void {
+function sendToRenderer(channel: string, ...args: unknown[]): void {
   if (shellWindow && !shellWindow.isDestroyed()) {
     shellWindow.webContents.send(channel, ...args);
   }
@@ -79,23 +65,18 @@ function sendToRenderer(
 
 function createClient(): Client {
   return {
-    async sessionUpdate(
-      params: SessionNotification,
-    ): Promise<void> {
+    async sessionUpdate(params: SessionNotification): Promise<void> {
       sendToRenderer("agent:update", params);
     },
 
     async requestPermission(
       params: RequestPermissionRequest,
     ): Promise<RequestPermissionResponse> {
-      const allow = params.options.find(
-        (o) => o.kind === "allow_once",
-      );
+      const allow = params.options.find((o) => o.kind === "allow_once");
       return {
         outcome: {
           outcome: "selected",
-          optionId:
-            allow?.optionId ?? params.options[0].optionId,
+          optionId: allow?.optionId ?? params.options[0].optionId,
         },
       };
     },
@@ -103,18 +84,14 @@ function createClient(): Client {
     async readTextFile(
       params: ReadTextFileRequest,
     ): Promise<ReadTextFileResponse> {
-      const content = await readFile(
-        params.path, "utf-8",
-      );
+      const content = await readFile(params.path, "utf-8");
       return { content };
     },
 
     async writeTextFile(
       params: WriteTextFileRequest,
     ): Promise<WriteTextFileResponse> {
-      await writeFile(
-        params.path, params.content, "utf-8",
-      );
+      await writeFile(params.path, params.content, "utf-8");
       return {};
     },
   };
@@ -141,18 +118,13 @@ function findAgentCommand(): {
     };
   }
   return {
-    command: resolve(
-      app.getAppPath(),
-      "node_modules/.bin/claude-agent-acp",
-    ),
+    command: resolve(app.getAppPath(), "node_modules/.bin/claude-agent-acp"),
     args: [],
     extraEnv: {},
   };
 }
 
-function saveSessionPref(
-  sessionId: string, cwd: string,
-): void {
+function saveSessionPref(sessionId: string, cwd: string): void {
   if (!appConfig) return;
   setPref(appConfig, PREF_SESSION_ID, sessionId);
   setPref(appConfig, PREF_SESSION_CWD, cwd);
@@ -164,9 +136,7 @@ function clearSessionPref(): void {
   setPref(appConfig, PREF_SESSION_CWD, null);
 }
 
-async function spawnAndInitialize(
-  cwd: string,
-): Promise<{
+async function spawnAndInitialize(cwd: string): Promise<{
   connection: ClientSideConnection;
   proc: ChildProcess;
 }> {
@@ -181,22 +151,13 @@ async function spawnAndInitialize(
       ACP_PERMISSION_MODE: "acceptEdits",
     },
   });
-  console.log(
-    `[acp-timing] spawn: ${(performance.now() - t0).toFixed(0)}ms`,
-  );
+  console.log(`[acp-timing] spawn: ${(performance.now() - t0).toFixed(0)}ms`);
 
-  const input = Writable.toWeb(
-    proc.stdin!,
-  ) as WritableStream<Uint8Array>;
-  const output = Readable.toWeb(
-    proc.stdout!,
-  ) as ReadableStream<Uint8Array>;
+  const input = Writable.toWeb(proc.stdin!) as WritableStream<Uint8Array>;
+  const output = Readable.toWeb(proc.stdout!) as ReadableStream<Uint8Array>;
   const stream = ndJsonStream(input, output);
 
-  const connection = new ClientSideConnection(
-    () => createClient(),
-    stream,
-  );
+  const connection = new ClientSideConnection(() => createClient(), stream);
 
   const t1 = performance.now();
   await connection.initialize({
@@ -237,9 +198,7 @@ function registerSession(
   });
 }
 
-export async function spawnAgent(
-  cwd: string,
-): Promise<{
+export async function spawnAgent(cwd: string): Promise<{
   sessionId: string;
   resumed: boolean;
   cachedMessages: unknown[];
@@ -254,34 +213,36 @@ export async function spawnAgent(
   const tStart = performance.now();
 
   // Load cached messages in parallel with spawning
-  const [{ connection, proc }, cachedMessages] =
-    await Promise.all([
-      spawnAndInitialize(cwd),
-      savedId ? loadCachedMessages() : [],
-    ]);
+  const [{ connection, proc }, cachedMessages] = await Promise.all([
+    spawnAndInitialize(cwd),
+    savedId ? loadCachedMessages() : [],
+  ]);
 
   if (savedId) {
     registerSession(savedId, connection, proc, cwd);
 
     // Resume in background — don't block the UI
     const tResume = performance.now();
-    (connection as any).unstable_resumeSession({
-      sessionId: savedId,
-      cwd: savedCwd ?? cwd,
-    }).then(() => {
-      console.log(
-        `[acp-timing] resumeSession: ${(performance.now() - tResume).toFixed(0)}ms`,
-      );
-      sendToRenderer("agent:session-ready", {
+    (connection as any)
+      .unstable_resumeSession({
         sessionId: savedId,
+        cwd: savedCwd ?? cwd,
+      })
+      .then(() => {
+        console.log(
+          `[acp-timing] resumeSession: ${(performance.now() - tResume).toFixed(0)}ms`,
+        );
+        sendToRenderer("agent:session-ready", {
+          sessionId: savedId,
+        });
+      })
+      .catch(() => {
+        clearSessionPref();
+        clearCachedMessages();
+        sendToRenderer("agent:session-failed", {
+          sessionId: savedId,
+        });
       });
-    }).catch(() => {
-      clearSessionPref();
-      clearCachedMessages();
-      sendToRenderer("agent:session-failed", {
-        sessionId: savedId,
-      });
-    });
 
     console.log(
       `[acp-timing] total (non-blocking): ${(performance.now() - tStart).toFixed(0)}ms`,
@@ -328,9 +289,7 @@ export async function promptAgent(
       stopReason: result.stopReason,
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error
-      ? err.message
-      : "Unknown error";
+    const msg = err instanceof Error ? err.message : "Unknown error";
     sendToRenderer("agent:prompt-error", {
       sessionId,
       error: msg,
@@ -338,9 +297,7 @@ export async function promptAgent(
   }
 }
 
-export async function cancelAgent(
-  sessionId: string,
-): Promise<void> {
+export async function cancelAgent(sessionId: string): Promise<void> {
   const session = sessions.get(sessionId);
   if (!session) return;
   await session.connection.cancel({ sessionId });
@@ -360,19 +317,13 @@ export function killAllAgents(): void {
   sessions.clear();
 }
 
-export function registerAgentIpc(
-  win: BrowserWindow,
-  cfg: AppConfig,
-): void {
+export function registerAgentIpc(win: BrowserWindow, cfg: AppConfig): void {
   shellWindow = win;
   appConfig = cfg;
 
   ipcMain.handle(
     "agent:spawn",
-    async (
-      _event: unknown,
-      { cwd }: { cwd: string },
-    ) => {
+    async (_event: unknown, { cwd }: { cwd: string }) => {
       return await spawnAgent(cwd);
     },
   );
@@ -381,8 +332,12 @@ export function registerAgentIpc(
     "agent:prompt",
     async (
       _event: unknown,
-      { sessionId, text }: {
-        sessionId: string; text: string;
+      {
+        sessionId,
+        text,
+      }: {
+        sessionId: string;
+        text: string;
       },
     ) => {
       promptAgent(sessionId, text);
@@ -392,10 +347,7 @@ export function registerAgentIpc(
 
   ipcMain.handle(
     "agent:cancel",
-    async (
-      _event: unknown,
-      { sessionId }: { sessionId: string },
-    ) => {
+    async (_event: unknown, { sessionId }: { sessionId: string }) => {
       await cancelAgent(sessionId);
       return {};
     },
@@ -403,10 +355,7 @@ export function registerAgentIpc(
 
   ipcMain.handle(
     "agent:kill",
-    async (
-      _event: unknown,
-      { sessionId }: { sessionId: string },
-    ) => {
+    async (_event: unknown, { sessionId }: { sessionId: string }) => {
       killAgent(sessionId);
       return {};
     },
@@ -414,10 +363,7 @@ export function registerAgentIpc(
 
   ipcMain.handle(
     "agent:save-messages",
-    async (
-      _event: unknown,
-      { messages }: { messages: unknown[] },
-    ) => {
+    async (_event: unknown, { messages }: { messages: unknown[] }) => {
       await saveCachedMessages(messages);
       return {};
     },

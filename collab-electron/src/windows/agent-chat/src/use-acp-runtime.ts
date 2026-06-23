@@ -13,9 +13,9 @@ export type AcpUpdate = {
     content?:
       | { type: string; text?: string }
       | Array<{
-        type: string;
-        content?: { type: string; text?: string };
-      }>;
+          type: string;
+          content?: { type: string; text?: string };
+        }>;
     toolCallId?: string;
     title?: string;
     kind?: string;
@@ -28,55 +28,33 @@ export type AcpUpdate = {
 declare global {
   interface Window {
     api: {
-      agentSpawn: (
-        cwd: string,
-      ) => Promise<{
+      agentSpawn: (cwd: string) => Promise<{
         sessionId: string;
         resumed: boolean;
         cachedMessages: unknown[];
       }>;
-      agentPrompt: (
-        sessionId: string, text: string,
-      ) => Promise<void>;
-      agentCancel: (
-        sessionId: string,
-      ) => Promise<void>;
-      agentKill: (
-        sessionId: string,
-      ) => Promise<void>;
-      agentSaveMessages: (
-        messages: unknown[],
-      ) => Promise<void>;
-      onAgentUpdate: (
-        cb: (params: AcpUpdate) => void,
-      ) => () => void;
+      agentPrompt: (sessionId: string, text: string) => Promise<void>;
+      agentCancel: (sessionId: string) => Promise<void>;
+      agentKill: (sessionId: string) => Promise<void>;
+      agentSaveMessages: (messages: unknown[]) => Promise<void>;
+      onAgentUpdate: (cb: (params: AcpUpdate) => void) => () => void;
       onAgentPromptComplete: (
-        cb: (data: {
-          sessionId: string; stopReason: string;
-        }) => void,
+        cb: (data: { sessionId: string; stopReason: string }) => void,
       ) => () => void;
       onAgentPromptError: (
-        cb: (data: {
-          sessionId: string; error: string;
-        }) => void,
+        cb: (data: { sessionId: string; error: string }) => void,
       ) => () => void;
-      onAgentExit: (
-        cb: (data: { sessionId: string }) => void,
-      ) => () => void;
+      onAgentExit: (cb: (data: { sessionId: string }) => void) => () => void;
       onAgentSessionReady: (
         cb: (data: { sessionId: string }) => void,
       ) => () => void;
       onAgentSessionFailed: (
         cb: (data: { sessionId: string }) => void,
       ) => () => void;
-      sendToHost: (
-        channel: string, ...args: unknown[]
-      ) => void;
+      sendToHost: (channel: string, ...args: unknown[]) => void;
     };
   }
 }
-
-
 
 /**
  * ChatModelAdapter that bridges ACP IPC events into
@@ -94,12 +72,8 @@ function createAcpAdapter(
       }
 
       const lastMsg = messages[messages.length - 1];
-      const textPart = lastMsg?.content.find(
-        (c: any) => c.type === "text",
-      );
-      const text = textPart?.type === "text"
-        ? (textPart as any).text
-        : "";
+      const textPart = lastMsg?.content.find((c: any) => c.type === "text");
+      const text = textPart?.type === "text" ? (textPart as any).text : "";
 
       if (!text) return;
 
@@ -108,13 +82,13 @@ function createAcpAdapter(
       type Part =
         | { type: "text"; text: string }
         | {
-          type: "tool-call";
-          toolCallId: string;
-          toolName: string;
-          argsText: string;
-          args: Record<string, unknown>;
-          result?: unknown;
-        };
+            type: "tool-call";
+            toolCallId: string;
+            toolName: string;
+            argsText: string;
+            args: Record<string, unknown>;
+            result?: unknown;
+          };
       const parts: Part[] = [];
       let version = 0;
 
@@ -125,12 +99,10 @@ function createAcpAdapter(
 
       let resolveComplete: () => void;
       let rejectComplete: (err: Error) => void;
-      const completionPromise = new Promise<void>(
-        (res, rej) => {
-          resolveComplete = res;
-          rejectComplete = rej;
-        },
-      );
+      const completionPromise = new Promise<void>((res, rej) => {
+        resolveComplete = res;
+        rejectComplete = rej;
+      });
 
       const cleanups: Array<() => void> = [];
 
@@ -141,9 +113,7 @@ function createAcpAdapter(
           switch (update.sessionUpdate) {
             case "agent_message_chunk": {
               const chunk = update.content;
-              const t = chunk && !Array.isArray(chunk)
-                ? chunk.text
-                : undefined;
+              const t = chunk && !Array.isArray(chunk) ? chunk.text : undefined;
               if (!t) break;
               const last = lastTextPart();
               if (last) {
@@ -157,16 +127,10 @@ function createAcpAdapter(
             case "tool_call": {
               parts.push({
                 type: "tool-call",
-                toolCallId:
-                  update.toolCallId ?? `tc_${Date.now()}`,
+                toolCallId: update.toolCallId ?? `tc_${Date.now()}`,
                 toolName: update.title ?? "tool",
-                argsText: JSON.stringify(
-                  update.rawInput ?? {},
-                ),
-                args:
-                  (update.rawInput as Record<
-                    string, unknown
-                  >) ?? {},
+                argsText: JSON.stringify(update.rawInput ?? {}),
+                args: (update.rawInput as Record<string, unknown>) ?? {},
               });
               version++;
               break;
@@ -174,20 +138,13 @@ function createAcpAdapter(
             case "tool_call_update": {
               const id = update.toolCallId;
               const tc = parts.find(
-                (p) =>
-                  p.type === "tool-call" &&
-                  p.toolCallId === id,
+                (p) => p.type === "tool-call" && p.toolCallId === id,
               );
               if (tc && tc.type === "tool-call") {
                 const raw = update.content;
-                if (
-                  Array.isArray(raw) && raw.length > 0
-                ) {
+                if (Array.isArray(raw) && raw.length > 0) {
                   const first = raw[0];
-                  if (
-                    first.type === "content" &&
-                    first.content?.text
-                  ) {
+                  if (first.type === "content" && first.content?.text) {
                     tc.result = first.content.text;
                   }
                 }
@@ -228,9 +185,7 @@ function createAcpAdapter(
 
           const done = await Promise.race([
             completionPromise.then(() => true),
-            new Promise<false>((r) =>
-              setTimeout(() => r(false), 100),
-            ),
+            new Promise<false>((r) => setTimeout(() => r(false), 100)),
           ]);
 
           if (version > lastVersion || done) {
@@ -253,23 +208,16 @@ export type ConnectResult = {
   cachedMessages: unknown[];
 };
 
-export function useAcpRuntime(
-  connectResult: ConnectResult,
-) {
-  const sessionIdRef = useRef<string | null>(
-    connectResult.sessionId,
-  );
-  const [ready, setReady] = useState(
-    !connectResult.resumed,
-  );
+export function useAcpRuntime(connectResult: ConnectResult) {
+  const sessionIdRef = useRef<string | null>(connectResult.sessionId);
+  const [ready, setReady] = useState(!connectResult.resumed);
 
   // Use cached messages as initial messages
   const initialMessages = useMemo(() => {
     if (!connectResult.cachedMessages?.length) {
       return undefined;
     }
-    const msgs =
-      connectResult.cachedMessages as ThreadMessageLike[];
+    const msgs = connectResult.cachedMessages as ThreadMessageLike[];
     return msgs.length > 0 ? msgs : undefined;
   }, []);
 
@@ -297,31 +245,29 @@ export function useAcpRuntime(
 
   // Save messages after each prompt completes
   useEffect(() => {
-    const cleanup = window.api.onAgentPromptComplete(
-      () => {
-        const state = runtime.thread.getState();
-        const msgs = state.messages.map((m: any) => ({
-          role: m.role,
-          content: m.content.map((p: any) => {
-            if (p.type === "text") {
-              return { type: "text", text: p.text };
-            }
-            if (p.type === "tool-call") {
-              return {
-                type: "tool-call",
-                toolCallId: p.toolCallId,
-                toolName: p.toolName,
-                argsText: p.argsText ?? "",
-                args: p.args,
-                result: p.result,
-              };
-            }
-            return p;
-          }),
-        }));
-        window.api.agentSaveMessages(msgs);
-      },
-    );
+    const cleanup = window.api.onAgentPromptComplete(() => {
+      const state = runtime.thread.getState();
+      const msgs = state.messages.map((m: any) => ({
+        role: m.role,
+        content: m.content.map((p: any) => {
+          if (p.type === "text") {
+            return { type: "text", text: p.text };
+          }
+          if (p.type === "tool-call") {
+            return {
+              type: "tool-call",
+              toolCallId: p.toolCallId,
+              toolName: p.toolName,
+              argsText: p.argsText ?? "",
+              args: p.args,
+              result: p.result,
+            };
+          }
+          return p;
+        }),
+      }));
+      window.api.agentSaveMessages(msgs);
+    });
     return cleanup;
   }, [runtime]);
 

@@ -80,6 +80,6 @@ export const zh: Record<TranslationKey, string> = {
   "language.chinese": "简体中文",
 
   // Misc
-  "esc": "esc",
-  "close": "关闭",
+  esc: "esc",
+  close: "关闭",
 };

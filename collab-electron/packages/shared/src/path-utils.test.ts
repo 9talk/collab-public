@@ -34,9 +34,7 @@ describe("path-utils", () => {
   });
 
   test("parses WSL UNC paths", () => {
-    expect(
-      parseWslUncPath("\\\\wsl$\\Ubuntu\\home\\me\\repo"),
-    ).toEqual({
+    expect(parseWslUncPath("\\\\wsl$\\Ubuntu\\home\\me\\repo")).toEqual({
       distro: "Ubuntu",
       guestPath: "/home/me/repo",
     });
@@ -49,7 +47,9 @@ describe("path-utils", () => {
   });
 
   test("normalizes executable command names for comparison", () => {
-    expect(displayCommandName("C:\\Program Files\\PowerShell\\7\\pwsh.exe")).toBe("pwsh");
+    expect(
+      displayCommandName("C:\\Program Files\\PowerShell\\7\\pwsh.exe"),
+    ).toBe("pwsh");
     expect(normalizeCommandName("PowerShell.EXE")).toBe("powershell");
     expect(normalizeCommandName("/bin/bash")).toBe("bash");
   });

@@ -1,4 +1,5 @@
-const URL_REGEX = /(https?|HTTPS?):[/]{2}[^\s"'!*(){}|\\\^<>`]*[^\s"':,.!?{}|\\\^~\[\]`()<>]/;
+const URL_REGEX =
+  /(https?|HTTPS?):[/]{2}[^\s"'!*(){}|\\\^<>`]*[^\s"':,.!?{}|\\\^~\[\]`()<>]/;
 const URL_COLOR = "\x1b[38;2;0;150;255m";
 const RESET = "\x1b[0m";
 

@@ -86,9 +86,7 @@ describe("extractCoverImageUrl", () => {
   });
 
   test("passes through data: URLs", () => {
-    const result = extractCoverImageUrl(
-      "![](data:image/png;base64,abc123)",
-    );
+    const result = extractCoverImageUrl("![](data:image/png;base64,abc123)");
     expect(result).toBe("data:image/png;base64,abc123");
   });
 

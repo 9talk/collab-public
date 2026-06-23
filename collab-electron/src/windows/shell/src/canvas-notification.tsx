@@ -7,7 +7,11 @@ let _getTile: any = null;
 
 const toastTileMap = new Map<string | number, string>();
 
-export function createCanvasNotifications({ getTile, edgeIndicators, tileManager }: any) {
+export function createCanvasNotifications({
+  getTile,
+  edgeIndicators,
+  tileManager,
+}: any) {
   _getTile = getTile;
   _focusTile = (tileId: string) => {
     const tile = _getTile(tileId);
@@ -38,22 +42,34 @@ export function createCanvasNotifications({ getTile, edgeIndicators, tileManager
     const tile = _getTile(tileId);
     if (!tile) return;
 
-    const label = message ? `${tile.autoTitle || tile.userTitle || tile.filePath || tile.cwd || tile.type}` : undefined;
+    const label = message
+      ? `${tile.autoTitle || tile.userTitle || tile.filePath || tile.cwd || tile.type}`
+      : undefined;
 
-    const id = toast(tile.autoTitle || tile.userTitle || tile.filePath || tile.cwd || tile.type || "Notification", {
-      description: message || undefined,
-      duration: Infinity,
-      action: {
-        label: "TODO",
-        onClick: () => {
-          _focusTile(tileId);
-          _dismissToast(id);
+    const id = toast(
+      tile.autoTitle ||
+        tile.userTitle ||
+        tile.filePath ||
+        tile.cwd ||
+        tile.type ||
+        "Notification",
+      {
+        description: message || undefined,
+        duration: Infinity,
+        action: {
+          label: "TODO",
+          onClick: () => {
+            _focusTile(tileId);
+            _dismissToast(id);
+          },
         },
       },
-    });
+    );
 
     // Click the toast card → focus tile
-    const el = document.querySelector(`[data-sonner-toast][data-id="${id}"]`) as HTMLElement | null;
+    const el = document.querySelector(
+      `[data-sonner-toast][data-id="${id}"]`,
+    ) as HTMLElement | null;
     if (el) {
       el.style.cursor = "pointer";
       el.addEventListener("click", (e) => {
@@ -64,7 +80,9 @@ export function createCanvasNotifications({ getTile, edgeIndicators, tileManager
     } else {
       // The DOM node isn't mounted yet — wait for it
       requestAnimationFrame(() => {
-        const el2 = document.querySelector(`[data-sonner-toast][data-id="${id}"]`) as HTMLElement | null;
+        const el2 = document.querySelector(
+          `[data-sonner-toast][data-id="${id}"]`,
+        ) as HTMLElement | null;
         if (el2) {
           el2.style.cursor = "pointer";
           el2.addEventListener("click", (e) => {

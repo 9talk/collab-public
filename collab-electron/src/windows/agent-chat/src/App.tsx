@@ -1,14 +1,12 @@
 import { useState, useEffect } from "react";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { AgentThread } from "./AgentThread";
-import {
-  useAcpRuntime,
-  type ConnectResult,
-} from "./use-acp-runtime";
+import { useAcpRuntime, type ConnectResult } from "./use-acp-runtime";
 
 export default function App() {
-  const [connectResult, setConnectResult] =
-    useState<ConnectResult | null>(null);
+  const [connectResult, setConnectResult] = useState<ConnectResult | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -16,33 +14,27 @@ export default function App() {
 
     async function connect() {
       try {
-        const params = new URLSearchParams(
-          window.location.search,
-        );
+        const params = new URLSearchParams(window.location.search);
         const cwd = params.get("cwd") || ".";
         const result = await window.api.agentSpawn(cwd);
         if (cancelled) return;
         setConnectResult(result as ConnectResult);
       } catch (err: unknown) {
         if (cancelled) return;
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to connect",
-        );
+        setError(err instanceof Error ? err.message : "Failed to connect");
       }
     }
 
     connect();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (error) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-sm">
-        <span className="text-destructive">
-          {error}
-        </span>
+        <span className="text-destructive">{error}</span>
       </div>
     );
   }
@@ -58,11 +50,7 @@ export default function App() {
   return <ConnectedChat connectResult={connectResult} />;
 }
 
-function ConnectedChat({
-  connectResult,
-}: {
-  connectResult: ConnectResult;
-}) {
+function ConnectedChat({ connectResult }: { connectResult: ConnectResult }) {
   const { runtime, ready } = useAcpRuntime(connectResult);
 
   return (

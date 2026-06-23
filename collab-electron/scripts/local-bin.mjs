@@ -14,10 +14,16 @@ export function normalizeWindowsPath(path) {
 
 export function resolvePackageBin(cwd, packageName, binName = packageName) {
   const repoDir = normalizeWindowsPath(cwd);
-  const packageJsonPath = join(repoDir, "node_modules", packageName, "package.json");
+  const packageJsonPath = join(
+    repoDir,
+    "node_modules",
+    packageName,
+    "package.json",
+  );
   const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
   const binField = packageJson.bin;
-  const relativeBinPath = typeof binField === "string" ? binField : binField?.[binName];
+  const relativeBinPath =
+    typeof binField === "string" ? binField : binField?.[binName];
 
   if (!relativeBinPath) {
     throw new Error(`Package ${packageName} does not declare bin ${binName}`);

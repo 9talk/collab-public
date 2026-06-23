@@ -17,9 +17,7 @@ const execFileAsync = promisify(execFile);
 
 let replayIgnore = ignore().add(getDefaultPatterns());
 
-async function loadWorkspaceIgnore(
-  workspacePath: string,
-): Promise<void> {
+async function loadWorkspaceIgnore(workspacePath: string): Promise<void> {
   replayIgnore = ignore().add(getDefaultPatterns());
   try {
     const gitignore = await readFile(
@@ -40,7 +38,9 @@ let emptyTreeSha: string | null = null;
 
 async function getEmptyTreeSha(cwd: string): Promise<string> {
   if (emptyTreeSha) return emptyTreeSha;
-  const sha = (await git(["hash-object", "-t", "tree", "/dev/null"], cwd)).trim();
+  const sha = (
+    await git(["hash-object", "-t", "tree", "/dev/null"], cwd)
+  ).trim();
   emptyTreeSha = sha;
   return sha;
 }
@@ -77,10 +77,7 @@ interface RawCommit {
 
 let aborted = false;
 
-async function git(
-  args: string[],
-  cwd: string,
-): Promise<string> {
+async function git(args: string[], cwd: string): Promise<string> {
   const { stdout } = await execFileAsync("git", args, {
     cwd,
     maxBuffer: 50 * 1024 * 1024,
@@ -88,9 +85,7 @@ async function git(
   return stdout;
 }
 
-async function readCache(
-  cachePath: string,
-): Promise<ReplayCacheData | null> {
+async function readCache(cachePath: string): Promise<ReplayCacheData | null> {
   try {
     const text = await readFile(cachePath, "utf-8");
     const data = JSON.parse(text) as ReplayCacheData;
@@ -116,10 +111,7 @@ async function writeCache(
   }
 }
 
-async function hashExists(
-  hash: string,
-  cwd: string,
-): Promise<boolean> {
+async function hashExists(hash: string, cwd: string): Promise<boolean> {
   try {
     await git(["cat-file", "-t", hash], cwd);
     return true;
@@ -164,8 +156,7 @@ function deduplicateAndSort(commits: RawCommit[]): RawCommit[] {
     unique.push(c);
   }
   unique.sort(
-    (a, b) =>
-      new Date(a.isoDate).getTime() - new Date(b.isoDate).getTime(),
+    (a, b) => new Date(a.isoDate).getTime() - new Date(b.isoDate).getTime(),
   );
   return unique;
 }
@@ -206,9 +197,7 @@ function parseNameStatus(raw: string): ReplayFileChange[] {
   return changes;
 }
 
-function extractLinksFromDiff(
-  diffOutput: string,
-): ReplayLinkChange[] {
+function extractLinksFromDiff(diffOutput: string): ReplayLinkChange[] {
   const links: ReplayLinkChange[] = [];
   let currentFile = "";
 
@@ -216,9 +205,7 @@ function extractLinksFromDiff(
 
   for (const line of diffOutput.split("\n")) {
     if (line.startsWith("diff --git ")) {
-      const match = line.match(
-        /diff --git a\/.+ b\/(.+)/,
-      );
+      const match = line.match(/diff --git a\/.+ b\/(.+)/);
       const captured = match?.[1];
       if (captured) {
         currentFile = captured;
@@ -229,10 +216,7 @@ function extractLinksFromDiff(
 
     if (skipFile) continue;
 
-    if (
-      line.startsWith("+++") ||
-      line.startsWith("---")
-    ) {
+    if (line.startsWith("+++") || line.startsWith("---")) {
       continue;
     }
 
@@ -240,9 +224,7 @@ function extractLinksFromDiff(
     const isRemove = line.startsWith("-");
     if (!isAdd && !isRemove) continue;
 
-    const action: "add" | "remove" = isAdd
-      ? "add"
-      : "remove";
+    const action: "add" | "remove" = isAdd ? "add" : "remove";
     const content = line.slice(1);
 
     for (const m of content.matchAll(WIKILINK_RE)) {
@@ -418,11 +400,7 @@ async function computeReplay(
         "--reverse",
         `${lastHash}..HEAD`,
       ]
-    : [
-        "log",
-        "--format=%H%x00%aI%x00%an%x00%s%x00%P",
-        "--reverse",
-      ];
+    : ["log", "--format=%H%x00%aI%x00%an%x00%s%x00%P", "--reverse"];
 
   let logOutput: string;
   try {
@@ -438,9 +416,7 @@ async function computeReplay(
     return;
   }
 
-  const rawCommits = deduplicateAndSort(
-    parseCommitLog(logOutput),
-  );
+  const rawCommits = deduplicateAndSort(parseCommitLog(logOutput));
 
   if (rawCommits.length === 0 && cachedCommits.length === 0) {
     process.parentPort.postMessage({
@@ -469,8 +445,7 @@ async function computeReplay(
   const cpKeys = Object.keys(cachedCheckpoints)
     .map(Number)
     .sort((a, b) => a - b);
-  const lastCpIndex =
-    cpKeys.length > 0 ? cpKeys[cpKeys.length - 1]! : -1;
+  const lastCpIndex = cpKeys.length > 0 ? cpKeys[cpKeys.length - 1]! : -1;
 
   if (lastCpIndex >= 0) {
     const cp = cachedCheckpoints[String(lastCpIndex)]!;
@@ -484,26 +459,14 @@ async function computeReplay(
       });
     }
     // Apply commits after the checkpoint to get current state
-    for (
-      let i = lastCpIndex + 1;
-      i < cachedCommits.length;
-      i++
-    ) {
+    for (let i = lastCpIndex + 1; i < cachedCommits.length; i++) {
       const c = cachedCommits[i]!;
-      updateFileAndLinkState(
-        state,
-        c.fileChanges,
-        c.linkChanges,
-      );
+      updateFileAndLinkState(state, c.fileChanges, c.linkChanges);
     }
   } else {
     // No checkpoint — replay all cached commits to rebuild state
     for (const c of cachedCommits) {
-      updateFileAndLinkState(
-        state,
-        c.fileChanges,
-        c.linkChanges,
-      );
+      updateFileAndLinkState(state, c.fileChanges, c.linkChanges);
     }
   }
 
@@ -514,10 +477,7 @@ async function computeReplay(
   for (let i = 0; i < rawCommits.length; i++) {
     if (aborted) return;
 
-    const commit = await processCommit(
-      rawCommits[i]!,
-      workspacePath,
-    );
+    const commit = await processCommit(rawCommits[i]!, workspacePath);
     allCommits.push(commit);
 
     process.parentPort.postMessage({
@@ -526,11 +486,7 @@ async function computeReplay(
       data: commit,
     });
 
-    updateFileAndLinkState(
-      state,
-      commit.fileChanges,
-      commit.linkChanges,
-    );
+    updateFileAndLinkState(state, commit.fileChanges, commit.linkChanges);
 
     const globalIndex = allCommits.length - 1;
     if ((globalIndex + 1) % CHECKPOINT_INTERVAL === 0) {
@@ -547,8 +503,7 @@ async function computeReplay(
         data: cp,
       });
 
-      const newLastHash =
-        allCommits[allCommits.length - 1]!.hash;
+      const newLastHash = allCommits[allCommits.length - 1]!.hash;
       await writeCache(cachePath, {
         version: CACHE_VERSION,
         lastHash: newLastHash,
@@ -593,29 +548,26 @@ const keepAlive = setInterval(() => {}, 2 ** 31 - 1);
 let runningReplay: Promise<void> | null = null;
 let currentWorkspace: string | null = null;
 
-process.parentPort.on(
-  "message",
-  ({ data }: { data: WorkerCommand }) => {
-    if (data.cmd === "start") {
-      // Only abort if restarting the same workspace
-      if (currentWorkspace === data.workspacePath) {
-        aborted = true;
-      }
-      const prev = runningReplay;
-      runningReplay = (async () => {
-        if (prev) await prev;
-        currentWorkspace = data.workspacePath;
-        aborted = false;
-        await computeReplay(data.workspacePath, data.cachePath);
-        currentWorkspace = null;
-        runningReplay = null;
-      })();
-    } else if (data.cmd === "stop") {
+process.parentPort.on("message", ({ data }: { data: WorkerCommand }) => {
+  if (data.cmd === "start") {
+    // Only abort if restarting the same workspace
+    if (currentWorkspace === data.workspacePath) {
       aborted = true;
-    } else if (data.cmd === "close") {
-      aborted = true;
-      clearInterval(keepAlive);
-      process.exit(0);
     }
-  },
-);
+    const prev = runningReplay;
+    runningReplay = (async () => {
+      if (prev) await prev;
+      currentWorkspace = data.workspacePath;
+      aborted = false;
+      await computeReplay(data.workspacePath, data.cachePath);
+      currentWorkspace = null;
+      runningReplay = null;
+    })();
+  } else if (data.cmd === "stop") {
+    aborted = true;
+  } else if (data.cmd === "close") {
+    aborted = true;
+    clearInterval(keepAlive);
+    process.exit(0);
+  }
+});

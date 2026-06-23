@@ -19,22 +19,15 @@ interface AgentStatus {
   installed: boolean;
 }
 
-
 function agentDetected(id: AgentId): boolean {
   const home = homedir();
   switch (id) {
     case "claude":
-      return (
-        existsSync(join(home, ".claude")) || isOnPath("claude")
-      );
+      return existsSync(join(home, ".claude")) || isOnPath("claude");
     case "codex":
-      return (
-        existsSync(join(home, ".codex")) || isOnPath("codex")
-      );
+      return existsSync(join(home, ".codex")) || isOnPath("codex");
     case "gemini":
-      return (
-        existsSync(join(home, ".gemini")) || isOnPath("gemini")
-      );
+      return existsSync(join(home, ".gemini")) || isOnPath("gemini");
   }
 }
 
@@ -113,9 +106,7 @@ export function installSkill(id: AgentId): void {
 
   mkdirSync(join(target, ".."), { recursive: true });
   const sourceFile =
-    id === "codex"
-      ? "collab-canvas-codex.md"
-      : "collab-canvas-gemini.md";
+    id === "codex" ? "collab-canvas-codex.md" : "collab-canvas-gemini.md";
   writeFileSync(
     target,
     readFileSync(join(srcDir, sourceFile), "utf-8"),
@@ -166,47 +157,37 @@ export function getAgentStatuses(): AgentStatus[] {
 }
 
 export function registerIntegrationsIpc(): void {
-  ipcMain.handle("integrations:get-agents", () =>
-    getAgentStatuses(),
-  );
+  ipcMain.handle("integrations:get-agents", () => getAgentStatuses());
 
-  ipcMain.handle(
-    "integrations:install-skill",
-    (_event, agentId: string) => {
-      if (!VALID_AGENT_IDS.has(agentId)) {
-        return { ok: false, error: `Unknown agent: ${agentId}` };
-      }
-      try {
-        installSkill(agentId as AgentId);
-        return { ok: true };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[integrations] Failed to install skill:", msg);
-        return { ok: false, error: msg };
-      }
-    },
-  );
+  ipcMain.handle("integrations:install-skill", (_event, agentId: string) => {
+    if (!VALID_AGENT_IDS.has(agentId)) {
+      return { ok: false, error: `Unknown agent: ${agentId}` };
+    }
+    try {
+      installSkill(agentId as AgentId);
+      return { ok: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[integrations] Failed to install skill:", msg);
+      return { ok: false, error: msg };
+    }
+  });
 
-  ipcMain.handle(
-    "integrations:uninstall-skill",
-    (_event, agentId: string) => {
-      if (!VALID_AGENT_IDS.has(agentId)) {
-        return { ok: false, error: `Unknown agent: ${agentId}` };
-      }
-      try {
-        uninstallSkill(agentId as AgentId);
-        return { ok: true };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[integrations] Failed to uninstall skill:", msg);
-        return { ok: false, error: msg };
-      }
-    },
-  );
+  ipcMain.handle("integrations:uninstall-skill", (_event, agentId: string) => {
+    if (!VALID_AGENT_IDS.has(agentId)) {
+      return { ok: false, error: `Unknown agent: ${agentId}` };
+    }
+    try {
+      uninstallSkill(agentId as AgentId);
+      return { ok: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[integrations] Failed to uninstall skill:", msg);
+      return { ok: false, error: msg };
+    }
+  });
 
-  ipcMain.handle("integrations:has-offered-plugin", () =>
-    hasOfferedPlugin(),
-  );
+  ipcMain.handle("integrations:has-offered-plugin", () => hasOfferedPlugin());
 
   ipcMain.handle("integrations:mark-plugin-offered", () => {
     markPluginOffered();

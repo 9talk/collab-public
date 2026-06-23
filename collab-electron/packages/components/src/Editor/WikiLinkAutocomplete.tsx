@@ -1,9 +1,4 @@
-import {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-} from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 // BlockNote does not export its internal TipTap editor type.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,8 +26,7 @@ interface WikiLinkAutocompleteProps {
 function getCaretCoords(
   editor: TipTapEditor,
 ): { top: number; left: number } | null {
-  const tiptap =
-    editor._tiptapEditor ?? editor.tiptapEditor;
+  const tiptap = editor._tiptapEditor ?? editor.tiptapEditor;
   if (!tiptap?.view) return null;
   const { state } = tiptap;
   const { from } = state.selection;
@@ -44,9 +38,7 @@ function getCaretCoords(
   }
 }
 
-function getTiptap(
-  editor: TipTapEditor,
-): TipTapEditor {
+function getTiptap(editor: TipTapEditor): TipTapEditor {
   return editor._tiptapEditor ?? editor.tiptapEditor;
 }
 
@@ -82,13 +74,9 @@ function findTrigger(
   };
 }
 
-export function WikiLinkAutocomplete({
-  editor,
-}: WikiLinkAutocompleteProps) {
+export function WikiLinkAutocomplete({ editor }: WikiLinkAutocompleteProps) {
   const [active, setActive] = useState(false);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>(
-    [],
-  );
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [position, setPosition] = useState<{
     top: number;
@@ -118,9 +106,7 @@ export function WikiLinkAutocomplete({
       });
       if (!node) return;
 
-      const tr = state.tr
-        .delete(triggerStart, from)
-        .insert(triggerStart, node);
+      const tr = state.tr.delete(triggerStart, from).insert(triggerStart, node);
 
       tiptap.view.dispatch(tr);
       tiptap.view.focus();
@@ -171,9 +157,7 @@ export function WikiLinkAutocomplete({
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIndex((i) =>
-          Math.min(i + 1, items.length - 1),
-        );
+        setSelectedIndex((i) => Math.min(i + 1, items.length - 1));
         return;
       }
 
@@ -210,9 +194,9 @@ export function WikiLinkAutocomplete({
 
   useEffect(() => {
     if (!active) return;
-    const item = dropdownRef.current?.children[
-      selectedIndex
-    ] as HTMLElement | undefined;
+    const item = dropdownRef.current?.children[selectedIndex] as
+      | HTMLElement
+      | undefined;
     item?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex, active]);
 

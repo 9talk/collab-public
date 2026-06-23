@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReplayCommit } from "@collab/shared/types";
 import "./ReplayTimeline.css";
 
@@ -32,8 +26,18 @@ const MS_PER_MONTH = 30 * MS_PER_DAY;
 const MS_PER_YEAR = 365 * MS_PER_DAY;
 
 const MONTH_NAMES = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
 function computeDateLabels(
@@ -70,10 +74,7 @@ function addYearLabels(
   const endDate = new Date(end);
   const startYear = startDate.getFullYear();
   const endYear = endDate.getFullYear();
-  const step = Math.max(
-    1,
-    Math.ceil((endYear - startYear + 1) / maxLabels),
-  );
+  const step = Math.max(1, Math.ceil((endYear - startYear + 1) / maxLabels));
   for (let y = startYear; y <= endYear; y += step) {
     const ts = new Date(y, 0, 1).getTime();
     if (ts >= start && ts <= end) {
@@ -104,9 +105,8 @@ function addMonthLabels(
     const ts = new Date(y, mNorm, 1).getTime();
     if (ts < start) continue;
     if (ts > end) break;
-    const text = mNorm === 0
-      ? `${MONTH_NAMES[mNorm]} ${y}`
-      : MONTH_NAMES[mNorm]!;
+    const text =
+      mNorm === 0 ? `${MONTH_NAMES[mNorm]} ${y}` : MONTH_NAMES[mNorm]!;
     labels.push({ position: (ts - start) / span, text });
   }
 }
@@ -149,13 +149,9 @@ function findNearestCommitIndex(
 ): number {
   if (commits.length === 0) return -1;
   let bestIdx = 0;
-  let bestDist = Math.abs(
-    commits[0]!.timestamp - targetTimestamp,
-  );
+  let bestDist = Math.abs(commits[0]!.timestamp - targetTimestamp);
   for (let i = 1; i < commits.length; i++) {
-    const dist = Math.abs(
-      commits[i]!.timestamp - targetTimestamp,
-    );
+    const dist = Math.abs(commits[i]!.timestamp - targetTimestamp);
     if (dist < bestDist) {
       bestDist = dist;
       bestIdx = i;
@@ -291,15 +287,16 @@ export function ReplayTimeline({
   }, []);
 
   const { isDraggingRef, handleMouseDown } = useTimelineDrag(
-    trackRef, timeRange, commits,
-    isPlaying, onPause, onSeekTo,
+    trackRef,
+    timeRange,
+    commits,
+    isPlaying,
+    onPause,
+    onSeekTo,
   );
 
   const { hoverX, hoveredCommit, handleTrackHover, handleTrackLeave } =
-    useTimelineHover(
-      trackRef, isDraggingRef,
-      timeRange, trackWidth, commits,
-    );
+    useTimelineHover(trackRef, isDraggingRef, timeRange, trackWidth, commits);
 
   const commitPositions = useMemo(() => {
     if (!timeRange || commits.length === 0) return [];
@@ -308,25 +305,17 @@ export function ReplayTimeline({
     if (span <= 0) {
       return commits.map(() => 0.5);
     }
-    return commits.map(
-      (c) => (c.timestamp - start) / span,
-    );
+    return commits.map((c) => (c.timestamp - start) / span);
   }, [commits, timeRange]);
 
   const dateLabels = useMemo(
-    () =>
-      timeRange
-        ? computeDateLabels(timeRange, trackWidth)
-        : [],
+    () => (timeRange ? computeDateLabels(timeRange, trackWidth) : []),
     [timeRange, trackWidth],
   );
 
   const playheadPosition = useMemo(() => {
     if (currentIndex === -1) return 1;
-    if (
-      currentIndex >= 0 &&
-      currentIndex < commitPositions.length
-    ) {
+    if (currentIndex >= 0 && currentIndex < commitPositions.length) {
       return commitPositions[currentIndex]!;
     }
     return 1;
@@ -341,14 +330,7 @@ export function ReplayTimeline({
       }
       onPlay();
     }
-  }, [
-    isPlaying,
-    currentIndex,
-    commits.length,
-    onPlay,
-    onPause,
-    onSeekTo,
-  ]);
+  }, [isPlaying, currentIndex, commits.length, onPlay, onPause, onSeekTo]);
 
   const handleOpen = useCallback(() => {
     setIsOpen(true);
@@ -361,14 +343,9 @@ export function ReplayTimeline({
 
   const playDisabled = isLoading;
 
-  const showProgress =
-    isLoading &&
-    totalCommits !== null &&
-    totalCommits > 0;
+  const showProgress = isLoading && totalCommits !== null && totalCommits > 0;
 
-  const progressFraction = showProgress
-    ? commits.length / totalCommits!
-    : 0;
+  const progressFraction = showProgress ? commits.length / totalCommits! : 0;
 
   return (
     <div
@@ -397,9 +374,7 @@ export function ReplayTimeline({
             cy="22"
             r="20"
             strokeDasharray={RING_CIRCUMFERENCE}
-            strokeDashoffset={
-              RING_CIRCUMFERENCE * (1 - progressFraction)
-            }
+            strokeDashoffset={RING_CIRCUMFERENCE * (1 - progressFraction)}
           />
         </svg>
       )}
@@ -586,8 +561,7 @@ function Tooltip({
         {truncate(commit.subject, 60)}
       </div>
       <div className="replay-timeline-tooltip-meta">
-        {commit.author} &middot;{" "}
-        {formatDate(commit.timestamp)}
+        {commit.author} &middot; {formatDate(commit.timestamp)}
       </div>
     </div>
   );

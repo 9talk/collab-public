@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface UseInlineRenameReturn {
   renamingPath: string | null;
@@ -16,47 +11,33 @@ interface UseInlineRenameReturn {
 }
 
 export function useInlineRename(
-  onRename: (
-    oldPath: string,
-    newName: string,
-  ) => Promise<void>,
+  onRename: (oldPath: string, newName: string) => Promise<void>,
 ): UseInlineRenameReturn {
-  const [renamingPath, setRenamingPath] = useState<
-    string | null
-  >(null);
-  const [renameValue, setRenameValue] = useState('');
+  const [renamingPath, setRenamingPath] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
   const pendingSelectRef = useRef(false);
-  const originalNameRef = useRef('');
+  const originalNameRef = useRef("");
 
-  const startRename = useCallback(
-    (path: string, currentName: string) => {
-      const lastDot = currentName.lastIndexOf('.');
-      const stem =
-        lastDot > 0
-          ? currentName.slice(0, lastDot)
-          : currentName;
-      setRenamingPath(path);
-      setRenameValue(stem);
-      originalNameRef.current = stem;
-      pendingSelectRef.current = true;
-    },
-    [],
-  );
+  const startRename = useCallback((path: string, currentName: string) => {
+    const lastDot = currentName.lastIndexOf(".");
+    const stem = lastDot > 0 ? currentName.slice(0, lastDot) : currentName;
+    setRenamingPath(path);
+    setRenameValue(stem);
+    originalNameRef.current = stem;
+    pendingSelectRef.current = true;
+  }, []);
 
   const cancelRename = useCallback(() => {
     setRenamingPath(null);
-    setRenameValue('');
+    setRenameValue("");
     pendingSelectRef.current = false;
   }, []);
 
   const confirmRename = useCallback(() => {
     if (!renamingPath) return;
     const trimmed = renameValue.trim();
-    if (
-      trimmed.length === 0 ||
-      trimmed === originalNameRef.current
-    ) {
+    if (trimmed.length === 0 || trimmed === originalNameRef.current) {
       cancelRename();
       return;
     }

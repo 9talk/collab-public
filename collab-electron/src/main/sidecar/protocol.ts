@@ -17,8 +17,6 @@ export function sessionSocketPath(sessionId: string): string {
 // Ring buffer default: 8 MB per session
 export const DEFAULT_RING_BUFFER_BYTES = 8 * 1024 * 1024;
 
-
-
 // JSON-RPC 2.0 types
 export interface JsonRpcRequest {
   jsonrpc: "2.0";
@@ -54,11 +52,7 @@ export function makeResponse(id: number, result: unknown): string {
   return JSON.stringify(msg) + "\n";
 }
 
-export function makeError(
-  id: number,
-  code: number,
-  message: string,
-): string {
+export function makeError(id: number, code: number, message: string): string {
   const msg: JsonRpcResponse = {
     jsonrpc: "2.0",
     id,

@@ -31,12 +31,7 @@ function forwardToWebview(
   channel: string,
   ...args: unknown[]
 ): void {
-  mainWindow?.webContents.send(
-    "shell:forward",
-    target,
-    channel,
-    ...args,
-  );
+  mainWindow?.webContents.send("shell:forward", target, channel, ...args);
 }
 
 export function setMainWindow(win: BrowserWindow): void {
@@ -54,8 +49,8 @@ export function registerIpcHandlers(config: AppConfig): void {
 
   // File watcher notifications
   watcher.setNotifyFn((events) => {
-    const changedPaths = events.flatMap(
-      (event) => event.changes.map((change) => change.path),
+    const changedPaths = events.flatMap((event) =>
+      event.changes.map((change) => change.path),
     );
     fileFilterRef.current?.invalidateBinaryCache(changedPaths);
     invalidateImageCache(changedPaths);
@@ -78,17 +73,13 @@ export function registerIpcHandlers(config: AppConfig): void {
     const deletedPaths = events.flatMap((e) =>
       e.changes
         .filter(
-          (c) =>
-            c.type === FS_CHANGE_DELETED &&
-            !recentlyRenamed.has(c.path),
+          (c) => c.type === FS_CHANGE_DELETED && !recentlyRenamed.has(c.path),
         )
         .map((c) => c.path),
     );
     if (deletedPaths.length > 0) {
       forwardToWebview("nav", "files-deleted", deletedPaths);
-      forwardToWebview(
-        "viewer", "files-deleted", deletedPaths,
-      );
+      forwardToWebview("viewer", "files-deleted", deletedPaths);
     }
   });
 

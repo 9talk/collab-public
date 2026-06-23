@@ -10,10 +10,7 @@ export function pathKind(value: string): PathKind {
   if (/^\\\\wsl(?:\$|\.localhost)\\[^\\]+/i.test(input)) {
     return "wsl-unc";
   }
-  if (
-    /^[A-Za-z]:[\\/]/.test(input)
-    || /^\\\\[^\\]+\\[^\\]+/.test(input)
-  ) {
+  if (/^[A-Za-z]:[\\/]/.test(input) || /^\\\\[^\\]+\\[^\\]+/.test(input)) {
     return "windows";
   }
   if (input.startsWith("/")) {
@@ -28,15 +25,10 @@ function collapseSeparators(value: string, separator: "/" | "\\"): string {
   }
   const hasUncPrefix = /^[\\/]{2}/.test(value);
   const collapsed = value.replace(/[\\/]+/g, "\\");
-  return hasUncPrefix
-    ? `\\\\${collapsed.replace(/^\\+/, "")}`
-    : collapsed;
+  return hasUncPrefix ? `\\\\${collapsed.replace(/^\\+/, "")}` : collapsed;
 }
 
-function trimTrailingSeparators(
-  value: string,
-  separator: "/" | "\\",
-): string {
+function trimTrailingSeparators(value: string, separator: "/" | "\\"): string {
   if (!value) return value;
   if (separator === "/") {
     if (value === "/") return value;
@@ -168,17 +160,13 @@ export interface ParsedWslUncPath {
   guestPath: string;
 }
 
-export function parseWslUncPath(
-  value: string,
-): ParsedWslUncPath | null {
+export function parseWslUncPath(value: string): ParsedWslUncPath | null {
   const normalized = normalizeInput(value).replace(/\//g, "\\");
   const match = normalized.match(
     /^\\\\wsl(?:\$|\.localhost)\\([^\\]+)(\\.*)?$/i,
   );
   if (!match) return null;
-  const guestPath = match[2]
-    ? collapseSeparators(match[2], "/")
-    : "/";
+  const guestPath = match[2] ? collapseSeparators(match[2], "/") : "/";
   return {
     distro: match[1],
     guestPath: guestPath.startsWith("/") ? guestPath : `/${guestPath}`,
@@ -189,9 +177,7 @@ export function windowsPathToWslPath(value: string): string | null {
   const input = normalizeInput(value);
   const driveMatch = input.match(/^([A-Za-z]):[\\/]*(.*)$/);
   if (!driveMatch) return null;
-  const rest = driveMatch[2]
-    ? collapseSeparators(driveMatch[2], "/")
-    : "";
+  const rest = driveMatch[2] ? collapseSeparators(driveMatch[2], "/") : "";
   const suffix = rest ? `/${rest}` : "";
   return `/mnt/${driveMatch[1].toLowerCase()}${suffix}`;
 }

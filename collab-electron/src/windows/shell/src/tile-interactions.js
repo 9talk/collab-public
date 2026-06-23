@@ -28,18 +28,22 @@ const CLICK_THRESHOLD = 3;
  * @param {() => boolean} [opts.isSpaceHeld] - when true, suppress drag (canvas is panning)
  * @param {HTMLElement} [opts.contentOverlay] - secondary drag surface over tile content
  */
-export function attachDrag(titleBar, tile, {
-  viewport,
-  onUpdate,
-  disablePointerEvents,
-  enablePointerEvents,
-  getAllWebviews,
-  getGroupDragContext,
-  onShiftClick,
-  onFocus,
-  isSpaceHeld,
-  contentOverlay,
-}) {
+export function attachDrag(
+  titleBar,
+  tile,
+  {
+    viewport,
+    onUpdate,
+    disablePointerEvents,
+    enablePointerEvents,
+    getAllWebviews,
+    getGroupDragContext,
+    onShiftClick,
+    onFocus,
+    isSpaceHeld,
+    contentOverlay,
+  },
+) {
   function startDrag(e, { deferFocus = false } = {}) {
     if (e.button !== 0) return;
     if (isSpaceHeld?.()) return;
@@ -165,14 +169,17 @@ export function attachDrag(titleBar, tile, {
  * @param {() => boolean} opts.isSpaceHeld
  * @param {() => Array<{webview: HTMLElement}>} opts.getAllWebviews
  */
-export function attachMarquee(canvasEl, {
-  viewport,
-  tiles,
-  onSelectionChange,
-  isShiftHeld,
-  isSpaceHeld,
-  getAllWebviews,
-}) {
+export function attachMarquee(
+  canvasEl,
+  {
+    viewport,
+    tiles,
+    onSelectionChange,
+    isShiftHeld,
+    isSpaceHeld,
+    getAllWebviews,
+  },
+) {
   const tileLayer = canvasEl.querySelector("#tile-layer");
   const gridCanvas = canvasEl.querySelector("#grid-canvas");
 
@@ -185,7 +192,8 @@ export function attachMarquee(canvasEl, {
       e.target !== canvasEl &&
       e.target !== tileLayer &&
       e.target !== gridCanvas
-    ) return;
+    )
+      return;
 
     e.preventDefault();
     if (document.activeElement) document.activeElement.blur();
@@ -259,12 +267,7 @@ export function attachMarquee(canvasEl, {
       for (const t of tiles()) {
         const tRight = t.x + t.width;
         const tBottom = t.y + t.height;
-        if (
-          t.x < cBR.x &&
-          tRight > cTL.x &&
-          t.y < cBR.y &&
-          tBottom > cTL.y
-        ) {
+        if (t.x < cBR.x && tRight > cTL.x && t.y < cBR.y && tBottom > cTL.y) {
           hitIds.add(t.id);
         }
       }
@@ -292,7 +295,12 @@ export function attachMarquee(canvasEl, {
  * @param {() => Array<{webview: HTMLElement}>} getAllWebviews
  */
 export function attachResize(
-  container, tile, viewport, onUpdate, getAllWebviews, onFocus,
+  container,
+  tile,
+  viewport,
+  onUpdate,
+  getAllWebviews,
+  onFocus,
   onResizeEnd,
 ) {
   const edges = ["n", "s", "e", "w"];
@@ -340,9 +348,7 @@ export function attachResize(
         }
         if (dir.includes("w")) {
           const newW = Math.max(min.width, startW - dx * m);
-          tile.x = symmetric
-            ? cx - newW / 2
-            : startX + (startW - newW);
+          tile.x = symmetric ? cx - newW / 2 : startX + (startW - newW);
           tile.width = newW;
         }
         if (dir.includes("s")) {
@@ -351,9 +357,7 @@ export function attachResize(
         }
         if (dir.includes("n")) {
           const newH = Math.max(min.height, startH - dy * m);
-          tile.y = symmetric
-            ? cy - newH / 2
-            : startY + (startH - newH);
+          tile.y = symmetric ? cy - newH / 2 : startY + (startH - newH);
           tile.height = newH;
         }
 

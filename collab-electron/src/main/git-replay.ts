@@ -37,9 +37,7 @@ export function startWorker(): void {
       return;
     }
 
-    console.warn(
-      `[git-replay] Worker exited with code ${code}, restarting`,
-    );
+    console.warn(`[git-replay] Worker exited with code ${code}, restarting`);
     restartCount++;
     startWorker();
   });
@@ -57,11 +55,7 @@ export function startReplay(workspacePath: string): boolean {
   }
   restartCount = 0;
   if (!worker) startWorker();
-  const cachePath = join(
-    workspacePath,
-    ".collaborator",
-    "replay-cache.json",
-  );
+  const cachePath = join(workspacePath, ".collaborator", "replay-cache.json");
   worker?.postMessage({ cmd: "start", workspacePath, cachePath });
   return true;
 }

@@ -11,8 +11,7 @@ interface ExcerptDisplayProps {
 function pluralize(word: string): string {
   const lower = word.toLowerCase();
   if (/[sxz]$|[cs]h$/.test(lower)) return word + "es";
-  if (/[bcdfghjklmnpqrstvwxz]y$/i.test(word))
-    return word.slice(0, -1) + "ies";
+  if (/[bcdfghjklmnpqrstvwxz]y$/i.test(word)) return word.slice(0, -1) + "ies";
   if (/f$/.test(lower)) return word.slice(0, -1) + "ves";
   if (/fe$/.test(lower)) return word.slice(0, -2) + "ves";
   return word + "s";
@@ -61,10 +60,7 @@ function highlightTextInExcerpt(text: string, highlightText: string): string {
   for (let i = matches.length - 1; i >= 0; i--) {
     const { start, end, text: matchText } = matches[i]!;
     const beforeMatch = result.substring(Math.max(0, start - 40), start);
-    const afterMatch = result.substring(
-      end,
-      Math.min(result.length, end + 7),
-    );
+    const afterMatch = result.substring(end, Math.min(result.length, end + 7));
 
     if (
       beforeMatch.includes('<span class="excerpt-highlight">') &&

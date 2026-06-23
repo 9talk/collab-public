@@ -1,9 +1,4 @@
-import {
-  app,
-  ipcMain,
-  dialog,
-  type BrowserWindow,
-} from "electron";
+import { app, ipcMain, dialog, type BrowserWindow } from "electron";
 import {
   appendFileSync,
   mkdirSync,
@@ -60,11 +55,7 @@ function ensureGitignoreEntry(workspacePath: string): void {
   if (alreadyIgnored) return;
 
   const suffix = content.endsWith("\n") ? "" : "\n";
-  appendFileSync(
-    gitignorePath,
-    `${suffix}.collaborator\n`,
-    "utf-8",
-  );
+  appendFileSync(gitignorePath, `${suffix}.collaborator\n`, "utf-8");
 }
 
 function initWorkspaceFiles(workspacePath: string): void {
@@ -81,9 +72,8 @@ export function workspaceForFile(
   workspaces: string[],
 ): string | null {
   return (
-    workspaces.find(
-      (ws) => filePath === ws || filePath.startsWith(ws + "/"),
-    ) ?? null
+    workspaces.find((ws) => filePath === ws || filePath.startsWith(ws + "/")) ??
+    null
   );
 }
 
@@ -120,18 +110,12 @@ export function startSingleWorkspaceServices(
 /**
  * Stop workspace services for a single removed workspace.
  */
-export function stopSingleWorkspaceServices(
-  path: string,
-): void {
+export function stopSingleWorkspaceServices(path: string): void {
   watcher.unwatchWorkspace(path);
   wsConfigMap.delete(path);
 }
 
-const LEGACY_FM_FIELDS = new Set([
-  "createdAt",
-  "modifiedAt",
-  "author",
-]);
+const LEGACY_FM_FIELDS = new Set(["createdAt", "modifiedAt", "author"]);
 
 async function readTreeRecursive(
   dirPath: string,
@@ -172,11 +156,7 @@ async function readTreeRecursive(
     const mtime = stats.mtime.toISOString();
 
     if (entry.isDirectory()) {
-      const children = await readTreeRecursive(
-        fullPath,
-        rootPath,
-        filter,
-      );
+      const children = await readTreeRecursive(fullPath, rootPath, filter);
       folders.push({
         path: fullPath,
         name: entry.name,
@@ -197,13 +177,8 @@ async function readTreeRecursive(
 
       if (entry.name.endsWith(".md")) {
         try {
-          const fileContent = await readFile(
-            fullPath,
-            "utf-8",
-          );
-          const parsed = fm<Record<string, unknown>>(
-            fileContent,
-          );
+          const fileContent = await readFile(fullPath, "utf-8");
+          const parsed = fm<Record<string, unknown>>(fileContent);
           node.frontmatter = parsed.attributes;
           node.preview = parsed.body.slice(0, 200);
         } catch {
@@ -215,8 +190,12 @@ async function readTreeRecursive(
     }
   }
 
-  folders.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-  files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  folders.sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true }),
+  );
+  files.sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true }),
+  );
   return [...folders, ...files];
 }
 
@@ -231,18 +210,13 @@ export function registerWorkspaceHandlers(
 
   ipcMain.handle(
     "workspace-pref:get",
-    (
-      _event,
-      params: { key: string; workspacePath: string },
-    ) => {
+    (_event, params: { key: string; workspacePath: string }) => {
       if (!params.workspacePath) return null;
       const config = getWsConfig(params.workspacePath);
-      if (params.key === "expanded_dirs")
-        return config.expanded_dirs;
+      if (params.key === "expanded_dirs") return config.expanded_dirs;
       if (params.key === "agent_skip_permissions")
         return config.agent_skip_permissions;
-      if (params.key === "alias")
-        return config.alias ?? null;
+      if (params.key === "alias") return config.alias ?? null;
       return null;
     },
   );
@@ -260,16 +234,14 @@ export function registerWorkspaceHandlers(
       if (!params.workspacePath) return;
       const config = getWsConfig(params.workspacePath);
       if (params.key === "expanded_dirs") {
-        config.expanded_dirs = Array.isArray(params.value)
-          ? params.value
-          : [];
+        config.expanded_dirs = Array.isArray(params.value) ? params.value : [];
       } else if (params.key === "agent_skip_permissions") {
-        config.agent_skip_permissions =
-          params.value === true;
+        config.agent_skip_permissions = params.value === true;
       } else if (params.key === "alias") {
-        config.alias = typeof params.value === "string" && params.value.length > 0
-          ? params.value
-          : undefined;
+        config.alias =
+          typeof params.value === "string" && params.value.length > 0
+            ? params.value
+            : undefined;
       }
       saveWorkspaceConfig(params.workspacePath, config);
     },
@@ -317,63 +289,42 @@ export function registerWorkspaceHandlers(
     return { workspaces: appConfig.workspaces };
   });
 
-  ipcMain.handle(
-    "workspace:remove",
-    (_event, index: number) => {
-      if (index < 0 || index >= appConfig.workspaces.length) {
-        return { workspaces: appConfig.workspaces };
-      }
-
-      const removedPath = appConfig.workspaces[index]!;
-      appConfig.workspaces.splice(index, 1);
-      saveConfig(appConfig);
-      trackEvent("workspace_removed");
-
-      stopSingleWorkspaceServices(removedPath);
-      ctx.forwardToWebview(
-        "nav",
-        "workspace-removed",
-        removedPath,
-      );
-
+  ipcMain.handle("workspace:remove", (_event, index: number) => {
+    if (index < 0 || index >= appConfig.workspaces.length) {
       return { workspaces: appConfig.workspaces };
-    },
-  );
+    }
 
-  ipcMain.handle(
-    "workspace:remove-by-path",
-    (_event, path: string) => {
-      const index = appConfig.workspaces.indexOf(path);
-      if (index === -1) {
-        return { workspaces: appConfig.workspaces };
-      }
+    const removedPath = appConfig.workspaces[index]!;
+    appConfig.workspaces.splice(index, 1);
+    saveConfig(appConfig);
+    trackEvent("workspace_removed");
 
-      appConfig.workspaces.splice(index, 1);
-      saveConfig(appConfig);
-      trackEvent("workspace_removed");
+    stopSingleWorkspaceServices(removedPath);
+    ctx.forwardToWebview("nav", "workspace-removed", removedPath);
 
-      stopSingleWorkspaceServices(path);
-      ctx.forwardToWebview(
-        "nav",
-        "workspace-removed",
-        path,
-      );
+    return { workspaces: appConfig.workspaces };
+  });
 
+  ipcMain.handle("workspace:remove-by-path", (_event, path: string) => {
+    const index = appConfig.workspaces.indexOf(path);
+    if (index === -1) {
       return { workspaces: appConfig.workspaces };
-    },
-  );
+    }
+
+    appConfig.workspaces.splice(index, 1);
+    saveConfig(appConfig);
+    trackEvent("workspace_removed");
+
+    stopSingleWorkspaceServices(path);
+    ctx.forwardToWebview("nav", "workspace-removed", path);
+
+    return { workspaces: appConfig.workspaces };
+  });
 
   ipcMain.handle(
     "workspace:read-tree",
-    async (
-      _event,
-      params: { root: string },
-    ): Promise<TreeNode[]> => {
-      return readTreeRecursive(
-        params.root,
-        params.root,
-        fileFilterRef.current,
-      );
+    async (_event, params: { root: string }): Promise<TreeNode[]> => {
+      return readTreeRecursive(params.root, params.root, fileFilterRef.current);
     },
   );
 
