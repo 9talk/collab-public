@@ -28,7 +28,7 @@ import {
   isSubpath,
   parentPath,
 } from "@collab/shared/path-utils";
-import { isExternalAppFile } from "@collab/shared/external-app";
+import { isExternalAppFile, isCodeFile } from "@collab/shared/external-app";
 
 const PLATFORM = window.api.getPlatform();
 
@@ -231,6 +231,7 @@ export default function App() {
     new Set(),
   );
   const suppressWorkspaceExpandRef = useRef(false);
+  const useExternalEditorRef = useRef(false);
 
   // Refs for each workspace's imperative handle
   const workspaceRefsMap = useRef(
@@ -347,6 +348,16 @@ export default function App() {
         setTreeSortMode(v as SortMode);
       }
     });
+  }, []);
+
+  // Load external editor preference
+  useEffect(() => {
+    window.api
+      .getPref("useExternalEditor")
+      .then((v) => {
+        if (typeof v === "boolean") useExternalEditorRef.current = v;
+      })
+      .catch(() => {});
   }, []);
 
   // Load persisted expanded workspaces
@@ -641,6 +652,12 @@ export default function App() {
     if (path && isExternalAppFile(path)) {
       window.api.openPath(path);
       return;
+    }
+    if (path && isCodeFile(path) && useExternalEditorRef.current) {
+      if (typeof window.api.openFileInExternalEditor === "function") {
+        window.api.openFileInExternalEditor(path);
+        return;
+      }
     }
     window.api.selectFile(path);
   }, []);
