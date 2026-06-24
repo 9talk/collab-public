@@ -6,6 +6,7 @@ import {
   Plus,
   Graph,
   Crosshair,
+  ArrowSquareOut,
 } from "@phosphor-icons/react";
 import type { FlatItem } from "./useFileTree";
 import { formatRelativeTime, displayFileName } from "./Helpers";
@@ -199,6 +200,22 @@ export const FolderRow = React.memo(function FolderRow({
       )}
       {item.childCount != null && (
         <span className="collection-tree-count">{item.childCount}</span>
+      )}
+      {isWorkspace && (
+        <button
+          className="folder-action-button"
+          data-tooltip="Open in external editor"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (
+              typeof window.api.openWorkspaceInExternalEditor === "function"
+            ) {
+              window.api.openWorkspaceInExternalEditor(item.path);
+            }
+          }}
+        >
+          <ArrowSquareOut size={12} weight="bold" />
+        </button>
       )}
       <button
         className="folder-action-button"
