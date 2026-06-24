@@ -9,6 +9,7 @@ import {
   Monitor,
   Terminal,
   ArrowClockwise,
+  FolderOpen,
 } from "@phosphor-icons/react";
 import { useTranslation } from "./translations";
 import type { SupportedLocale, TranslationKey } from "./translations";
@@ -30,6 +31,9 @@ interface SettingsApi {
   getAgents: () => Promise<AgentStatus[]>;
   installSkill: (agentId: string) => Promise<{ ok: boolean }>;
   uninstallSkill: (agentId: string) => Promise<{ ok: boolean }>;
+  listExternalEditors: () => Promise<
+    Array<{ id: string; name: string; appPath: string; binPath: string }>
+  >;
   close: () => void;
 }
 
@@ -669,7 +673,91 @@ function IntegrationsPane({ t }: { t: (key: TranslationKey) => string }) {
   );
 }
 
-type Pane = "appearance" | "terminal" | "integrations" | "controls" | "updates";
+type Pane =
+  | "appearance"
+  | "terminal"
+  | "integrations"
+  | "controls"
+  | "updates"
+  | "files";
+
+function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
+  const [useExternalEditor, setUseExternalEditor] = useState(false);
+  const [selectedEditor, setSelectedEditor] = useState("intellij-idea");
+  const [editors, setEditors] = useState<Array<{ id: string; name: string }>>(
+    [],
+  );
+
+  useEffect(() => {
+    api
+      .getPref("useExternalEditor")
+      .then((v) => {
+        if (typeof v === "boolean") setUseExternalEditor(v);
+      })
+      .catch(() => {});
+    api
+      .getPref("externalEditor")
+      .then((v) => {
+        if (typeof v === "string") setSelectedEditor(v);
+      })
+      .catch(() => {});
+    api
+      .listExternalEditors()
+      .then((list) => setEditors(list))
+      .catch(() => {});
+  }, []);
+
+  async function handleToggle(checked: boolean) {
+    setUseExternalEditor(checked);
+    await api.setPref("useExternalEditor", checked);
+  }
+
+  async function handleEditorChange(id: string) {
+    setSelectedEditor(id);
+    await api.setPref("externalEditor", id);
+  }
+
+  return (
+    <div className="space-y-6 p-6">
+      <div className="space-y-1">
+        <h2 className="text-base font-semibold">{t("files.title")}</h2>
+        <p className="text-sm text-muted-foreground">
+          {t("files.description")}
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{t("files.useExternalEditor")}</p>
+        <ToggleSwitch
+          checked={useExternalEditor}
+          onChange={(v) => {
+            void handleToggle(v);
+          }}
+        />
+      </div>
+
+      {useExternalEditor && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">{t("files.externalEditor")}</p>
+          <select
+            value={selectedEditor}
+            onChange={(e) => {
+              void handleEditorChange(e.target.value);
+            }}
+            className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+            style={{ color: "var(--foreground)" }}
+          >
+            {editors.map((ed) => (
+              <option key={ed.id} value={ed.id}>
+                {ed.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function UpdatesPane({ t }: { t: (key: TranslationKey) => string }) {
   const [autoCheck, setAutoCheck] = useState(false);
@@ -781,6 +869,7 @@ export default function App() {
     { id: "integrations", label: t("nav.integrations"), icon: PuzzlePiece },
     { id: "controls", label: t("nav.controls"), icon: Keyboard },
     { id: "updates", label: t("nav.updates"), icon: ArrowClockwise },
+    { id: "files", label: t("nav.files"), icon: FolderOpen },
   ];
 
   return (
@@ -838,6 +927,7 @@ export default function App() {
         {activePane === "integrations" && <IntegrationsPane t={t} />}
         {activePane === "controls" && <ControlsPane t={t} />}
         {activePane === "updates" && <UpdatesPane t={t} />}
+        {activePane === "files" && <FilesPane t={t} />}
       </div>
     </div>
   );
