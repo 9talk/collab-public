@@ -53,6 +53,12 @@ import {
 import { stopImageWorker } from "./image-service";
 import { installCli } from "./cli-installer";
 import { listTerminalTargets } from "./terminal-target";
+import {
+  detectEditors,
+  openFileInEditor,
+  openWorkspaceInEditor,
+} from "./external-editor";
+import { workspaceForFile } from "./ipc-workspace";
 import { readSessionMeta } from "./session-meta";
 import { registerBrowserIpc } from "./ipc-browser";
 import { registerAgentIpc } from "./acp-agent";
@@ -738,6 +744,26 @@ ipcMain.on(
 
 ipcMain.on("settings:close", () => setSettingsOpen(false));
 ipcMain.on("settings:toggle", () => setSettingsOpen(!settingsOpen));
+
+// External editor
+ipcMain.handle("external-editor:list", () => detectEditors());
+
+ipcMain.on("external-editor:open-file", (_event, filePath: string) => {
+  const editorId = getPref(config, "externalEditor") as string | undefined;
+  if (!editorId) return;
+  const ws = workspaceForFile(filePath, config.workspaces);
+  if (!ws) return;
+  openFileInEditor(editorId, filePath, ws);
+});
+
+ipcMain.on(
+  "external-editor:open-workspace",
+  (_event, workspacePath: string) => {
+    const editorId = getPref(config, "externalEditor") as string | undefined;
+    if (!editorId) return;
+    openWorkspaceInEditor(editorId, workspacePath);
+  },
+);
 
 function sendLoadingDone(): void {
   mainWindow?.webContents.send("shell:loading-done");
