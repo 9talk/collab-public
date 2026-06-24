@@ -318,6 +318,13 @@ contextBridge.exposeInMainWorld("api", {
   openExternal: (url: string) => ipcRenderer.send("shell:open-external", url),
   openPath: (path: string) => ipcRenderer.send("shell:open-path", path),
 
+  // External editor
+  listExternalEditors: () => ipcRenderer.invoke("external-editor:list"),
+  openFileInExternalEditor: (filePath: string) =>
+    ipcRenderer.send("external-editor:open-file", filePath),
+  openWorkspaceInExternalEditor: (workspacePath: string) =>
+    ipcRenderer.send("external-editor:open-workspace", workspacePath),
+
   // Integrations
   getAgents: () => ipcRenderer.invoke("integrations:get-agents"),
   installSkill: (agentId: string) =>
