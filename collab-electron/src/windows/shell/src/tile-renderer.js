@@ -162,6 +162,21 @@ export function createTileDOM(tile, callbacks) {
     btnGroup.appendChild(viewBtn);
   }
 
+  if (tile.type === "term" && tile.cwd) {
+    const editBtn = document.createElement("button");
+    editBtn.className = "tile-action-btn tile-editor-btn";
+    editBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="13.5 4 13.5 2 11.5 2"/><line x1="9" y1="7" x2="13.5" y2="2"/><polyline points="12 8 12 13.5 2 13.5 2 4 7.5 4"/></svg>`;
+    editBtn.title = "Open in external editor";
+    editBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+    editBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (typeof window.shellApi.openWorkspaceInExternalEditor === "function") {
+        window.shellApi.openWorkspaceInExternalEditor(tile.cwd);
+      }
+    });
+    btnGroup.appendChild(editBtn);
+  }
+
   if (tile.type === "term" && tile.cwd && callbacks.onLocate) {
     const locateBtn = document.createElement("button");
     locateBtn.className = "tile-action-btn tile-locate-btn";
