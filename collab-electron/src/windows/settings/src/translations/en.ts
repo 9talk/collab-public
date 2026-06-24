@@ -8,6 +8,7 @@ export const en = {
   "nav.integrations": "Integrations",
   "nav.controls": "Controls",
   "nav.updates": "Updates",
+  "nav.files": "Files",
 
   // Appearance pane
   "appearance.title": "Appearance",
@@ -76,6 +77,12 @@ export const en = {
   "language.label": "Language",
   "language.english": "English",
   "language.chinese": "简体中文",
+
+  // Files pane
+  "files.title": "Files",
+  "files.description": "Configure external editor for code files.",
+  "files.useExternalEditor": "Open code files with external editor",
+  "files.externalEditor": "External editor",
 
   // Misc
   esc: "esc",

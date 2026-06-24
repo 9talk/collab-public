@@ -12,6 +12,7 @@ export const zh: Record<TranslationKey, string> = {
   "nav.integrations": "集成",
   "nav.controls": "控制",
   "nav.updates": "更新",
+  "nav.files": "文件",
 
   // Appearance pane
   "appearance.title": "外观",
@@ -78,6 +79,12 @@ export const zh: Record<TranslationKey, string> = {
   "language.label": "语言",
   "language.english": "English",
   "language.chinese": "简体中文",
+
+  // Files pane
+  "files.title": "文件",
+  "files.description": "配置代码文件的外部编辑器。",
+  "files.useExternalEditor": "使用外部编辑器打开代码文件",
+  "files.externalEditor": "外部编辑器",
 
   // Misc
   esc: "esc",
