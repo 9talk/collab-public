@@ -733,13 +733,43 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
   }
 
   const DEFAULT_EXTENSIONS = [
-    ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".xml",
-    ".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs",
-    ".py", ".rb", ".go", ".rs", ".java", ".kt", ".swift",
-    ".c", ".cpp", ".h", ".hpp", ".cs",
-    ".css", ".scss", ".less", ".html", ".htm",
-    ".svg", ".sh", ".bash", ".zsh",
-    ".sql", ".graphql", ".proto",
+    ".md",
+    ".txt",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".xml",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".mjs",
+    ".cjs",
+    ".py",
+    ".rb",
+    ".go",
+    ".rs",
+    ".java",
+    ".kt",
+    ".swift",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".cs",
+    ".css",
+    ".scss",
+    ".less",
+    ".html",
+    ".htm",
+    ".svg",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".sql",
+    ".graphql",
+    ".proto",
   ].join(",");
 
   return (
@@ -798,10 +828,6 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
             </p>
           </div>
         </>
-      )}
-            ))}
-          </select>
-        </div>
       )}
     </div>
   );
