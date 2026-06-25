@@ -232,6 +232,7 @@ export default function App() {
   );
   const suppressWorkspaceExpandRef = useRef(false);
   const useExternalEditorRef = useRef(false);
+  const externalEditorExtensionsRef = useRef("");
 
   // Refs for each workspace's imperative handle
   const workspaceRefsMap = useRef(
@@ -356,6 +357,12 @@ export default function App() {
       .getPref("useExternalEditor")
       .then((v) => {
         if (typeof v === "boolean") useExternalEditorRef.current = v;
+      })
+      .catch(() => {});
+    window.api
+      .getPref("externalEditorExtensions")
+      .then((v) => {
+        if (typeof v === "string") externalEditorExtensionsRef.current = v;
       })
       .catch(() => {});
   }, []);
@@ -653,8 +660,18 @@ export default function App() {
       window.api.openPath(path);
       return;
     }
-    if (path && isCodeFile(path) && useExternalEditorRef.current) {
-      if (typeof window.api.openFileInExternalEditor === "function") {
+    if (path && useExternalEditorRef.current) {
+      const userExts = externalEditorExtensionsRef.current
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      const dot = path.lastIndexOf(".");
+      const ext = dot >= 0 ? path.slice(dot).toLowerCase() : "";
+      const matchesUser = userExts.length > 0 && userExts.includes(ext);
+      if (
+        (isCodeFile(path) || matchesUser) &&
+        typeof window.api.openFileInExternalEditor === "function"
+      ) {
         window.api.openFileInExternalEditor(path);
         return;
       }

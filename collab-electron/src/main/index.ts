@@ -749,18 +749,31 @@ ipcMain.on("settings:toggle", () => setSettingsOpen(!settingsOpen));
 ipcMain.handle("external-editor:list", () => detectEditors());
 
 ipcMain.on("external-editor:open-file", (_event, filePath: string) => {
-  const editorId = getPref(config, "externalEditor") as string | undefined;
-  if (!editorId) return;
+  const editorId =
+    (getPref(config, "externalEditor") as string | undefined) ??
+    "intellij-idea";
+  console.log("[external-editor] open-file:", { editorId, filePath });
   const ws = workspaceForFile(filePath, config.workspaces);
-  if (!ws) return;
+  if (!ws) {
+    console.log(
+      "[external-editor] open-file: no workspace found for",
+      filePath,
+    );
+    return;
+  }
   openFileInEditor(editorId, filePath, ws);
 });
 
 ipcMain.on(
   "external-editor:open-workspace",
   (_event, workspacePath: string) => {
-    const editorId = getPref(config, "externalEditor") as string | undefined;
-    if (!editorId) return;
+    const editorId =
+      (getPref(config, "externalEditor") as string | undefined) ??
+      "intellij-idea";
+    console.log("[external-editor] open-workspace:", {
+      editorId,
+      workspacePath,
+    });
     openWorkspaceInEditor(editorId, workspacePath);
   },
 );

@@ -83,6 +83,9 @@ export const en = {
   "files.description": "Configure external editor for code files.",
   "files.useExternalEditor": "Open code files with external editor",
   "files.externalEditor": "External editor",
+  "files.extensions": "File extensions",
+  "files.extensionsHint":
+    "Comma-separated list of extensions to open with the external editor (e.g. .ts,.py,.md). Leave empty to use defaults.",
 
   // Misc
   esc: "esc",

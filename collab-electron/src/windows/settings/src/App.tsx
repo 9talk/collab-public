@@ -684,6 +684,7 @@ type Pane =
 function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
   const [useExternalEditor, setUseExternalEditor] = useState(false);
   const [selectedEditor, setSelectedEditor] = useState("intellij-idea");
+  const [extensions, setExtensions] = useState("");
   const [editors, setEditors] = useState<Array<{ id: string; name: string }>>(
     [],
   );
@@ -698,7 +699,16 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
     api
       .getPref("externalEditor")
       .then((v) => {
-        if (typeof v === "string") setSelectedEditor(v);
+        if (typeof v === "string" && v) setSelectedEditor(v);
+        else api.setPref("externalEditor", "intellij-idea");
+      })
+      .catch(() => {
+        api.setPref("externalEditor", "intellij-idea");
+      });
+    api
+      .getPref("externalEditorExtensions")
+      .then((v) => {
+        if (typeof v === "string") setExtensions(v);
       })
       .catch(() => {});
     api
@@ -716,6 +726,21 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
     setSelectedEditor(id);
     await api.setPref("externalEditor", id);
   }
+
+  async function handleExtensionsChange(value: string) {
+    setExtensions(value);
+    await api.setPref("externalEditorExtensions", value);
+  }
+
+  const DEFAULT_EXTENSIONS = [
+    ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".xml",
+    ".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs",
+    ".py", ".rb", ".go", ".rs", ".java", ".kt", ".swift",
+    ".c", ".cpp", ".h", ".hpp", ".cs",
+    ".css", ".scss", ".less", ".html", ".htm",
+    ".svg", ".sh", ".bash", ".zsh",
+    ".sql", ".graphql", ".proto",
+  ].join(",");
 
   return (
     <div className="space-y-6 p-6">
@@ -737,20 +762,43 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
       </div>
 
       {useExternalEditor && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">{t("files.externalEditor")}</p>
-          <select
-            value={selectedEditor}
-            onChange={(e) => {
-              void handleEditorChange(e.target.value);
-            }}
-            className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-            style={{ color: "var(--foreground)" }}
-          >
-            {editors.map((ed) => (
-              <option key={ed.id} value={ed.id}>
-                {ed.name}
-              </option>
+        <>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">{t("files.externalEditor")}</p>
+            <select
+              value={selectedEditor}
+              onChange={(e) => {
+                void handleEditorChange(e.target.value);
+              }}
+              className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+              style={{ color: "var(--foreground)" }}
+            >
+              {editors.map((ed) => (
+                <option key={ed.id} value={ed.id}>
+                  {ed.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium">{t("files.extensions")}</p>
+            <input
+              type="text"
+              value={extensions}
+              placeholder={DEFAULT_EXTENSIONS}
+              onChange={(e) => {
+                void handleExtensionsChange(e.target.value);
+              }}
+              className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+              style={{ color: "var(--foreground)" }}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("files.extensionsHint")}
+            </p>
+          </div>
+        </>
+      )}
             ))}
           </select>
         </div>

@@ -34,7 +34,10 @@ export function openFileInEditor(
   workspacePath: string,
 ): void {
   const editor = KNOWN_EDITORS.find((e) => e.id === editorId);
-  if (!editor) return;
+  if (!editor) {
+    console.log("[external-editor] editor not found:", editorId);
+    return;
+  }
 
   let args: string[];
   if (editorId === "intellij-idea") {
@@ -43,6 +46,7 @@ export function openFileInEditor(
     args = [filePath];
   }
 
+  console.log("[external-editor] spawning:", editor.binPath, args);
   spawn(editor.binPath, args, {
     detached: true,
     stdio: "ignore",
@@ -54,8 +58,12 @@ export function openWorkspaceInEditor(
   workspacePath: string,
 ): void {
   const editor = KNOWN_EDITORS.find((e) => e.id === editorId);
-  if (!editor) return;
+  if (!editor) {
+    console.log("[external-editor] editor not found:", editorId);
+    return;
+  }
 
+  console.log("[external-editor] spawning:", editor.binPath, [workspacePath]);
   spawn(editor.binPath, [workspacePath], {
     detached: true,
     stdio: "ignore",

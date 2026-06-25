@@ -85,6 +85,9 @@ export const zh: Record<TranslationKey, string> = {
   "files.description": "配置代码文件的外部编辑器。",
   "files.useExternalEditor": "使用外部编辑器打开代码文件",
   "files.externalEditor": "外部编辑器",
+  "files.extensions": "文件扩展名",
+  "files.extensionsHint":
+    "逗号分隔的扩展名列表，使用外部编辑器打开（如 .ts,.py,.md）。留空使用默认值。",
 
   // Misc
   esc: "esc",
