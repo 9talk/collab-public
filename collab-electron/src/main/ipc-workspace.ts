@@ -298,6 +298,42 @@ export function registerWorkspaceHandlers(
     return { workspaces: appConfig.workspaces };
   });
 
+  ipcMain.handle(
+    "workspace:add-by-path",
+    async (_event, folderPath: string) => {
+      if (!folderPath || typeof folderPath !== "string") return null;
+      const chosen = realpathSync(folderPath);
+
+      if (appConfig.workspaces.includes(chosen)) {
+        return { workspaces: appConfig.workspaces };
+      }
+
+      const collabDir = join(chosen, ".collaborator");
+      const isNew = !existsSync(collabDir);
+      if (isNew) {
+        initWorkspaceFiles(chosen);
+      }
+
+      appConfig.workspaces.push(chosen);
+      saveConfig(appConfig);
+      trackEvent("workspace_added", { is_new: isNew });
+
+      const userIgnored = Array.isArray(appConfig.ui.ignoredFiles)
+        ? (appConfig.ui.ignoredFiles as string[])
+        : [];
+      startSingleWorkspaceServices(
+        chosen,
+        (f) => {
+          fileFilterRef.current = f;
+        },
+        userIgnored,
+      );
+      ctx.forwardToWebview("nav", "workspace-added", chosen);
+
+      return { workspaces: appConfig.workspaces };
+    },
+  );
+
   ipcMain.handle("workspace:remove", (_event, index: number) => {
     if (index < 0 || index >= appConfig.workspaces.length) {
       return { workspaces: appConfig.workspaces };

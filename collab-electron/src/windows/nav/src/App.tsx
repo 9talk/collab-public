@@ -880,6 +880,10 @@ export default function App() {
             id: "import-web-article",
             label: "Import Web Article",
           },
+          {
+            id: "new-workspace",
+            label: "New Workspace",
+          },
           ...(!isRoot
             ? [
                 {
@@ -965,6 +969,11 @@ export default function App() {
             setImportModal({
               folderPath: item.path,
             });
+          }
+          break;
+        case "new-workspace":
+          if (item) {
+            await window.api.workspaceAddByPath(item.path);
           }
           break;
         case "rename":
