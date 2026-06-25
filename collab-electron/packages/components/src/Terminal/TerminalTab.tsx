@@ -56,6 +56,14 @@ function TerminalTab({
     });
     termRef.current = term;
 
+    const linkHandler = {
+      activate: (_event: MouseEvent, text: string) => {
+        window.api.openExternal(text);
+      },
+    };
+    // Override the default confirm()+window.open() handler for OSC 8 links.
+    term.options.linkHandler = linkHandler;
+
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(container);
@@ -65,12 +73,9 @@ function TerminalTab({
     term.loadAddon(unicode11);
     term.unicode.activeVersion = "11";
 
-    // Auto-detect http/https URLs using WebLinksAddon's link provider
-    // (correct coordinate mapping for wide characters). Open via
-    // window.api.openExternal instead of window.open.
-    const webLinks = new WebLinksAddon((event: MouseEvent, uri: string) => {
+    const webLinks = new WebLinksAddon((_event: MouseEvent, uri: string) => {
       window.api.openExternal(uri);
-    });
+    }, linkHandler);
     term.loadAddon(webLinks);
 
     // WebGL retry counter: tracks consecutive context losses.

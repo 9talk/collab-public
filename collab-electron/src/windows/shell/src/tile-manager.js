@@ -276,6 +276,10 @@ export function createTileManager({
     });
 
     wv.addEventListener("ipc-message", (event) => {
+      if (event.channel === "open-external") {
+        window.shellApi.openExternal(event.args[0]);
+        return;
+      }
       if (event.channel === "pty-session-id") {
         tile.ptySessionId = event.args[0];
         saveCanvasDebounced();
