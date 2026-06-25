@@ -1,5 +1,7 @@
 # Collaborator — [CLAUDE.md](https://CLAUDE.md)
 
+Always use Context7 when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
+
 ## Working Directory
 
 This repo root is `/Users/dingxin/collab-public`. All project scripts and code live under subdirectories.
