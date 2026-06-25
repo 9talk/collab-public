@@ -178,8 +178,11 @@ export function getDefaultPatterns(): string[] {
   return [...DEFAULT_PATTERNS];
 }
 
-export function createFileFilter(): FileFilter {
+export function createFileFilter(extraPatterns?: string[]): FileFilter {
   const ig = ignore().add(DEFAULT_PATTERNS);
+  if (extraPatterns && extraPatterns.length > 0) {
+    ig.add(extraPatterns);
+  }
   const binaryCache = new Map<string, Promise<boolean>>();
 
   return {

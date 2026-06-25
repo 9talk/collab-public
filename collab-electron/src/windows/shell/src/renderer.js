@@ -635,6 +635,7 @@ async function init() {
     },
     onTileFocused(tile) {
       tileListWebview.send("tile-list:focus", tile?.id || null);
+      if (tile) notifications.dismissByTileId(tile.id);
     },
     onTileDblClick(tile) {
       edgeIndicators.panToTile(tile);

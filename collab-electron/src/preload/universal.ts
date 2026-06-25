@@ -320,8 +320,8 @@ contextBridge.exposeInMainWorld("api", {
 
   // External editor
   listExternalEditors: () => ipcRenderer.invoke("external-editor:list"),
-  openFileInExternalEditor: (filePath: string) =>
-    ipcRenderer.send("external-editor:open-file", filePath),
+  openFileInExternalEditor: (filePath: string, editorId?: string) =>
+    ipcRenderer.send("external-editor:open-file", filePath, editorId),
   openWorkspaceInExternalEditor: (workspacePath: string) =>
     ipcRenderer.send("external-editor:open-workspace", workspacePath),
 
@@ -345,6 +345,12 @@ contextBridge.exposeInMainWorld("api", {
     const handler = (_event: unknown, path: string | null) => cb(path);
     ipcRenderer.on("file-selected", handler);
     return () => ipcRenderer.removeListener("file-selected", handler);
+  },
+  onPrefChanged: (cb: (key: string, value: unknown) => void) => {
+    const handler = (_event: unknown, key: string, value: unknown) =>
+      cb(key, value);
+    ipcRenderer.on("pref-changed", handler);
+    return () => ipcRenderer.removeListener("pref-changed", handler);
   },
   onFolderSelected: (cb: (path: string) => void) => {
     const handler = (_event: unknown, path: string) => cb(path);

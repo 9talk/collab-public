@@ -81,11 +81,17 @@ export const en = {
   // Files pane
   "files.title": "Files",
   "files.description": "Configure external editor for code files.",
-  "files.useExternalEditor": "Open code files with external editor",
-  "files.externalEditor": "External editor",
-  "files.extensions": "File extensions",
-  "files.extensionsHint":
-    "Comma-separated list of extensions to open with the external editor (e.g. .ts,.py,.md). Leave empty to use defaults.",
+  "files.defaultExternalEditor": "Use external editor",
+  "files.externalEditor": "Default editor",
+  "files.recognizedFileTypes": "Recognized Files",
+  "files.extensionColumn": "Extension",
+  "files.editorColumn": "Editor",
+  "files.addType": "Add",
+  "files.delete": "Delete",
+  "files.reset": "Reset",
+  "files.ignoredFiles": "Ignored Files and Folders",
+  "files.ignoredFilesDesc":
+    "Patterns matching files and folders to hide from the Files view.",
 
   // Misc
   esc: "esc",

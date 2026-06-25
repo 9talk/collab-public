@@ -46,7 +46,10 @@ export function shouldIncludeEntry(
       : "";
   const relPath = prefix + entry.name;
 
-  return !filter.isIgnored(isDirectory ? `${relPath}/` : relPath);
+  return (
+    !filter.isIgnored(relPath) &&
+    !(isDirectory && filter.isIgnored(`${relPath}/`))
+  );
 }
 
 export async function shouldIncludeEntryWithContent(

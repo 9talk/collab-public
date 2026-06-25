@@ -13,6 +13,11 @@ import {
 } from "@phosphor-icons/react";
 import { useTranslation } from "./translations";
 import type { SupportedLocale, TranslationKey } from "./translations";
+import {
+  getDefaultFileTypeGroups,
+  DEFAULT_IGNORED_PATTERNS,
+  type FileTypeGroup,
+} from "@collab/shared/external-app";
 
 type ThemeMode = "light" | "dark" | "system";
 
@@ -32,7 +37,7 @@ interface SettingsApi {
   installSkill: (agentId: string) => Promise<{ ok: boolean }>;
   uninstallSkill: (agentId: string) => Promise<{ ok: boolean }>;
   listExternalEditors: () => Promise<
-    Array<{ id: string; name: string; appPath: string; binPath: string }>
+    Array<{ id: string; name: string; appPath: string }>
   >;
   close: () => void;
 }
@@ -683,11 +688,18 @@ type Pane =
 
 function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
   const [useExternalEditor, setUseExternalEditor] = useState(false);
-  const [selectedEditor, setSelectedEditor] = useState("intellij-idea");
-  const [extensions, setExtensions] = useState("");
+  const [defaultEditor, setDefaultEditor] = useState("intellij-idea");
+  const [fileTypeGroups, setFileTypeGroups] = useState<FileTypeGroup[]>([]);
   const [editors, setEditors] = useState<Array<{ id: string; name: string }>>(
     [],
   );
+  const [ignoredPatterns, setIgnoredPatterns] = useState<string[]>([]);
+  const [newIgnore, setNewIgnore] = useState("");
+  const [expandedName, setExpandedName] = useState<string | null>(null);
+  const [newPattern, setNewPattern] = useState("");
+  const [newTypeName, setNewTypeName] = useState("");
+
+  const allEditorOptions = [...editors, { id: "system-app", name: "系统应用" }];
 
   useEffect(() => {
     api
@@ -699,78 +711,129 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
     api
       .getPref("externalEditor")
       .then((v) => {
-        if (typeof v === "string" && v) setSelectedEditor(v);
+        if (typeof v === "string" && v) setDefaultEditor(v);
         else api.setPref("externalEditor", "intellij-idea");
       })
       .catch(() => {
         api.setPref("externalEditor", "intellij-idea");
       });
     api
-      .getPref("externalEditorExtensions")
+      .getPref("externalEditorFileTypes")
       .then((v) => {
-        if (typeof v === "string") setExtensions(v);
+        if (Array.isArray(v) && (v as Array<unknown>).length > 0) {
+          const arr = v as Array<Record<string, unknown>>;
+          // Detect old flat format {extension, editorId} → migrate
+          if (arr.length > 0 && "extension" in arr[0]!) {
+            const migrated: FileTypeGroup[] = [
+              {
+                name: "Custom",
+                editorId: defaultEditor,
+                patterns: arr.map(
+                  (it) => (it as { extension: string }).extension,
+                ),
+              },
+            ];
+            setFileTypeGroups(migrated);
+            api.setPref("externalEditorFileTypes", migrated);
+          } else {
+            setFileTypeGroups(v as FileTypeGroup[]);
+          }
+        } else {
+          const defaults = getDefaultFileTypeGroups();
+          setFileTypeGroups(defaults);
+          api.setPref("externalEditorFileTypes", defaults);
+        }
+      })
+      .catch(() => {});
+    api
+      .getPref("ignoredFiles")
+      .then((v) => {
+        if (Array.isArray(v) && (v as Array<unknown>).length > 0) {
+          setIgnoredPatterns(v as string[]);
+        } else {
+          setIgnoredPatterns(DEFAULT_IGNORED_PATTERNS);
+          api.setPref("ignoredFiles", DEFAULT_IGNORED_PATTERNS);
+        }
       })
       .catch(() => {});
     api
       .listExternalEditors()
       .then((list) => setEditors(list))
       .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleToggle(checked: boolean) {
+  async function saveUseExternalEditor(checked: boolean) {
     setUseExternalEditor(checked);
     await api.setPref("useExternalEditor", checked);
   }
 
-  async function handleEditorChange(id: string) {
-    setSelectedEditor(id);
+  async function saveDefaultEditor(id: string) {
+    setDefaultEditor(id);
     await api.setPref("externalEditor", id);
   }
 
-  async function handleExtensionsChange(value: string) {
-    setExtensions(value);
-    await api.setPref("externalEditorExtensions", value);
+  async function saveFileTypeGroups(groups: FileTypeGroup[]) {
+    setFileTypeGroups(groups);
+    await api.setPref("externalEditorFileTypes", groups);
   }
 
-  const DEFAULT_EXTENSIONS = [
-    ".md",
-    ".txt",
-    ".json",
-    ".yaml",
-    ".yml",
-    ".toml",
-    ".xml",
-    ".js",
-    ".ts",
-    ".jsx",
-    ".tsx",
-    ".mjs",
-    ".cjs",
-    ".py",
-    ".rb",
-    ".go",
-    ".rs",
-    ".java",
-    ".kt",
-    ".swift",
-    ".c",
-    ".cpp",
-    ".h",
-    ".hpp",
-    ".cs",
-    ".css",
-    ".scss",
-    ".less",
-    ".html",
-    ".htm",
-    ".svg",
-    ".sh",
-    ".bash",
-    ".zsh",
-    ".sql",
-    ".graphql",
-    ".proto",
-  ].join(",");
+  async function saveIgnoredPatterns(patterns: string[]) {
+    setIgnoredPatterns(patterns);
+    await api.setPref("ignoredFiles", patterns);
+  }
+
+  function updateGroupEditor(name: string, editorId: string) {
+    saveFileTypeGroups(
+      fileTypeGroups.map((g) => (g.name === name ? { ...g, editorId } : g)),
+    );
+  }
+
+  function addPatternToGroup(name: string, pattern: string) {
+    const trimmed = pattern.trim();
+    if (!trimmed) return;
+    saveFileTypeGroups(
+      fileTypeGroups.map((g) =>
+        g.name === name ? { ...g, patterns: [...g.patterns, trimmed] } : g,
+      ),
+    );
+    setNewPattern("");
+  }
+
+  function removePatternFromGroup(name: string, pattern: string) {
+    saveFileTypeGroups(
+      fileTypeGroups.map((g) =>
+        g.name === name
+          ? { ...g, patterns: g.patterns.filter((p) => p !== pattern) }
+          : g,
+      ),
+    );
+  }
+
+  function deleteGroup(name: string) {
+    saveFileTypeGroups(fileTypeGroups.filter((g) => g.name !== name));
+  }
+
+  function addGroup() {
+    const name = newTypeName.trim();
+    if (!name || fileTypeGroups.some((g) => g.name === name)) return;
+    setNewTypeName("");
+    saveFileTypeGroups([
+      ...fileTypeGroups,
+      { name, editorId: defaultEditor, patterns: [] },
+    ]);
+  }
+
+  function addIgnoredPattern() {
+    const pattern = newIgnore.trim();
+    if (!pattern) return;
+    setNewIgnore("");
+    saveIgnoredPatterns([...ignoredPatterns, pattern]);
+  }
+
+  function deleteIgnoredPattern(idx: number) {
+    saveIgnoredPatterns(ignoredPatterns.filter((_, i) => i !== idx));
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -781,12 +844,91 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
         </p>
       </div>
 
+      {/* Ignored Files — always visible */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium">{t("files.ignoredFiles")}</p>
+            <p className="text-xs text-muted-foreground">
+              {t("files.ignoredFilesDesc")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              saveIgnoredPatterns([...DEFAULT_IGNORED_PATTERNS]);
+            }}
+            className="rounded-md border border-border px-3 py-1 text-sm cursor-pointer flex-shrink-0"
+            style={{ color: "var(--foreground)" }}
+          >
+            {t("files.reset")}
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newIgnore}
+            placeholder="*.log, node_modules, ..."
+            onChange={(e) => setNewIgnore(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addIgnoredPattern();
+            }}
+            className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm"
+            style={{ color: "var(--foreground)" }}
+          />
+          <button
+            type="button"
+            onClick={addIgnoredPattern}
+            className="rounded-md border border-border px-3 py-1 text-sm cursor-pointer"
+            style={{ color: "var(--foreground)" }}
+          >
+            {t("files.addType")}
+          </button>
+        </div>
+        {ignoredPatterns.length > 0 && (
+          <div
+            className="flex flex-wrap gap-1 overflow-auto"
+            style={{ maxHeight: "4.5rem" }}
+          >
+            {ignoredPatterns.map((pat, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs"
+                style={{
+                  backgroundColor:
+                    "color-mix(in srgb, var(--foreground) 6%, transparent)",
+                  color: "var(--foreground)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <span className="font-mono">{pat}</span>
+                <button
+                  type="button"
+                  className="cursor-pointer"
+                  style={{
+                    color: "var(--muted-foreground)",
+                    fontSize: "12px",
+                    lineHeight: 1,
+                  }}
+                  onClick={() => deleteIgnoredPattern(i)}
+                >
+                  &times;
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Default external editor toggle */}
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">{t("files.useExternalEditor")}</p>
+        <p className="text-sm font-medium">
+          {t("files.defaultExternalEditor")}
+        </p>
         <ToggleSwitch
           checked={useExternalEditor}
           onChange={(v) => {
-            void handleToggle(v);
+            void saveUseExternalEditor(v);
           }}
         />
       </div>
@@ -796,14 +938,14 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium">{t("files.externalEditor")}</p>
             <select
-              value={selectedEditor}
+              value={defaultEditor}
               onChange={(e) => {
-                void handleEditorChange(e.target.value);
+                void saveDefaultEditor(e.target.value);
               }}
               className="rounded-md border border-border bg-background px-2 py-1 text-sm"
               style={{ color: "var(--foreground)" }}
             >
-              {editors.map((ed) => (
+              {allEditorOptions.map((ed) => (
                 <option key={ed.id} value={ed.id}>
                   {ed.name}
                 </option>
@@ -811,21 +953,180 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
             </select>
           </div>
 
-          <div className="space-y-1.5">
-            <p className="text-sm font-medium">{t("files.extensions")}</p>
-            <input
-              type="text"
-              value={extensions}
-              placeholder={DEFAULT_EXTENSIONS}
-              onChange={(e) => {
-                void handleExtensionsChange(e.target.value);
-              }}
-              className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-              style={{ color: "var(--foreground)" }}
-            />
-            <p className="text-xs text-muted-foreground">
-              {t("files.extensionsHint")}
-            </p>
+          {/* Recognized File Types — expandable list */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">
+                {t("files.recognizedFileTypes")}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  saveFileTypeGroups(getDefaultFileTypeGroups());
+                }}
+                className="rounded-md border border-border px-3 py-1 text-sm cursor-pointer flex-shrink-0"
+                style={{ color: "var(--foreground)" }}
+              >
+                {t("files.reset")}
+              </button>
+            </div>
+
+            {/* Add new type */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newTypeName}
+                placeholder="New type name..."
+                onChange={(e) => setNewTypeName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") addGroup();
+                }}
+                className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                style={{ color: "var(--foreground)" }}
+              />
+              <button
+                type="button"
+                onClick={addGroup}
+                className="rounded-md border border-border px-3 py-1 text-sm cursor-pointer"
+                style={{ color: "var(--foreground)" }}
+              >
+                {t("files.addType")}
+              </button>
+            </div>
+
+            <div
+              className="space-y-1 overflow-auto"
+              style={{ maxHeight: "220px" }}
+            >
+              {fileTypeGroups.map((group) => {
+                const isExpanded = expandedName === group.name;
+                return (
+                  <div key={group.name}>
+                    {/* Header row */}
+                    <div
+                      className="flex items-center gap-2 rounded px-2 py-1 cursor-pointer select-none"
+                      style={{
+                        backgroundColor:
+                          "color-mix(in srgb, var(--foreground) 4%, transparent)",
+                      }}
+                      onClick={() =>
+                        setExpandedName(isExpanded ? null : group.name)
+                      }
+                    >
+                      <span
+                        className="text-xs flex-shrink-0"
+                        style={{ color: "var(--muted-foreground)", width: 14 }}
+                      >
+                        {isExpanded ? "▼" : "▶"}
+                      </span>
+                      <span className="text-sm flex-1 font-medium">
+                        {group.name}
+                      </span>
+                      <select
+                        value={group.editorId}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) =>
+                          updateGroupEditor(group.name, e.target.value)
+                        }
+                        className="rounded-md border border-border bg-background px-2 py-0.5 text-xs flex-shrink-0"
+                        style={{ color: "var(--foreground)", width: 140 }}
+                      >
+                        <option value="">{t("files.externalEditor")}</option>
+                        {allEditorOptions.map((ed) => (
+                          <option key={ed.id} value={ed.id}>
+                            {ed.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteGroup(group.name);
+                        }}
+                        className="text-muted-foreground hover:text-foreground cursor-pointer flex-shrink-0"
+                        style={{
+                          fontSize: 16,
+                          lineHeight: 1,
+                          width: 20,
+                          textAlign: "center",
+                        }}
+                      >
+                        &times;
+                      </button>
+                    </div>
+
+                    {/* Expanded: patterns */}
+                    {isExpanded && (
+                      <div
+                        className="ml-6 mt-1 flex flex-wrap items-center gap-1 rounded px-2 py-1.5"
+                        style={{
+                          backgroundColor:
+                            "color-mix(in srgb, var(--foreground) 2%, transparent)",
+                        }}
+                      >
+                        {group.patterns.map((pat) => (
+                          <span
+                            key={pat}
+                            className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs"
+                            style={{
+                              backgroundColor:
+                                "color-mix(in srgb, var(--foreground) 6%, transparent)",
+                              color: "var(--foreground)",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            <span className="font-mono">{pat}</span>
+                            <button
+                              type="button"
+                              className="cursor-pointer"
+                              style={{
+                                color: "var(--muted-foreground)",
+                                fontSize: 12,
+                                lineHeight: 1,
+                              }}
+                              onClick={() =>
+                                removePatternFromGroup(group.name, pat)
+                              }
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        ))}
+                        <div className="inline-flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={
+                              expandedName === group.name ? newPattern : ""
+                            }
+                            placeholder="*.ext"
+                            onChange={(e) => setNewPattern(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter")
+                                addPatternToGroup(group.name, newPattern);
+                            }}
+                            className="w-20 rounded-md border border-border bg-background px-1.5 py-0.5 text-xs font-mono"
+                            style={{ color: "var(--foreground)" }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              addPatternToGroup(group.name, newPattern);
+                            }}
+                            className="rounded border border-border px-1.5 py-0.5 text-xs cursor-pointer"
+                            style={{ color: "var(--muted-foreground)" }}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </>
       )}

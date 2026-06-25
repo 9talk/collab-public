@@ -83,11 +83,16 @@ export const zh: Record<TranslationKey, string> = {
   // Files pane
   "files.title": "文件",
   "files.description": "配置代码文件的外部编辑器。",
-  "files.useExternalEditor": "使用外部编辑器打开代码文件",
-  "files.externalEditor": "外部编辑器",
-  "files.extensions": "文件扩展名",
-  "files.extensionsHint":
-    "逗号分隔的扩展名列表，使用外部编辑器打开（如 .ts,.py,.md）。留空使用默认值。",
+  "files.defaultExternalEditor": "使用外部编辑器",
+  "files.externalEditor": "默认编辑器",
+  "files.recognizedFileTypes": "识别的文件",
+  "files.extensionColumn": "扩展名",
+  "files.editorColumn": "编辑器",
+  "files.addType": "添加",
+  "files.delete": "删除",
+  "files.reset": "重置",
+  "files.ignoredFiles": "忽略的文件和文件夹",
+  "files.ignoredFilesDesc": "在 Files 视图中隐藏与此模式匹配的文件和文件夹。",
 
   // Misc
   esc: "esc",

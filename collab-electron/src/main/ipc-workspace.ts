@@ -83,6 +83,7 @@ export function workspaceForFile(
 export function startAllWorkspaceServices(
   workspaces: string[],
   fileFilterSetter: (f: FileFilter) => void,
+  extraIgnorePatterns?: string[],
 ): void {
   for (const ws of workspaces) {
     wsConfigMap.set(ws, loadWorkspaceConfig(ws));
@@ -90,7 +91,7 @@ export function startAllWorkspaceServices(
     watcher.watchWorkspace(ws);
     void wikilinkIndex.buildIndex(ws);
   }
-  fileFilterSetter(createFileFilter());
+  fileFilterSetter(createFileFilter(extraIgnorePatterns));
 }
 
 /**
@@ -99,11 +100,12 @@ export function startAllWorkspaceServices(
 export function startSingleWorkspaceServices(
   path: string,
   fileFilterSetter: (f: FileFilter) => void,
+  extraIgnorePatterns?: string[],
 ): void {
   wsConfigMap.set(path, loadWorkspaceConfig(path));
   setThumbnailCacheDir(path);
   watcher.watchWorkspace(path);
-  fileFilterSetter(createFileFilter());
+  fileFilterSetter(createFileFilter(extraIgnorePatterns));
   void wikilinkIndex.buildIndex(path);
 }
 
@@ -281,9 +283,16 @@ export function registerWorkspaceHandlers(
     saveConfig(appConfig);
     trackEvent("workspace_added", { is_new: isNew });
 
-    startSingleWorkspaceServices(chosen, (f) => {
-      fileFilterRef.current = f;
-    });
+    const userIgnored = Array.isArray(appConfig.ui.ignoredFiles)
+      ? (appConfig.ui.ignoredFiles as string[])
+      : [];
+    startSingleWorkspaceServices(
+      chosen,
+      (f) => {
+        fileFilterRef.current = f;
+      },
+      userIgnored,
+    );
     ctx.forwardToWebview("nav", "workspace-added", chosen);
 
     return { workspaces: appConfig.workspaces };

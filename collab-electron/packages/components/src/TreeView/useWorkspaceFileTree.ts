@@ -188,6 +188,18 @@ export function useWorkspaceFileTree(
     });
   }, [workspacePath, loadDir]);
 
+  // Ignored files change — reload all cached dirs so filter takes effect
+  useEffect(() => {
+    if (typeof window.api.onPrefChanged !== "function") return;
+    return window.api.onPrefChanged((key: string) => {
+      if (key === "ignoredFiles") {
+        for (const dirPath of dirContentsRef.current.keys()) {
+          loadDir(dirPath);
+        }
+      }
+    });
+  }, [loadDir]);
+
   // Hydrate + flatten
   const hydratedTree = useMemo(() => {
     const children = dirContents.get(workspacePath) ?? [];

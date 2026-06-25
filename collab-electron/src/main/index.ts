@@ -30,7 +30,7 @@ import {
   type WindowState,
   type TerminalTarget,
 } from "./config";
-import { registerIpcHandlers, setMainWindow } from "./ipc";
+import { registerIpcHandlers, setMainWindow, rebuildFileFilter } from "./ipc";
 import { registerCanvasRpc } from "./canvas-rpc";
 import { registerIntegrationsIpc } from "./integrations";
 import {
@@ -582,8 +582,25 @@ ipcMain.handle("pref:set", (_event, key: string, value: unknown) => {
   if (key === "autoCheckUpdates" && typeof value === "boolean") {
     updateManager.setAutoCheckEnabled(value);
   }
+  if (key === "ignoredFiles" && Array.isArray(value)) {
+    rebuildFileFilter(value as string[]);
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("pref:changed", key, value);
+    if (
+      key === "externalEditorFileTypes" ||
+      key === "useExternalEditor" ||
+      key === "externalEditor" ||
+      key === "ignoredFiles"
+    ) {
+      mainWindow.webContents.send(
+        "shell:forward",
+        "nav",
+        "pref-changed",
+        key,
+        value,
+      );
+    }
   }
 });
 
@@ -748,21 +765,25 @@ ipcMain.on("settings:toggle", () => setSettingsOpen(!settingsOpen));
 // External editor
 ipcMain.handle("external-editor:list", () => detectEditors());
 
-ipcMain.on("external-editor:open-file", (_event, filePath: string) => {
-  const editorId =
-    (getPref(config, "externalEditor") as string | undefined) ??
-    "intellij-idea";
-  console.log("[external-editor] open-file:", { editorId, filePath });
-  const ws = workspaceForFile(filePath, config.workspaces);
-  if (!ws) {
-    console.log(
-      "[external-editor] open-file: no workspace found for",
-      filePath,
-    );
-    return;
-  }
-  openFileInEditor(editorId, filePath, ws);
-});
+ipcMain.on(
+  "external-editor:open-file",
+  (_event, filePath: string, editorId?: string) => {
+    const resolvedEditorId =
+      editorId ||
+      ((getPref(config, "externalEditor") as string | undefined) ??
+        "intellij-idea");
+    console.log("[external-editor] open-file:", { editorId, filePath });
+    const ws = workspaceForFile(filePath, config.workspaces);
+    if (!ws) {
+      console.log(
+        "[external-editor] open-file: no workspace found for",
+        filePath,
+      );
+      return;
+    }
+    openFileInEditor(resolvedEditorId, filePath, ws);
+  },
+);
 
 ipcMain.on(
   "external-editor:open-workspace",

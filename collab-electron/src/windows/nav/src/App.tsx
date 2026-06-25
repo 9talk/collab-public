@@ -28,7 +28,12 @@ import {
   isSubpath,
   parentPath,
 } from "@collab/shared/path-utils";
-import { isExternalAppFile, isCodeFile } from "@collab/shared/external-app";
+import {
+  isExternalAppFile,
+  isCodeFile,
+  matchesPattern,
+  type FileTypeGroup,
+} from "@collab/shared/external-app";
 
 const PLATFORM = window.api.getPlatform();
 
@@ -232,7 +237,7 @@ export default function App() {
   );
   const suppressWorkspaceExpandRef = useRef(false);
   const useExternalEditorRef = useRef(false);
-  const externalEditorExtensionsRef = useRef("");
+  const externalEditorFileTypesRef = useRef<FileTypeGroup[]>([]);
 
   // Refs for each workspace's imperative handle
   const workspaceRefsMap = useRef(
@@ -360,11 +365,23 @@ export default function App() {
       })
       .catch(() => {});
     window.api
-      .getPref("externalEditorExtensions")
+      .getPref("externalEditorFileTypes")
       .then((v) => {
-        if (typeof v === "string") externalEditorExtensionsRef.current = v;
+        if (Array.isArray(v))
+          externalEditorFileTypesRef.current = v as FileTypeGroup[];
       })
       .catch(() => {});
+
+    if (typeof window.api.onPrefChanged === "function") {
+      return window.api.onPrefChanged((key, value) => {
+        if (key === "useExternalEditor" && typeof value === "boolean") {
+          useExternalEditorRef.current = value;
+        }
+        if (key === "externalEditorFileTypes" && Array.isArray(value)) {
+          externalEditorFileTypesRef.current = value as FileTypeGroup[];
+        }
+      });
+    }
   }, []);
 
   // Load persisted expanded workspaces
@@ -656,26 +673,45 @@ export default function App() {
 
   const selectFile = useCallback((path: string | null) => {
     setSelectedPath(path);
-    if (path && isExternalAppFile(path)) {
+    if (!path) {
+      window.api.selectFile(null);
+      return;
+    }
+
+    const dot = path.lastIndexOf(".");
+    const ext = dot >= 0 ? path.slice(dot).toLowerCase() : "";
+
+    const groups = externalEditorFileTypesRef.current;
+    let matchedEditor: string | null = null;
+    for (const group of groups) {
+      if (group.patterns.some((p) => matchesPattern(ext, p))) {
+        matchedEditor = group.editorId || null;
+        break;
+      }
+    }
+    if (matchedEditor) {
+      if (matchedEditor === "system-app") {
+        window.api.openPath(path);
+        return;
+      }
+      if (typeof window.api.openFileInExternalEditor === "function") {
+        window.api.openFileInExternalEditor(path, matchedEditor);
+        return;
+      }
+    }
+
+    if (isExternalAppFile(path)) {
       window.api.openPath(path);
       return;
     }
-    if (path && useExternalEditorRef.current) {
-      const userExts = externalEditorExtensionsRef.current
-        .split(",")
-        .map((e) => e.trim().toLowerCase())
-        .filter(Boolean);
-      const dot = path.lastIndexOf(".");
-      const ext = dot >= 0 ? path.slice(dot).toLowerCase() : "";
-      const matchesUser = userExts.length > 0 && userExts.includes(ext);
-      if (
-        (isCodeFile(path) || matchesUser) &&
-        typeof window.api.openFileInExternalEditor === "function"
-      ) {
+
+    if (useExternalEditorRef.current && isCodeFile(path)) {
+      if (typeof window.api.openFileInExternalEditor === "function") {
         window.api.openFileInExternalEditor(path);
         return;
       }
     }
+
     window.api.selectFile(path);
   }, []);
 
