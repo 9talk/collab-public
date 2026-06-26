@@ -317,7 +317,11 @@ export function createTileManager({
         }
         clearTileFocusRing();
         dom.container.classList.add("tile-focused");
-        dom.webview.focus();
+        // Electron forbids webview.focus() before dom-ready; _pendingFocus
+        // handles the actual focus transfer once the webview has loaded.
+        if (!wasRebuilt) {
+          dom.webview.focus();
+        }
         onNoteSurfaceFocus("canvas-tile");
 
         if (onPanToTile && tile) onPanToTile(tile);
