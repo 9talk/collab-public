@@ -372,8 +372,10 @@ export function createTileManager({
       if (dom._pendingFocus) {
         dom._pendingFocus = false;
         if (dom.webview) dom.webview.focus();
-        // Re-apply focus ring in case canvas stole it while webview loaded
+        // Re-establish canvas-focused and tile-focused in case window
+        // focus events cleared them while the webview was loading.
         dom.container.classList.add("tile-focused");
+        onNoteSurfaceFocus("canvas-tile");
       }
       wv.addEventListener("before-input-event", () => {});
     });
