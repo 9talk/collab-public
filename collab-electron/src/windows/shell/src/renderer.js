@@ -1815,6 +1815,20 @@ async function init() {
   navWebview.send("workspace-init", workspaceData.workspaces);
 
   panelManager.applyVisibility();
+
+  // Auto-relayout terminals on app open — same as clicking the relayout button
+  const relayoutPositions = computeTerminalLayout();
+  if (relayoutPositions.length > 0) {
+    for (const [id, x, y] of relayoutPositions) {
+      const tile = getTile(id);
+      if (!tile) continue;
+      tile.x = x;
+      tile.y = y;
+    }
+    tileManager.repositionAllTiles();
+    tileManager.saveCanvasImmediate();
+    minimap.update();
+  }
 }
 
 async function checkFirstLaunchDialog() {
