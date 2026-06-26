@@ -320,11 +320,14 @@ export function createTileManager({
     dom.container.classList.add("tile-focused");
     onNoteSurfaceFocus("canvas-tile");
 
-    // Focus the webview (even a freshly created one — it's a DOM element
-    // that can hold focus, preventing canvas from stealing it and clearing
-    // the focus ring). _pendingFocus ensures we re-focus after dom-ready.
+    // Focus the webview, or temporarily park focus on the container so
+    // canvas doesn't steal it and clear the focus ring. Electron webview
+    // methods (including .focus()) only work after dom-ready.
     if (dom.webview) {
       dom.webview.focus();
+    } else {
+      dom.container.tabIndex = -1;
+      dom.container.focus();
     }
 
     if (onPanToTile && tile) onPanToTile(tile);
@@ -373,6 +376,7 @@ export function createTileManager({
       if (autoFocus) focusCanvasTile(tile.id);
       if (dom._pendingFocus) {
         dom._pendingFocus = false;
+        dom.container.removeAttribute("tabindex");
         if (dom.webview) dom.webview.focus();
       }
       wv.addEventListener("before-input-event", () => {});
