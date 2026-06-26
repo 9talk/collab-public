@@ -383,27 +383,27 @@ async function init() {
         else pendingMessages.push([ch, args]);
       },
     };
-
-    // Forward agent IPC from shell to the chat webview
-    window.shellApi.onAgentUpdate((data) => {
-      agentWebview.send("agent:update", data);
-    });
-    window.shellApi.onAgentPromptComplete((data) => {
-      agentWebview.send("agent:prompt-complete", data);
-    });
-    window.shellApi.onAgentPromptError((data) => {
-      agentWebview.send("agent:prompt-error", data);
-    });
-    window.shellApi.onAgentExit((data) => {
-      agentWebview.send("agent:exit", data);
-    });
-    window.shellApi.onAgentSessionReady((data) => {
-      agentWebview.send("agent:session-ready", data);
-    });
-    window.shellApi.onAgentSessionFailed((data) => {
-      agentWebview.send("agent:session-failed", data);
-    });
   }
+
+  // Set up agent IPC forwarding once (listeners guard on agentWebview)
+  window.shellApi.onAgentUpdate((data) => {
+    if (agentWebview) agentWebview.send("agent:update", data);
+  });
+  window.shellApi.onAgentPromptComplete((data) => {
+    if (agentWebview) agentWebview.send("agent:prompt-complete", data);
+  });
+  window.shellApi.onAgentPromptError((data) => {
+    if (agentWebview) agentWebview.send("agent:prompt-error", data);
+  });
+  window.shellApi.onAgentExit((data) => {
+    if (agentWebview) agentWebview.send("agent:exit", data);
+  });
+  window.shellApi.onAgentSessionReady((data) => {
+    if (agentWebview) agentWebview.send("agent:session-ready", data);
+  });
+  window.shellApi.onAgentSessionFailed((data) => {
+    if (agentWebview) agentWebview.send("agent:session-failed", data);
+  });
 
   const agentPanel = createPanel("agent", {
     panel: panelAgent,
@@ -426,6 +426,10 @@ async function init() {
           noteSurfaceFocus("agent");
         }
       } else {
+        if (agentWebview) {
+          agentWebview.webview.remove();
+          agentWebview = null;
+        }
         canvasEl.focus();
       }
     },
@@ -505,16 +509,18 @@ async function init() {
   tileListContainer.style.minHeight = "0";
   panelNav.appendChild(tileListContainer);
 
-  const tileListWebview = createWebview(
-    "tile-list",
-    configs.tileList,
-    tileListContainer,
-    handleDndMessage,
-  );
+  let tileListWebview = null;
 
   function updateSidebarContent(mode) {
     fileTreeContainer.style.display = mode === "files" ? "flex" : "none";
     tileListContainer.style.display = mode === "tiles" ? "flex" : "none";
+    if (mode === "tiles") {
+      ensureTileListWebview();
+    } else if (tileListWebview) {
+      tileListWebview.webview.remove();
+      tileListWebview = null;
+      lastTileSnapshot = new Map();
+    }
   }
   updateSidebarContent(panelManager.getMode());
 
@@ -547,7 +553,7 @@ async function init() {
     const opacity =
       Math.max(0, Math.min(100, Number(lastCanvasOpacity) || 0)) / 100;
     workspaceManager.getNavWebview().send("canvas-opacity", opacity);
-    tileListWebview.send("canvas-opacity", opacity);
+    tileListWebview?.send("canvas-opacity", opacity);
     if (agentWebview) {
       agentWebview.send("canvas-opacity", opacity);
     }
@@ -572,7 +578,7 @@ async function init() {
         prev.description !== entry.description ||
         prev.status !== entry.status
       ) {
-        tileListWebview.send(
+        tileListWebview?.send(
           prev ? "tile-list:update" : "tile-list:add",
           entry,
         );
@@ -581,7 +587,7 @@ async function init() {
     }
     for (const id of lastTileSnapshot.keys()) {
       if (!currentIds.has(id)) {
-        tileListWebview.send("tile-list:remove", id);
+        tileListWebview?.send("tile-list:remove", id);
         lastTileSnapshot.delete(id);
       }
     }
@@ -634,7 +640,7 @@ async function init() {
       syncTileList();
     },
     onTileFocused(tile) {
-      tileListWebview.send("tile-list:focus", tile?.id || null);
+      tileListWebview?.send("tile-list:focus", tile?.id || null);
       if (tile) notifications.dismissByTileId(tile.id);
     },
     onTileDblClick(tile) {
@@ -813,7 +819,7 @@ async function init() {
 
     requestAnimationFrame(() => {
       window.focus();
-      if (surface === "settings") {
+      if (surface === "settings" && singletonWebviews.settings) {
         singletonWebviews.settings.webview.focus();
         noteSurfaceFocus("settings");
         return;
@@ -855,8 +861,8 @@ async function init() {
   function getAllWebviews() {
     const all = [workspaceManager.getNavWebview()];
     all.push(singletonViewer);
-    all.push(tileListWebview);
-    all.push(singletonWebviews.settings);
+    if (tileListWebview) all.push(tileListWebview);
+    if (singletonWebviews.settings) all.push(singletonWebviews.settings);
     if (agentWebview) all.push(agentWebview);
     for (const [, dom] of tileManager.getTileDOMs()) {
       if (dom.webview) {
@@ -1275,7 +1281,7 @@ async function init() {
   // -- IPC forwarding --
 
   window.shellApi.onForwardToWebview((target, channel, ...args) => {
-    if (target === "settings") {
+    if (target === "settings" && singletonWebviews.settings) {
       singletonWebviews.settings.send(channel, ...args);
     } else if (target === "nav") {
       workspaceManager.getNavWebview().send(channel, ...args);
@@ -1402,47 +1408,57 @@ async function init() {
     }
   });
 
-  // -- Tile list init + click-to-navigate --
+  // -- Tile list lazy-init --
 
-  tileListWebview.webview.addEventListener("dom-ready", () => {
-    lastTileSnapshot = new Map();
-    const initEntries = [];
-    for (const [id] of tileManager.getTileDOMs()) {
-      const tile = getTile(id);
-      if (tile) {
-        const entry = buildTileListEntry(tile);
-        initEntries.push(entry);
-        lastTileSnapshot.set(id, entry);
+  function ensureTileListWebview() {
+    if (tileListWebview) return;
+    tileListWebview = createWebview(
+      "tile-list",
+      configs.tileList,
+      tileListContainer,
+      handleDndMessage,
+    );
+    tileListWebview.webview.addEventListener("dom-ready", () => {
+      lastTileSnapshot = new Map();
+      const initEntries = [];
+      for (const [id] of tileManager.getTileDOMs()) {
+        const tile = getTile(id);
+        if (tile) {
+          const entry = buildTileListEntry(tile);
+          initEntries.push(entry);
+          lastTileSnapshot.set(id, entry);
+        }
       }
-    }
-    tileListWebview.send("tile-list:init", initEntries);
+      tileListWebview.send("tile-list:init", initEntries);
+      const focusedId = tileManager.getFocusedTileId();
+      if (focusedId) {
+        tileListWebview.send("tile-list:focus", focusedId);
+      }
+    });
+    tileListWebview.webview.addEventListener("ipc-message", (event) => {
+      if (event.channel === "tile-list:peek-tile") {
+        const tileId = event.args[0];
+        const tile = getTile(tileId);
+        if (tile) {
+          edgeIndicators.panToTile(tile, { targetZoom: 1 });
+        }
+      } else if (event.channel === "tile-list:focus-tile") {
+        const tileId = event.args[0];
+        const tile = getTile(tileId);
+        if (tile) {
+          edgeIndicators.panToTile(tile, { targetZoom: 1 });
+          tileManager.focusCanvasTile(tileId);
+        }
+      } else if (event.channel === "tile-list:rename-tile") {
+        const tileId = event.args[0];
+        const newTitle = event.args[1];
+        tileManager.renameTile(tileId, newTitle);
+      }
+    });
+  }
 
-    const focusedId = tileManager.getFocusedTileId();
-    if (focusedId) {
-      tileListWebview.send("tile-list:focus", focusedId);
-    }
-  });
-
-  tileListWebview.webview.addEventListener("ipc-message", (event) => {
-    if (event.channel === "tile-list:peek-tile") {
-      const tileId = event.args[0];
-      const tile = getTile(tileId);
-      if (tile) {
-        edgeIndicators.panToTile(tile, { targetZoom: 1 });
-      }
-    } else if (event.channel === "tile-list:focus-tile") {
-      const tileId = event.args[0];
-      const tile = getTile(tileId);
-      if (tile) {
-        edgeIndicators.panToTile(tile, { targetZoom: 1 });
-        tileManager.focusCanvasTile(tileId);
-      }
-    } else if (event.channel === "tile-list:rename-tile") {
-      const tileId = event.args[0];
-      const newTitle = event.args[1];
-      tileManager.renameTile(tileId, newTitle);
-    }
-  });
+  // Defer creation if starting in tiles mode (tileManager + edgeIndicators are ready by now)
+  if (panelManager.getMode() === "tiles") ensureTileListWebview();
 
   // -- Nav resize --
 
@@ -1476,15 +1492,31 @@ async function init() {
     const open = action === "open";
     settingsModalOpen = open;
     if (open) {
+      if (!singletonWebviews.settings) {
+        singletonWebviews.settings = createWebview(
+          "settings",
+          configs.settings,
+          settingsModal,
+          handleDndMessage,
+        );
+        singletonWebviews.settings.webview.addEventListener("focus", () => {
+          noteSurfaceFocus("settings");
+        });
+      }
       blurNonModalSurfaces();
     } else {
-      singletonWebviews.settings.webview.blur();
+      singletonWebviews.settings?.webview.blur();
     }
     setUnderlyingShellInert(open);
     settingsOverlay.classList.toggle("visible", open);
     if (open) {
       focusSurface("settings");
       return;
+    }
+    // Destroy settings webview to free the renderer process
+    if (singletonWebviews.settings) {
+      singletonWebviews.settings.webview.remove();
+      singletonWebviews.settings = null;
     }
     focusSurface(lastNonModalSurface);
   });
