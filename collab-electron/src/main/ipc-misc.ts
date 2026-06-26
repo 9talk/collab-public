@@ -68,7 +68,6 @@ export function registerMiscHandlers(ctx: IpcContext): void {
       // Walk the process tree: find all descendants of mainPid
       const descendantPids = new Set<number>();
       descendantPids.add(mainPid);
-      // Iterative tree traversal — keep expanding until no new children found
       let changed = true;
       while (changed) {
         changed = false;
@@ -79,11 +78,19 @@ export function registerMiscHandlers(ctx: IpcContext): void {
           }
         }
       }
-      // Build result from all descendant processes
+      // Build result from all descendant processes (filter out ps itself)
       for (const pid of descendantPids) {
+        // Filter out the transient ps process spawned by this handler
+        if (ppidByPid.get(pid) === mainPid && commByPid.get(pid) === "ps")
+          continue;
         const rss = rssByPid.get(pid) ?? 0;
+        let type = typeByPid.get(pid) ?? commByPid.get(pid) ?? "Unknown";
+        // Extract basename from full paths
+        if (type.startsWith("/")) {
+          type = type.split("/").pop() ?? type;
+        }
         processes.push({
-          type: typeByPid.get(pid) ?? commByPid.get(pid) ?? "Unknown",
+          type,
           pid,
           memory: {
             workingSetSize: rss,

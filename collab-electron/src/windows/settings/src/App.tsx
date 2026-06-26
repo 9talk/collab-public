@@ -828,7 +828,7 @@ function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
                 className={`${cellBase} text-right font-medium tabular-nums`}
                 style={{ width: 80, color: "var(--muted-foreground)" }}
               >
-                PID
+                {t("memory.processCount")}
               </th>
             </tr>
           </thead>

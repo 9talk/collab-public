@@ -41,6 +41,7 @@ export const en = {
   "memory.seconds15": "15 seconds",
   "memory.showDetails": "Process details",
   "memory.hideDetails": "Process details",
+  "memory.processCount": "Processes",
 
   // Terminal pane
   "terminal.title": "Terminal",
