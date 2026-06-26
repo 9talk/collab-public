@@ -696,6 +696,11 @@ type Pane =
   | "updates"
   | "files";
 
+const tableBorder =
+  "1px solid color-mix(in srgb, var(--foreground) 8%, transparent)";
+
+const cellBase = "px-3 py-1.5 text-sm";
+
 function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
   const [stats, setStats] = useState<{
     processes: Array<{
@@ -708,6 +713,7 @@ function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
   const [saveMemMode, setSaveMemMode] = useState(true);
   const [maxTiles, setMaxTiles] = useState(2);
   const [destroyDelay, setDestroyDelay] = useState(5);
+  const [showDetails, setShowDetails] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -747,19 +753,6 @@ function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
 
   const formatMB = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(0)} MB`;
 
-  const processGroups = stats
-    ? stats.processes.reduce(
-        (acc, p) => {
-          const key = p.type;
-          if (!acc[key]) acc[key] = { count: 0, memory: 0 };
-          acc[key].count++;
-          acc[key].memory += p.memory.workingSetSize;
-          return acc;
-        },
-        {} as Record<string, { count: number; memory: number }>,
-      )
-    : null;
-
   const processTypeLabel = (type: string) => {
     switch (type) {
       case "Browser":
@@ -775,6 +768,21 @@ function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
     }
   };
 
+  const processGroups = stats
+    ? Object.entries(
+        stats.processes.reduce(
+          (acc, p) => {
+            const key = p.type;
+            if (!acc[key]) acc[key] = { count: 0, memory: 0 };
+            acc[key].count++;
+            acc[key].memory += p.memory.workingSetSize;
+            return acc;
+          },
+          {} as Record<string, { count: number; memory: number }>,
+        ),
+      ).sort(([, a], [, b]) => b.memory - a.memory)
+    : null;
+
   return (
     <div className="space-y-6 p-6">
       <div className="space-y-1">
@@ -784,76 +792,174 @@ function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
         </p>
       </div>
 
-      {/* Memory stats */}
+      {/* Memory table */}
+      {stats && processGroups && (
+        <table
+          className="w-full rounded-lg overflow-hidden"
+          style={{
+            border: tableBorder,
+            borderCollapse: "collapse",
+          }}
+        >
+          <thead>
+            <tr
+              style={{
+                borderBottom: tableBorder,
+                backgroundColor:
+                  "color-mix(in srgb, var(--foreground) 3%, transparent)",
+              }}
+            >
+              <th
+                className={`${cellBase} text-left font-medium`}
+                style={{ width: "40%" }}
+              >
+                {t("memory.type")}
+              </th>
+              <th className={`${cellBase} text-right font-medium tabular-nums`}>
+                {t("memory.resident")}
+              </th>
+              <th
+                className={`${cellBase} text-right font-medium tabular-nums`}
+                style={{ color: "var(--muted-foreground)" }}
+              >
+                %
+              </th>
+              <th
+                className={`${cellBase} text-right font-medium tabular-nums`}
+                style={{ width: 80, color: "var(--muted-foreground)" }}
+              >
+                PID
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {processGroups.map(([type, info]) => (
+              <tr key={type} style={{ borderBottom: tableBorder }}>
+                <td className={cellBase}>{processTypeLabel(type)}</td>
+                <td
+                  className={`${cellBase} text-right tabular-nums font-medium`}
+                >
+                  {formatMB(info.memory)}
+                </td>
+                <td
+                  className={`${cellBase} text-right tabular-nums`}
+                  style={{ color: "var(--muted-foreground)" }}
+                >
+                  {((info.memory / stats.total) * 100).toFixed(0)}
+                </td>
+                <td
+                  className={`${cellBase} text-right tabular-nums`}
+                  style={{ color: "var(--muted-foreground)" }}
+                >
+                  {info.count}
+                </td>
+              </tr>
+            ))}
+            {/* Total row */}
+            <tr
+              style={{
+                backgroundColor:
+                  "color-mix(in srgb, var(--foreground) 5%, transparent)",
+              }}
+            >
+              <td className={`${cellBase} font-medium`}>{t("memory.total")}</td>
+              <td className={`${cellBase} text-right tabular-nums font-bold`}>
+                {formatMB(stats.total)}
+              </td>
+              <td className={cellBase} />
+              <td className={cellBase} />
+            </tr>
+          </tbody>
+        </table>
+      )}
+      {!stats && (
+        <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+          {t("memory.loading")}
+        </p>
+      )}
+
+      {/* Toggle for detailed process list */}
+      {stats && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowDetails(!showDetails)}
+            className="text-xs cursor-pointer"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            {showDetails
+              ? `▾ ${t("memory.hideDetails")}`
+              : `▸ ${t("memory.showDetails")}`}
+          </button>
+          {showDetails && (
+            <table
+              className="w-full mt-2 rounded-lg overflow-hidden"
+              style={{
+                border: tableBorder,
+                borderCollapse: "collapse",
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    borderBottom: tableBorder,
+                    backgroundColor:
+                      "color-mix(in srgb, var(--foreground) 3%, transparent)",
+                  }}
+                >
+                  <th className={`${cellBase} text-left font-medium`}>
+                    {t("memory.type")}
+                  </th>
+                  <th
+                    className={`${cellBase} text-right font-medium tabular-nums`}
+                  >
+                    PID
+                  </th>
+                  <th
+                    className={`${cellBase} text-right font-medium tabular-nums`}
+                  >
+                    {t("memory.resident")}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.processes.map((p, i) => (
+                  <tr
+                    key={i}
+                    style={{
+                      borderBottom:
+                        i < stats.processes.length - 1 ? tableBorder : "none",
+                    }}
+                  >
+                    <td className={cellBase}>{processTypeLabel(p.type)}</td>
+                    <td
+                      className={`${cellBase} text-right tabular-nums`}
+                      style={{ color: "var(--muted-foreground)" }}
+                    >
+                      {p.pid}
+                    </td>
+                    <td
+                      className={`${cellBase} text-right tabular-nums font-medium`}
+                    >
+                      {formatMB(p.memory.workingSetSize)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* Save memory mode */}
       <div
         className="rounded-lg p-4 space-y-3"
         style={{
+          border: tableBorder,
           backgroundColor:
-            "color-mix(in srgb, var(--foreground) 5%, transparent)",
+            "color-mix(in srgb, var(--foreground) 2%, transparent)",
         }}
       >
-        {stats && (
-          <>
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="text-center min-w-[70px]">
-                <div className="text-xl font-bold tabular-nums">
-                  {formatMB(stats.total)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {t("memory.total")}
-                </div>
-              </div>
-              {processGroups &&
-                Object.entries(processGroups).map(([type, info]) => (
-                  <div key={type} className="text-center min-w-[70px]">
-                    <div className="text-lg font-bold tabular-nums">
-                      {formatMB(info.memory)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {processTypeLabel(type)} ({info.count})
-                    </div>
-                  </div>
-                ))}
-            </div>
-
-            <div
-              className="text-xs text-muted-foreground"
-              style={{
-                borderTop:
-                  "1px solid color-mix(in srgb, var(--foreground) 8%, transparent)",
-                paddingTop: "8px",
-              }}
-            >
-              <table className="w-full">
-                <thead>
-                  <tr className="text-left">
-                    <th className="font-normal pr-4">{t("memory.type")}</th>
-                    <th className="font-normal pr-4">PID</th>
-                    <th className="font-normal">{t("memory.resident")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.processes.map((p, i) => (
-                    <tr key={i}>
-                      <td className="pr-4">{processTypeLabel(p.type)}</td>
-                      <td className="pr-4 tabular-nums">{p.pid}</td>
-                      <td className="tabular-nums">
-                        {formatMB(p.memory.workingSetSize)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-        {!stats && (
-          <p className="text-sm text-muted-foreground">{t("memory.loading")}</p>
-        )}
-      </div>
-
-      {/* Save memory mode */}
-      <div className="space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">{t("memory.saveMemMode")}</p>
           <ToggleSwitch
@@ -864,14 +970,17 @@ function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
             }}
           />
         </div>
-        <p className="text-xs text-muted-foreground -mt-1">
+        <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
           {t("memory.saveMemModeDesc")}
         </p>
 
         {saveMemMode && (
           <div className="flex gap-6">
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">
+              <label
+                className="text-xs block mb-1"
+                style={{ color: "var(--muted-foreground)" }}
+              >
                 {t("memory.maxActiveTiles")}
               </label>
               <select
@@ -894,7 +1003,10 @@ function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
               </select>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">
+              <label
+                className="text-xs block mb-1"
+                style={{ color: "var(--muted-foreground)" }}
+              >
                 {t("memory.destroyDelay")}
               </label>
               <select

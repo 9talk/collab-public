@@ -42,6 +42,8 @@ export const zh: Record<TranslationKey, string> = {
   "memory.seconds5": "5 秒",
   "memory.seconds10": "10 秒",
   "memory.seconds15": "15 秒",
+  "memory.showDetails": "进程详情",
+  "memory.hideDetails": "进程详情",
 
   // Terminal pane
   "terminal.title": "终端",
