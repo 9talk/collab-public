@@ -1235,7 +1235,6 @@ async function init() {
       }
       if (target) {
         tileManager.focusCanvasTile(target.id, null);
-        edgeIndicators.panToTile(target);
         notifications.dismissByTileId(target.id);
       }
     } else if (action === "nav-history-back") {
@@ -1246,20 +1245,6 @@ async function init() {
         }
         if (tileId) {
           tileManager.focusCanvasTile(tileId, null);
-          const tile = getTile(tileId);
-          if (tile) edgeIndicators.panToTile(tile);
-        }
-      })();
-    } else if (action === "nav-history-forward") {
-      (async () => {
-        let tileId = await window.shellApi.navigationGoForward();
-        while (tileId && !getTile(tileId)) {
-          tileId = await window.shellApi.navigationGoForward();
-        }
-        if (tileId) {
-          tileManager.focusCanvasTile(tileId, null);
-          const tile = getTile(tileId);
-          if (tile) edgeIndicators.panToTile(tile);
         }
       })();
     } else if (action === "dismiss-notification") {
