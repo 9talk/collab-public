@@ -295,47 +295,38 @@ export function createTileManager({
       repositionAllTiles();
     }
     const dom = tileDOMs.get(id);
-    if (!dom) return;
-
-    const wasRebuilt = !dom.webview && tile?.type === "term";
-    if (wasRebuilt) {
-      // Remove placeholder
-      if (dom._placeholder) {
-        dom.contentArea.removeChild(dom._placeholder);
-        dom._placeholder = null;
+    if (dom) {
+      // Rebuild webview if save memory mode destroyed it
+      const wasRebuilt = !dom.webview && tile?.type === "term";
+      if (wasRebuilt) {
+        if (dom._placeholder) {
+          dom.contentArea.removeChild(dom._placeholder);
+          dom._placeholder = null;
+        }
+        dom._pendingFocus = true;
+        spawnTerminalWebview(tile);
       }
-      dom._pendingFocus = true;
-      spawnTerminalWebview(tile);
-    }
+      if (dom.webview) {
+        if (focusedTileId && focusedTileId !== id) {
+          blurCanvasTileGuest(focusedTileId);
+        }
+        focusedTileId = id;
+        window.shellApi.navigationPush(id);
+        if (onTileFocused) {
+          onTileFocused(tile);
+        }
+        clearTileFocusRing();
+        dom.container.classList.add("tile-focused");
+        dom.webview.focus();
+        onNoteSurfaceFocus("canvas-tile");
 
-    if (focusedTileId && focusedTileId !== id) {
-      blurCanvasTileGuest(focusedTileId);
-    }
-    focusedTileId = id;
-    window.shellApi.navigationPush(id);
-    if (onTileFocused) {
-      onTileFocused(tile);
-    }
-    clearTileFocusRing();
-    dom.container.classList.add("tile-focused");
-    onNoteSurfaceFocus("canvas-tile");
+        if (onPanToTile && tile) onPanToTile(tile);
 
-    // Focus the webview (only when it was already loaded), or temporarily
-    // park focus on the container so canvas doesn't steal it and clear
-    // the focus ring. Electron webview.focus() is ineffective before dom-ready.
-    if (dom.webview && !wasRebuilt) {
-      dom.webview.focus();
-    } else {
-      dom.container.tabIndex = -1;
-      dom.container.focus();
+        if (mouseEvent && mouseEvent.button === 0 && tile.type !== "browser") {
+          forwardClickToWebview(dom.webview, mouseEvent);
+        }
+      }
     }
-
-    if (onPanToTile && tile) onPanToTile(tile);
-
-    if (mouseEvent && mouseEvent.button === 0 && tile?.type !== "browser") {
-      if (dom.webview) forwardClickToWebview(dom.webview, mouseEvent);
-    }
-
     // Track terminal tile focus for LRU
     if (tile?.type === "term") {
       trackTerminalFocus(id);
@@ -376,7 +367,6 @@ export function createTileManager({
       if (autoFocus) focusCanvasTile(tile.id);
       if (dom._pendingFocus) {
         dom._pendingFocus = false;
-        dom.container.removeAttribute("tabindex");
         if (dom.webview) dom.webview.focus();
       }
       wv.addEventListener("before-input-event", () => {});
