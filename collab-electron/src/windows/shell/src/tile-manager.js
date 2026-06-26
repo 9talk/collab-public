@@ -320,8 +320,10 @@ export function createTileManager({
     dom.container.classList.add("tile-focused");
     onNoteSurfaceFocus("canvas-tile");
 
-    // Focus the webview, but only if it has loaded (skip for just-rebuilt webviews)
-    if (dom.webview && !wasRebuilt) {
+    // Focus the webview (even a freshly created one — it's a DOM element
+    // that can hold focus, preventing canvas from stealing it and clearing
+    // the focus ring). _pendingFocus ensures we re-focus after dom-ready.
+    if (dom.webview) {
       dom.webview.focus();
     }
 
