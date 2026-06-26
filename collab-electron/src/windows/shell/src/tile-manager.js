@@ -363,6 +363,9 @@ export function createTileManager({
     wv.style.width = "100%";
     wv.style.height = "100%";
     wv.style.border = "none";
+    // Hide until the terminal has fitted to its container size, so the
+    // first visible frame is already correctly sized (no visual jump).
+    wv.style.visibility = "hidden";
 
     dom.contentArea.appendChild(wv);
     dom.webview = wv;
@@ -377,6 +380,12 @@ export function createTileManager({
         dom.container.classList.add("tile-focused");
         onNoteSurfaceFocus("canvas-tile");
       }
+      // Double-rAF to let xterm FitAddon finish sizing before revealing
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          wv.style.visibility = "";
+        });
+      });
       wv.addEventListener("before-input-event", () => {});
     });
 
