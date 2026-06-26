@@ -8,6 +8,7 @@ export const zh: Record<TranslationKey, string> = {
 
   // Navigation
   "nav.appearance": "外观",
+  "nav.memory": "内存",
   "nav.terminal": "终端",
   "nav.integrations": "集成",
   "nav.controls": "控制",
@@ -21,6 +22,26 @@ export const zh: Record<TranslationKey, string> = {
   "appearance.canvasOpacity": "画布不透明度",
   "appearance.rememberExpandedDirs": "记住展开的文件夹",
   "appearance.rememberExpandedDirsDesc": "重新打开应用时恢复之前的展开状态",
+
+  // Memory pane
+  "memory.title": "内存",
+  "memory.description": "监控和管理应用内存占用。",
+  "memory.mainProcess": "主进程",
+  "memory.renderer": "渲染进程",
+  "memory.utility": "工具",
+  "memory.total": "总计",
+  "memory.type": "类型",
+  "memory.resident": "常驻",
+  "memory.loading": "加载中...",
+  "memory.saveMemMode": "省内存模式",
+  "memory.saveMemModeDesc":
+    "限制活跃的终端 tile webview 数量。非活跃 tile 保留会话但释放渲染进程内存。",
+  "memory.maxActiveTiles": "最大活跃 tile 数",
+  "memory.destroyDelay": "销毁延迟",
+  "memory.seconds3": "3 秒",
+  "memory.seconds5": "5 秒",
+  "memory.seconds10": "10 秒",
+  "memory.seconds15": "15 秒",
 
   // Terminal pane
   "terminal.title": "终端",

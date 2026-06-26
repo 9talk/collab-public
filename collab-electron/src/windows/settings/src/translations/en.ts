@@ -4,6 +4,7 @@ export const en = {
 
   // Navigation
   "nav.appearance": "Appearance",
+  "nav.memory": "Memory",
   "nav.terminal": "Terminal",
   "nav.integrations": "Integrations",
   "nav.controls": "Controls",
@@ -18,6 +19,26 @@ export const en = {
   "appearance.rememberExpandedDirs": "Remember expanded folders",
   "appearance.rememberExpandedDirsDesc":
     "Restore folder expansion state when reopening the app",
+
+  // Memory pane
+  "memory.title": "Memory",
+  "memory.description": "Monitor and manage application memory usage.",
+  "memory.mainProcess": "Main",
+  "memory.renderer": "Renderer",
+  "memory.utility": "Utility",
+  "memory.total": "Total",
+  "memory.type": "Type",
+  "memory.resident": "Resident",
+  "memory.loading": "Loading...",
+  "memory.saveMemMode": "Save Memory Mode",
+  "memory.saveMemModeDesc":
+    "Limit active terminal tile webviews. Inactive tiles keep their sessions but release renderer memory.",
+  "memory.maxActiveTiles": "Max active tiles",
+  "memory.destroyDelay": "Destroy delay",
+  "memory.seconds3": "3 seconds",
+  "memory.seconds5": "5 seconds",
+  "memory.seconds10": "10 seconds",
+  "memory.seconds15": "15 seconds",
 
   // Terminal pane
   "terminal.title": "Terminal",

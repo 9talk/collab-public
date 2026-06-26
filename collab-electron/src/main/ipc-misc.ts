@@ -4,8 +4,10 @@ import {
   Menu,
   Notification,
   shell,
+  app,
   type BrowserWindow,
 } from "electron";
+import { execFileSync } from "node:child_process";
 import * as gitReplay from "./git-replay";
 import { importWebArticle } from "./import-service";
 import * as agentActivity from "./agent-activity";
@@ -25,6 +27,42 @@ interface IpcContext {
 }
 
 export function registerMiscHandlers(ctx: IpcContext): void {
+  // Memory stats — uses ps for accurate RSS on macOS
+  ipcMain.handle("memory:stats", () => {
+    const metrics = app.getAppMetrics();
+    // Build PID → RSS map from ps (more reliable than app.getAppMetrics on macOS)
+    const rssByPid = new Map<number, number>();
+    try {
+      const out = execFileSync("ps", ["-eo", "pid,rss"], {
+        encoding: "utf8",
+        timeout: 2000,
+      });
+      for (const line of out.trim().split("\n").slice(1)) {
+        const parts = line.trim().split(/\s+/);
+        const pid = parseInt(parts[0]!, 10);
+        const rssKb = parseInt(parts[1]!, 10);
+        if (!isNaN(pid) && !isNaN(rssKb)) {
+          rssByPid.set(pid, rssKb * 1024); // KB → bytes
+        }
+      }
+    } catch {
+      // Fall back to app.getAppMetrics memory if ps fails
+    }
+    const processes = metrics.map((m) => ({
+      type: m.type,
+      pid: m.pid,
+      memory: {
+        workingSetSize: rssByPid.get(m.pid) ?? m.memory?.workingSetSize ?? 0,
+        peakWorkingSetSize: m.memory?.peakWorkingSetSize ?? 0,
+      },
+    }));
+    const total = processes.reduce(
+      (sum, p) => sum + p.memory.workingSetSize,
+      0,
+    );
+    return { processes, total };
+  });
+
   // Dialog: open folder
   ipcMain.handle("dialog:open-folder", async () => {
     const win = ctx.mainWindow();

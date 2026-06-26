@@ -66,6 +66,15 @@ export function createTileManager({
   let saveTimer = null;
   let focusedTileId = null;
 
+  // -- Save memory mode state --
+  let saveMemMode = true;
+  let saveMemMaxTiles = 2;
+  let saveMemDestroyDelay = 5;
+  /** @type {string[]} — tile ids, most recently focused at the end */
+  const terminalFocusOrder = [];
+  /** @type {Map<string, ReturnType<typeof setTimeout>>} */
+  const destroyTimers = new Map();
+
   // Viewport read-only accessor for tile-interactions
   const viewport = {
     get panX() {
@@ -156,6 +165,66 @@ export function createTileManager({
     }
   }
 
+  // -- Save memory mode helpers --
+
+  function updateSaveMemConfig({ mode, maxTiles, destroyDelay } = {}) {
+    if (typeof mode === "boolean") saveMemMode = mode;
+    if (typeof maxTiles === "number") saveMemMaxTiles = maxTiles;
+    if (typeof destroyDelay === "number") saveMemDestroyDelay = destroyDelay;
+    if (saveMemMode) {
+      enforceLimit();
+    } else {
+      cancelAllDestroyTimers();
+    }
+  }
+
+  function cancelAllDestroyTimers() {
+    for (const timer of destroyTimers.values()) clearTimeout(timer);
+    destroyTimers.clear();
+  }
+
+  function destroyTerminalWebview(tileId) {
+    const dom = tileDOMs.get(tileId);
+    if (!dom?.webview) return;
+    dom.contentArea.removeChild(dom.webview);
+    dom.webview = null;
+    destroyTimers.delete(tileId);
+  }
+
+  function enforceLimit() {
+    if (!saveMemMode) return;
+    const activeTermIds = terminalFocusOrder.filter((id) => {
+      const dom = tileDOMs.get(id);
+      return dom?.webview != null;
+    });
+    const excess = activeTermIds.slice(
+      0,
+      activeTermIds.length - saveMemMaxTiles,
+    );
+    for (const id of excess) {
+      if (!destroyTimers.has(id)) {
+        destroyTimers.set(
+          id,
+          setTimeout(() => {
+            destroyTerminalWebview(id);
+          }, saveMemDestroyDelay * 1000),
+        );
+      }
+    }
+  }
+
+  function trackTerminalFocus(tileId) {
+    const idx = terminalFocusOrder.indexOf(tileId);
+    if (idx !== -1) terminalFocusOrder.splice(idx, 1);
+    terminalFocusOrder.push(tileId);
+    const timer = destroyTimers.get(tileId);
+    if (timer) {
+      clearTimeout(timer);
+      destroyTimers.delete(tileId);
+    }
+    enforceLimit();
+  }
+
   // -- Focus management --
 
   function clearTileFocusRing() {
@@ -218,25 +287,35 @@ export function createTileManager({
       repositionAllTiles();
     }
     const dom = tileDOMs.get(id);
-    if (dom && dom.webview) {
-      if (focusedTileId && focusedTileId !== id) {
-        blurCanvasTileGuest(focusedTileId);
+    if (dom) {
+      // Rebuild webview if save memory mode destroyed it
+      if (!dom.webview && tile?.type === "term") {
+        spawnTerminalWebview(tile);
       }
-      focusedTileId = id;
-      window.shellApi.navigationPush(id);
-      if (onTileFocused) {
-        onTileFocused(tile);
-      }
-      clearTileFocusRing();
-      dom.container.classList.add("tile-focused");
-      dom.webview.focus();
-      onNoteSurfaceFocus("canvas-tile");
+      if (dom.webview) {
+        if (focusedTileId && focusedTileId !== id) {
+          blurCanvasTileGuest(focusedTileId);
+        }
+        focusedTileId = id;
+        window.shellApi.navigationPush(id);
+        if (onTileFocused) {
+          onTileFocused(tile);
+        }
+        clearTileFocusRing();
+        dom.container.classList.add("tile-focused");
+        dom.webview.focus();
+        onNoteSurfaceFocus("canvas-tile");
 
-      if (onPanToTile && tile) onPanToTile(tile);
+        if (onPanToTile && tile) onPanToTile(tile);
 
-      if (mouseEvent && mouseEvent.button === 0 && tile.type !== "browser") {
-        forwardClickToWebview(dom.webview, mouseEvent);
+        if (mouseEvent && mouseEvent.button === 0 && tile.type !== "browser") {
+          forwardClickToWebview(dom.webview, mouseEvent);
+        }
       }
+    }
+    // Track terminal tile focus for LRU
+    if (tile?.type === "term") {
+      trackTerminalFocus(id);
     }
   }
 
@@ -780,7 +859,9 @@ export function createTileManager({
           userTitle: saved.userTitle,
           autoTitle: saved.autoTitle,
         });
-        spawnTerminalWebview(tile);
+        if (!saveMemMode) {
+          spawnTerminalWebview(tile);
+        }
       } else if (saved.type === "graph" && saved.folderPath) {
         const tile = createCanvasTile("graph", cx, cy, {
           id: saved.id,
@@ -901,5 +982,6 @@ export function createTileManager({
     broadcastToTileWebviews,
     saveCanvasDebounced,
     saveCanvasImmediate,
+    updateSaveMemConfig,
   };
 }

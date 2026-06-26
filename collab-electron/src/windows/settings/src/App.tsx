@@ -10,6 +10,7 @@ import {
   Terminal,
   ArrowClockwise,
   FolderOpen,
+  Gauge,
 } from "@phosphor-icons/react";
 import { useTranslation } from "./translations";
 import type { SupportedLocale, TranslationKey } from "./translations";
@@ -39,6 +40,14 @@ interface SettingsApi {
   listExternalEditors: () => Promise<
     Array<{ id: string; name: string; appPath: string }>
   >;
+  getMemoryStats: () => Promise<{
+    processes: Array<{
+      type: string;
+      pid: number;
+      memory: { workingSetSize: number; peakWorkingSetSize: number };
+    }>;
+    total: number;
+  }>;
   close: () => void;
 }
 
@@ -680,11 +689,240 @@ function IntegrationsPane({ t }: { t: (key: TranslationKey) => string }) {
 
 type Pane =
   | "appearance"
+  | "memory"
   | "terminal"
   | "integrations"
   | "controls"
   | "updates"
   | "files";
+
+function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
+  const [stats, setStats] = useState<{
+    processes: Array<{
+      type: string;
+      pid: number;
+      memory: { workingSetSize: number; peakWorkingSetSize: number };
+    }>;
+    total: number;
+  } | null>(null);
+  const [saveMemMode, setSaveMemMode] = useState(true);
+  const [maxTiles, setMaxTiles] = useState(2);
+  const [destroyDelay, setDestroyDelay] = useState(5);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    api
+      .getPref("saveMemMode")
+      .then((v) => {
+        if (typeof v === "boolean") setSaveMemMode(v);
+      })
+      .catch(() => {});
+    api
+      .getPref("saveMemMaxTiles")
+      .then((v) => {
+        if (typeof v === "number") setMaxTiles(v);
+      })
+      .catch(() => {});
+    api
+      .getPref("saveMemDestroyDelay")
+      .then((v) => {
+        if (typeof v === "number") setDestroyDelay(v);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const fetchStats = () => {
+      api
+        .getMemoryStats()
+        .then(setStats)
+        .catch(() => {});
+    };
+    fetchStats();
+    intervalRef.current = setInterval(fetchStats, 2000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  const formatMB = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(0)} MB`;
+
+  const processGroups = stats
+    ? stats.processes.reduce(
+        (acc, p) => {
+          const key = p.type;
+          if (!acc[key]) acc[key] = { count: 0, memory: 0 };
+          acc[key].count++;
+          acc[key].memory += p.memory.workingSetSize;
+          return acc;
+        },
+        {} as Record<string, { count: number; memory: number }>,
+      )
+    : null;
+
+  const processTypeLabel = (type: string) => {
+    switch (type) {
+      case "Browser":
+        return t("memory.mainProcess");
+      case "Tab":
+        return t("memory.renderer");
+      case "GPU":
+        return "GPU";
+      case "Utility":
+        return t("memory.utility");
+      default:
+        return type;
+    }
+  };
+
+  return (
+    <div className="space-y-6 p-6">
+      <div className="space-y-1">
+        <h2 className="text-base font-semibold">{t("memory.title")}</h2>
+        <p className="text-sm text-muted-foreground">
+          {t("memory.description")}
+        </p>
+      </div>
+
+      {/* Memory stats */}
+      <div
+        className="rounded-lg p-4 space-y-3"
+        style={{
+          backgroundColor:
+            "color-mix(in srgb, var(--foreground) 5%, transparent)",
+        }}
+      >
+        {stats && (
+          <>
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="text-center min-w-[70px]">
+                <div className="text-xl font-bold tabular-nums">
+                  {formatMB(stats.total)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {t("memory.total")}
+                </div>
+              </div>
+              {processGroups &&
+                Object.entries(processGroups).map(([type, info]) => (
+                  <div key={type} className="text-center min-w-[70px]">
+                    <div className="text-lg font-bold tabular-nums">
+                      {formatMB(info.memory)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {processTypeLabel(type)} ({info.count})
+                    </div>
+                  </div>
+                ))}
+            </div>
+
+            <div
+              className="text-xs text-muted-foreground"
+              style={{
+                borderTop:
+                  "1px solid color-mix(in srgb, var(--foreground) 8%, transparent)",
+                paddingTop: "8px",
+              }}
+            >
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left">
+                    <th className="font-normal pr-4">{t("memory.type")}</th>
+                    <th className="font-normal pr-4">PID</th>
+                    <th className="font-normal">{t("memory.resident")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.processes.map((p, i) => (
+                    <tr key={i}>
+                      <td className="pr-4">{processTypeLabel(p.type)}</td>
+                      <td className="pr-4 tabular-nums">{p.pid}</td>
+                      <td className="tabular-nums">
+                        {formatMB(p.memory.workingSetSize)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+        {!stats && (
+          <p className="text-sm text-muted-foreground">{t("memory.loading")}</p>
+        )}
+      </div>
+
+      {/* Save memory mode */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">{t("memory.saveMemMode")}</p>
+          <ToggleSwitch
+            checked={saveMemMode}
+            onChange={(v) => {
+              setSaveMemMode(v);
+              void api.setPref("saveMemMode", v);
+            }}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground -mt-1">
+          {t("memory.saveMemModeDesc")}
+        </p>
+
+        {saveMemMode && (
+          <div className="flex gap-6">
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">
+                {t("memory.maxActiveTiles")}
+              </label>
+              <select
+                value={maxTiles}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setMaxTiles(v);
+                  void api.setPref("saveMemMaxTiles", v);
+                }}
+                className="rounded-md border bg-transparent px-2 py-1 text-sm cursor-pointer"
+                style={{
+                  borderColor:
+                    "color-mix(in srgb, var(--foreground) 15%, transparent)",
+                  color: "var(--foreground)",
+                }}
+              >
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+                <option value={3}>3</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">
+                {t("memory.destroyDelay")}
+              </label>
+              <select
+                value={destroyDelay}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setDestroyDelay(v);
+                  void api.setPref("saveMemDestroyDelay", v);
+                }}
+                className="rounded-md border bg-transparent px-2 py-1 text-sm cursor-pointer"
+                style={{
+                  borderColor:
+                    "color-mix(in srgb, var(--foreground) 15%, transparent)",
+                  color: "var(--foreground)",
+                }}
+              >
+                <option value={3}>{t("memory.seconds3")}</option>
+                <option value={5}>{t("memory.seconds5")}</option>
+                <option value={10}>{t("memory.seconds10")}</option>
+                <option value={15}>{t("memory.seconds15")}</option>
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
   const [useExternalEditor, setUseExternalEditor] = useState(false);
@@ -1240,6 +1478,7 @@ export default function App() {
 
   const navItems: { id: Pane; label: string; icon: typeof Palette }[] = [
     { id: "appearance", label: t("nav.appearance"), icon: Palette },
+    { id: "memory", label: t("nav.memory"), icon: Gauge },
     { id: "terminal", label: t("nav.terminal"), icon: Terminal },
     { id: "integrations", label: t("nav.integrations"), icon: PuzzlePiece },
     { id: "controls", label: t("nav.controls"), icon: Keyboard },
@@ -1298,6 +1537,7 @@ export default function App() {
       {/* Content */}
       <div className="flex-1 overflow-auto">
         {activePane === "appearance" && <AppearancePane t={t} />}
+        {activePane === "memory" && <MemoryPane t={t} />}
         {activePane === "terminal" && <TerminalPane t={t} />}
         {activePane === "integrations" && <IntegrationsPane t={t} />}
         {activePane === "controls" && <ControlsPane t={t} />}

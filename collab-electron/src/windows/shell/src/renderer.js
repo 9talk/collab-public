@@ -54,6 +54,7 @@ initDarkMode(() => viewport.updateCanvas());
 let broadcastCanvasOpacity = () => {};
 const DEFAULT_CANVAS_OPACITY = 50;
 let lastCanvasOpacity = DEFAULT_CANVAS_OPACITY;
+let updateSaveMemConfig = null;
 
 window.shellApi.getPref("canvasOpacity").then((v) => {
   lastCanvasOpacity = v != null ? v : DEFAULT_CANVAS_OPACITY;
@@ -74,6 +75,12 @@ window.shellApi.onPrefChanged((key, value) => {
         window.__refreshTileTitles();
       }
     }
+  } else if (key === "saveMemMode") {
+    updateSaveMemConfig?.({ mode: !!value });
+  } else if (key === "saveMemMaxTiles") {
+    updateSaveMemConfig?.({ maxTiles: Number(value) || 2 });
+  } else if (key === "saveMemDestroyDelay") {
+    updateSaveMemConfig?.({ destroyDelay: Number(value) || 5 });
   }
 });
 
@@ -673,6 +680,21 @@ async function init() {
           }
         });
     },
+  });
+
+  // Set up save memory mode — read initial prefs and wire onPrefChanged
+  updateSaveMemConfig = tileManager.updateSaveMemConfig;
+  const [prefSaveMemMode, prefSaveMemMaxTiles, prefSaveMemDestroyDelay] =
+    await Promise.all([
+      window.shellApi.getPref("saveMemMode"),
+      window.shellApi.getPref("saveMemMaxTiles"),
+      window.shellApi.getPref("saveMemDestroyDelay"),
+    ]);
+  updateSaveMemConfig({
+    mode: typeof prefSaveMemMode === "boolean" ? prefSaveMemMode : true,
+    maxTiles: typeof prefSaveMemMaxTiles === "number" ? prefSaveMemMaxTiles : 2,
+    destroyDelay:
+      typeof prefSaveMemDestroyDelay === "number" ? prefSaveMemDestroyDelay : 5,
   });
 
   // Allow onPrefChanged handler to refresh all tile titles when aliases change

@@ -156,6 +156,7 @@ contextBridge.exposeInMainWorld("api", {
   getPref: (key: string) => ipcRenderer.invoke("pref:get", key),
   setPref: (key: string, value: unknown) =>
     ipcRenderer.invoke("pref:set", key, value),
+  getMemoryStats: () => ipcRenderer.invoke("memory:stats"),
   listTerminalTargets: () => ipcRenderer.invoke("terminal:list-targets"),
   getWorkspacePref: (key: string, workspacePath: string) =>
     ipcRenderer.invoke("workspace-pref:get", { key, workspacePath }),
