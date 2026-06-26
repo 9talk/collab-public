@@ -603,16 +603,12 @@ export const TreeView: React.FC<TreeViewProps> = ({
               onRenameChange={onRenameChange ?? (() => {})}
               onRenameConfirm={onRenameConfirm ?? (() => {})}
               onRenameCancel={onRenameCancel ?? (() => {})}
-              isAliasing={aliasingPath === item.path}
-              aliasValue={aliasValue ?? ""}
-              aliasInputRef={
-                aliasInputRef ?? {
-                  current: null,
-                }
-              }
-              onAliasChange={onAliasChange ?? (() => {})}
-              onAliasConfirm={onAliasConfirm ?? (() => {})}
-              onAliasCancel={onAliasCancel ?? (() => {})}
+              isAliasing={false}
+              aliasValue={""}
+              aliasInputRef={{ current: null }}
+              onAliasChange={() => {}}
+              onAliasConfirm={() => {}}
+              onAliasCancel={() => {}}
               onContextMenu={onContextMenu}
               isDropTarget={dropTargetPath === item.path}
               onDragStart={onDragStart}
@@ -645,16 +641,12 @@ export const TreeView: React.FC<TreeViewProps> = ({
             onRenameChange={onRenameChange ?? (() => {})}
             onRenameConfirm={onRenameConfirm ?? (() => {})}
             onRenameCancel={onRenameCancel ?? (() => {})}
-            isAliasing={aliasingPath === item.path}
-            aliasValue={aliasValue ?? ""}
-            aliasInputRef={
-              aliasInputRef ?? {
-                current: null,
-              }
-            }
-            onAliasChange={onAliasChange ?? (() => {})}
-            onAliasConfirm={onAliasConfirm ?? (() => {})}
-            onAliasCancel={onAliasCancel ?? (() => {})}
+            isAliasing={false}
+            aliasValue={""}
+            aliasInputRef={{ current: null }}
+            onAliasChange={() => {}}
+            onAliasConfirm={() => {}}
+            onAliasCancel={() => {}}
             onContextMenu={onContextMenu}
             isDropTarget={dropTargetPath === item.path}
             onDragStart={onDragStart}
