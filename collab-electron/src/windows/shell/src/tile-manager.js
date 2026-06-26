@@ -320,10 +320,10 @@ export function createTileManager({
     dom.container.classList.add("tile-focused");
     onNoteSurfaceFocus("canvas-tile");
 
-    // Focus the webview, or temporarily park focus on the container so
-    // canvas doesn't steal it and clear the focus ring. Electron webview
-    // methods (including .focus()) only work after dom-ready.
-    if (dom.webview) {
+    // Focus the webview (only when it was already loaded), or temporarily
+    // park focus on the container so canvas doesn't steal it and clear
+    // the focus ring. Electron webview.focus() is ineffective before dom-ready.
+    if (dom.webview && !wasRebuilt) {
       dom.webview.focus();
     } else {
       dom.container.tabIndex = -1;
