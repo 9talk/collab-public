@@ -763,6 +763,10 @@ function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
         return "GPU";
       case "Utility":
         return t("memory.utility");
+      case "PTY":
+        return t("memory.ptyService");
+      case "Shell":
+        return t("memory.shell");
       default:
         return type;
     }

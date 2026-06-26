@@ -42,6 +42,8 @@ export const en = {
   "memory.showDetails": "Process details",
   "memory.hideDetails": "Process details",
   "memory.processCount": "Processes",
+  "memory.ptyService": "PTY Service",
+  "memory.shell": "Shell",
 
   // Terminal pane
   "terminal.title": "Terminal",

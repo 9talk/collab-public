@@ -45,24 +45,24 @@ export function registerMiscHandlers(ctx: IpcContext): void {
       memory: { workingSetSize: number; peakWorkingSetSize: number };
     }> = [];
     try {
-      const out = execFileSync("ps", ["-eo", "pid,ppid,rss,comm"], {
+      const out = execFileSync("ps", ["-eo", "pid,ppid,rss,args"], {
         encoding: "utf8",
         timeout: 2000,
       });
       // Build maps from ps output
       const rssByPid = new Map<number, number>();
       const ppidByPid = new Map<number, number>();
-      const commByPid = new Map<number, string>();
+      const argsByPid = new Map<number, string>();
       for (const line of out.trim().split("\n").slice(1)) {
         const parts = line.trim().split(/\s+/);
         const pid = parseInt(parts[0]!, 10);
         const ppid = parseInt(parts[1]!, 10);
         const rssKb = parseInt(parts[2]!, 10);
-        const comm = parts.slice(3).join(" ");
+        const args = parts.slice(3).join(" ");
         if (!isNaN(pid) && !isNaN(rssKb)) {
           rssByPid.set(pid, rssKb * 1024);
           ppidByPid.set(pid, ppid);
-          commByPid.set(pid, comm);
+          argsByPid.set(pid, args);
         }
       }
       // Walk the process tree: find all descendants of mainPid
@@ -78,19 +78,33 @@ export function registerMiscHandlers(ctx: IpcContext): void {
           }
         }
       }
-      // Build result from all descendant processes (filter out ps itself)
+      // Known shells spawned inside terminal tiles
+      const shells = new Set(["zsh", "bash", "sh", "fish", "dash"]);
+      // Classify a process by its args when app.getAppMetrics doesn't know it
+      function classify(pid: number): string {
+        const known = typeByPid.get(pid);
+        if (known) return known;
+        const a = argsByPid.get(pid) ?? "";
+        if (!a) return "Unknown";
+        // PTY sidecar: forked child process running collab-electron sidecar
+        if (a.includes("--sidecar") || a.includes("pty-session")) return "PTY";
+        // Shell spawned inside a terminal tile
+        const firstWord = a.split(/\s+/)[0] ?? "";
+        const base = firstWord.split("/").pop() ?? firstWord;
+        if (shells.has(base) || a.startsWith("-")) return "Shell";
+        // Other child processes — use executable basename
+        return base || a.slice(0, 40);
+      }
+      // Build result from all descendant processes
       for (const pid of descendantPids) {
-        // Filter out the transient ps process spawned by this handler
-        if (ppidByPid.get(pid) === mainPid && commByPid.get(pid) === "ps")
+        if (
+          ppidByPid.get(pid) === mainPid &&
+          argsByPid.get(pid)?.startsWith("ps ")
+        )
           continue;
         const rss = rssByPid.get(pid) ?? 0;
-        let type = typeByPid.get(pid) ?? commByPid.get(pid) ?? "Unknown";
-        // Extract basename from full paths
-        if (type.startsWith("/")) {
-          type = type.split("/").pop() ?? type;
-        }
         processes.push({
-          type,
+          type: classify(pid),
           pid,
           memory: {
             workingSetSize: rss,
