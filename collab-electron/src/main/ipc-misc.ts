@@ -27,35 +27,85 @@ interface IpcContext {
 }
 
 export function registerMiscHandlers(ctx: IpcContext): void {
-  // Memory stats — uses ps for accurate RSS on macOS
+  // Memory stats — uses ps to find all child processes (not just Chromium-managed ones)
   ipcMain.handle("memory:stats", () => {
     const metrics = app.getAppMetrics();
-    // Build PID → RSS map from ps (more reliable than app.getAppMetrics on macOS)
-    const rssByPid = new Map<number, number>();
+    const mainPid = process.pid;
+    // Build type map from app.getAppMetrics (Chromium-managed processes)
+    const typeByPid = new Map<number, string>();
+    const peakByPid = new Map<number, number>();
+    for (const m of metrics) {
+      typeByPid.set(m.pid, m.type);
+      peakByPid.set(m.pid, m.memory?.peakWorkingSetSize ?? 0);
+    }
+    // Use ps to find ALL descendants of the main process
+    const processes: Array<{
+      type: string;
+      pid: number;
+      memory: { workingSetSize: number; peakWorkingSetSize: number };
+    }> = [];
     try {
-      const out = execFileSync("ps", ["-eo", "pid,rss"], {
+      const out = execFileSync("ps", ["-eo", "pid,ppid,rss,comm"], {
         encoding: "utf8",
         timeout: 2000,
       });
+      // Build maps from ps output
+      const rssByPid = new Map<number, number>();
+      const ppidByPid = new Map<number, number>();
+      const commByPid = new Map<number, string>();
       for (const line of out.trim().split("\n").slice(1)) {
         const parts = line.trim().split(/\s+/);
         const pid = parseInt(parts[0]!, 10);
-        const rssKb = parseInt(parts[1]!, 10);
+        const ppid = parseInt(parts[1]!, 10);
+        const rssKb = parseInt(parts[2]!, 10);
+        const comm = parts.slice(3).join(" ");
         if (!isNaN(pid) && !isNaN(rssKb)) {
-          rssByPid.set(pid, rssKb * 1024); // KB → bytes
+          rssByPid.set(pid, rssKb * 1024);
+          ppidByPid.set(pid, ppid);
+          commByPid.set(pid, comm);
         }
       }
+      // Walk the process tree: find all descendants of mainPid
+      const descendantPids = new Set<number>();
+      descendantPids.add(mainPid);
+      // Iterative tree traversal — keep expanding until no new children found
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const [pid, ppid] of ppidByPid) {
+          if (descendantPids.has(ppid) && !descendantPids.has(pid)) {
+            descendantPids.add(pid);
+            changed = true;
+          }
+        }
+      }
+      // Build result from all descendant processes
+      for (const pid of descendantPids) {
+        const rss = rssByPid.get(pid) ?? 0;
+        processes.push({
+          type: typeByPid.get(pid) ?? commByPid.get(pid) ?? "Unknown",
+          pid,
+          memory: {
+            workingSetSize: rss,
+            peakWorkingSetSize: peakByPid.get(pid) ?? 0,
+          },
+        });
+      }
+      // Sort by type for consistent display
+      processes.sort((a, b) => a.type.localeCompare(b.type) || a.pid - b.pid);
     } catch {
-      // Fall back to app.getAppMetrics memory if ps fails
+      // Fall back to app.getAppMetrics if ps fails
+      for (const m of metrics) {
+        processes.push({
+          type: m.type,
+          pid: m.pid,
+          memory: {
+            workingSetSize: m.memory?.workingSetSize ?? 0,
+            peakWorkingSetSize: m.memory?.peakWorkingSetSize ?? 0,
+          },
+        });
+      }
     }
-    const processes = metrics.map((m) => ({
-      type: m.type,
-      pid: m.pid,
-      memory: {
-        workingSetSize: rssByPid.get(m.pid) ?? m.memory?.workingSetSize ?? 0,
-        peakWorkingSetSize: m.memory?.peakWorkingSetSize ?? 0,
-      },
-    }));
     const total = processes.reduce(
       (sum, p) => sum + p.memory.workingSetSize,
       0,
