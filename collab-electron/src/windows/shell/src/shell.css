@@ -1088,6 +1088,18 @@ body.platform-win {
   border: none;
 }
 
+.tile-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(128, 128, 128, 0.6);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
 .canvas-tile[data-tile-type="term"] {
   background: rgba(250, 250, 250, 0.5);
 }

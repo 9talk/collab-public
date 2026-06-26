@@ -189,6 +189,14 @@ export function createTileManager({
     dom.contentArea.removeChild(dom.webview);
     dom.webview = null;
     destroyTimers.delete(tileId);
+    // Add placeholder so the user knows the tile is still alive
+    if (!dom._placeholder) {
+      dom._placeholder = document.createElement("div");
+      dom._placeholder.className = "tile-placeholder";
+      dom._placeholder.textContent = "Click to focus";
+      dom._placeholder.addEventListener("click", () => focusCanvasTile(tileId));
+      dom.contentArea.appendChild(dom._placeholder);
+    }
   }
 
   function enforceLimit() {
@@ -290,7 +298,12 @@ export function createTileManager({
     if (dom) {
       // Rebuild webview if save memory mode destroyed it
       if (!dom.webview && tile?.type === "term") {
-        spawnTerminalWebview(tile);
+        // Remove placeholder
+        if (dom._placeholder) {
+          dom.contentArea.removeChild(dom._placeholder);
+          dom._placeholder = null;
+        }
+        spawnTerminalWebview(tile, true); // autoFocus on dom-ready
       }
       if (dom.webview) {
         if (focusedTileId && focusedTileId !== id) {
