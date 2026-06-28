@@ -1327,6 +1327,12 @@ async function init() {
         const cwd = args[0];
         console.log(`[open-terminal] cwd="${cwd}"`);
         setLastTerminalCwd(cwd);
+        const existing = tiles.find((t) => t.type === "term" && t.cwd === cwd);
+        if (existing) {
+          edgeIndicators.panToTile(existing);
+          tileManager.focusCanvasTile(existing.id);
+          return;
+        }
         const size = defaultSize("term");
         const pos = findAutoPlacementForTerminal(cwd, size);
         const tile = tileManager.createCanvasTile("term", pos.x, pos.y, {
