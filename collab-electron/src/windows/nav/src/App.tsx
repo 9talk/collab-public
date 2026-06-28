@@ -485,9 +485,16 @@ export default function App() {
         // Always expand ancestors, even for same path (re-click support)
         if (prev === path && path) {
           queueMicrotask(() => {
-            const ws = workspacePathsRef.current.find((p) =>
-              isSubpath(p, path),
-            );
+            // Find the most specific (longest) matching workspace —
+            // ensures nested workspace paths take priority over parent ones.
+            let ws: string | undefined;
+            let bestLen = 0;
+            for (const p of workspacePathsRef.current) {
+              if (isSubpath(p, path) && p.length > bestLen) {
+                ws = p;
+                bestLen = p.length;
+              }
+            }
             if (ws) {
               setExpandedWorkspaces((prevExp) => {
                 if (prevExp.has(ws)) return prevExp;
@@ -529,19 +536,31 @@ export default function App() {
     // Defer to next macrotask so expandAncestors (queued via
     // queueMicrotask in onFileSelected) has rendered to the DOM.
     const scheduleId = setTimeout(() => {
-      let el = document.querySelector(
+      // Prefer workspace items over nested folder entries when a
+      // path is both a workspace and a subfolder of another workspace.
+      const all = document.querySelectorAll<HTMLElement>(
         `[data-item-id="${CSS.escape(highlightPath)}"]`,
       );
+      let el: HTMLElement | null =
+        [...all].find((e) => e.classList.contains("workspace-folder-row")) ??
+        all[0] ??
+        null;
       // The target row may still be outside the virtualized render
       // window after expand — retry once after a paint.
       if (!el) {
         requestAnimationFrame(() => {
           if (cancelled) return;
-          el = document.querySelector(
+          const retryAll = document.querySelectorAll<HTMLElement>(
             `[data-item-id="${CSS.escape(highlightPath)}"]`,
           );
-          if (!el) return;
-          applyFlash(el);
+          const retryEl =
+            [...retryAll].find((e) =>
+              e.classList.contains("workspace-folder-row"),
+            ) ??
+            retryAll[0] ??
+            null;
+          if (!retryEl) return;
+          applyFlash(retryEl);
         });
         return;
       }
@@ -573,7 +592,15 @@ export default function App() {
   // Expand ancestors when a file is selected externally
   useEffect(() => {
     if (!selectedPath) return;
-    const ws = workspacePaths.find((p) => isSubpath(p, selectedPath));
+    // Find the most specific (longest) matching workspace
+    let ws: string | undefined;
+    let bestLen = 0;
+    for (const p of workspacePaths) {
+      if (isSubpath(p, selectedPath) && p.length > bestLen) {
+        ws = p;
+        bestLen = p.length;
+      }
+    }
     if (!ws) return;
 
     // Ensure workspace is expanded
@@ -601,18 +628,20 @@ export default function App() {
   // Expand folder helper (used by drag-drop and create operations)
   const expandFolder = useCallback(
     (path: string) => {
-      // Find the workspace this path belongs to and notify it
-      // The workspace hook handles the actual expansion via its own state
-      // For the drag-drop timer-based expand, we need to trigger the right workspace
+      let bestWs: string | null = null;
+      let bestRef: { current: any } | null = null;
       for (const ws of workspacePaths) {
         if (path === ws || isSubpath(ws, path)) {
           const ref = workspaceRefsMap.current.get(ws);
-          if (ref?.current) {
-            // expandAncestors also expands the target dir
-            ref.current.expandAncestors(path + "/dummy");
+          if (ref?.current && (!bestWs || ws.length > bestWs.length)) {
+            bestWs = ws;
+            bestRef = ref;
           }
-          break;
+          if (path === ws) break;
         }
+      }
+      if (bestRef?.current) {
+        bestRef.current.expandAncestors(path + "/dummy");
       }
     },
     [workspacePaths],

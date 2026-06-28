@@ -39,6 +39,14 @@ export function createCanvasNotifications({
   }
 
   function show(tileId: string, message?: string) {
+    // Deduplicate: dismiss existing toast for the same tileId
+    for (const [toastId, tid] of toastTileMap) {
+      if (tid === tileId) {
+        toast.dismiss(toastId);
+        toastTileMap.delete(toastId);
+      }
+    }
+
     const tile = _getTile(tileId);
     if (!tile) return;
 
