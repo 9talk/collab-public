@@ -348,6 +348,7 @@ function TerminalTab({
         }
       }
 
+      window.api.sendToHost("term:user-input", sessionId);
       window.api.ptyWrite(sessionId, data);
     });
 
@@ -569,11 +570,12 @@ function TerminalTab({
         flushTimerRef.current = undefined;
       }
       dataBufferRef.current = [];
-      // Reset retry counter — manual refresh is a fresh start.
       webglRetriesRef.current = 0;
-      // Re-create WebGL renderer to flush corrupted texture atlas.
       createWebglRef.current?.();
-      requestAnimationFrame(() => fitRef.current?.fit());
+      requestAnimationFrame(() => {
+        fitRef.current?.fit();
+        window.api.sendToHost("term:refreshed", sessionId);
+      });
     });
     return unsub;
   }, [sessionId]);

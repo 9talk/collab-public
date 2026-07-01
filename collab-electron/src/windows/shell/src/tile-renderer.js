@@ -199,22 +199,6 @@ export function createTileDOM(tile, callbacks) {
     refreshBtn.addEventListener("mousedown", (e) => e.stopPropagation());
     refreshBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (refreshBtn.classList.contains("spinning")) return;
-      refreshBtn.classList.add("spinning");
-      setTimeout(() => refreshBtn.classList.remove("spinning"), 1500);
-
-      // Show a translucent overlay with a spinning icon over
-      // the tile content area while the terminal reloads.
-      const overlay = document.createElement("div");
-      overlay.className = "tile-refresh-overlay";
-      overlay.innerHTML = refreshBtn.innerHTML;
-      contentArea.appendChild(overlay);
-      requestAnimationFrame(() => overlay.classList.add("visible"));
-      setTimeout(() => {
-        overlay.classList.remove("visible");
-        setTimeout(() => overlay.remove(), 600);
-      }, 1200);
-
       callbacks.onRefresh(tile.id);
     });
     btnGroup.appendChild(refreshBtn);

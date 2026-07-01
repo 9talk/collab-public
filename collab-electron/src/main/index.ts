@@ -210,6 +210,7 @@ const TOGGLE_SHORTCUTS: Record<string, ShortcutEntry[]> = {
   KeyK: [{ modifier: cmdOrCtrl, action: "focus-file-search" }],
   KeyN: [{ modifier: cmdOrCtrl, action: "new-tile" }],
   KeyW: [{ modifier: cmdOrCtrl, action: "close-tile" }],
+  KeyR: [{ modifier: cmdOrCtrl, action: "refresh-terminal" }],
   ArrowRight: [
     { modifier: optCmd, action: "nav-history-forward" },
     { modifier: cmdNoAlt, action: "focus-tile-right" },

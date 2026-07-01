@@ -650,11 +650,18 @@ async function init() {
       tileListWebview?.send("tile-list:focus", tile?.id || null);
       if (tile) notifications.dismissByTileId(tile.id);
     },
+    onTileUserInput(tileId) {
+      notifications.dismissByTileId(tileId);
+    },
     onTileDblClick(tile) {
       edgeIndicators.panToTile(tile);
     },
     onPanToTile(tile) {
       edgeIndicators.panToTile(tile);
+    },
+    onRefreshCooldown(tileId) {
+      notifications.show(tileId, "请不要频繁刷新");
+      setTimeout(() => notifications.dismissByTileId(tileId), 2500);
     },
     onTermScreenshot(tileId) {
       // Show context menu → screenshot via webContents.capturePage()
@@ -1215,6 +1222,16 @@ async function init() {
         canvasEl.focus();
         noteSurfaceFocus("canvas");
         minimap.update();
+      }
+    } else if (action === "refresh-terminal") {
+      console.log("[refresh-terminal] shortcut triggered");
+      const focusedId = tileManager.getFocusedTileId();
+      if (focusedId) {
+        const dom = tileManager.getTileDOMs().get(focusedId);
+        if (dom?.webview) dom.webview.blur();
+        requestAnimationFrame(() => {
+          tileManager.refreshTerminalTile(focusedId);
+        });
       }
     } else if (
       action === "focus-tile-right" ||

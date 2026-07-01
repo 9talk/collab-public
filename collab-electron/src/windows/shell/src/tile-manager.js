@@ -57,8 +57,10 @@ export function createTileManager({
   onTileDblClick,
   onTermScreenshot,
   onLocate,
+  onRefreshCooldown,
   onReposition,
   onPanToTile,
+  onTileUserInput,
   getAliases = () => ({}),
 }) {
   /** @type {Map<string, {container: HTMLElement, contentArea: HTMLElement, titleText: HTMLElement, webview?: HTMLElement}>} */
@@ -386,7 +388,15 @@ export function createTileManager({
           wv.style.visibility = "";
         });
       });
-      wv.addEventListener("before-input-event", () => {});
+      wv.addEventListener("before-input-event", (event) => {
+        if (
+          event.input.type === "keyDown" &&
+          (event.input.meta || event.input.control) &&
+          (event.input.code === "KeyR" || event.input.key === "r")
+        ) {
+          event.preventDefault();
+        }
+      });
     });
 
     wv.addEventListener("ipc-message", (event) => {
@@ -429,6 +439,21 @@ export function createTileManager({
           updateTileStatus(tileDOMs.get(t.id), t);
         }
       }
+      if (event.channel === "term:refreshed") {
+        clearRefreshMask(tileDOMs.get(tile.id), tile);
+        focusCanvasTile(tile.id);
+      }
+      if (event.channel === "term:user-input") {
+        const sessionId = event.args[0];
+        if (sessionId && tile.ptySessionId === sessionId) {
+          onTileUserInput?.(tile.id);
+        }
+      }
+    });
+
+    // Webview 崩溃时清理遮罩
+    wv.addEventListener("render-process-gone", () => {
+      clearRefreshMask(tileDOMs.get(tile.id), tile);
     });
 
     // TEMP: forward console messages to shell DevTools
@@ -686,10 +711,7 @@ export function createTileManager({
         });
       },
       onRefresh: (id) => {
-        const d = tileDOMs.get(id);
-        if (d?.webview) {
-          d.webview.send("terminal:refresh");
-        }
+        refreshTerminalTile(id);
       },
       onLocate: onLocate
         ? (id) => {
@@ -778,6 +800,66 @@ export function createTileManager({
     );
 
     return tile;
+  }
+
+  function clearRefreshMask(d, tile) {
+    if (!d) return;
+    console.log("[refreshTile] clearing mask");
+    if (tile) tile._refreshing = false;
+    const btn = d.container.querySelector(".tile-refresh-btn");
+    if (btn) btn.classList.remove("spinning");
+    const overlay = d.contentArea.querySelector(".tile-refresh-overlay");
+    if (overlay) {
+      overlay.classList.remove("visible");
+      setTimeout(() => overlay.remove(), 600);
+    }
+  }
+
+  function refreshTerminalTile(id) {
+    const d = tileDOMs.get(id);
+    if (!d) return;
+    const tile = getTile(id);
+    if (!tile || tile.type !== "term") return;
+
+    // If save memory mode destroyed the webview, rebuild it.
+    // The new webview starts fresh, so no terminal:refresh needed.
+    if (!d.webview) {
+      if (d._placeholder) {
+        d.contentArea.removeChild(d._placeholder);
+        d._placeholder = null;
+      }
+      spawnTerminalWebview(tile);
+      return;
+    }
+
+    // 5 秒冷却限制
+    if (tile._lastRefreshAt && Date.now() - tile._lastRefreshAt < 5000) {
+      console.log("[refreshTile] cooldown, too frequent", id);
+      onRefreshCooldown?.(id);
+      return;
+    }
+
+    // _refreshing 标记守卫：刷新进行中忽略重复请求
+    // 与 cooldown 双重保护：请求进行中拒，刚完成但还在 5s 内也拒
+    if (tile._refreshing) {
+      console.log("[refreshTile] blocked by _refreshing flag", id);
+      return;
+    }
+    tile._refreshing = true;
+    tile._lastRefreshAt = Date.now();
+
+    console.log("[refreshTile] proceeding with refresh", id);
+    const refreshBtn = d.container.querySelector(".tile-refresh-btn");
+    if (refreshBtn) refreshBtn.classList.add("spinning");
+    const overlay = document.createElement("div");
+    overlay.className = "tile-refresh-overlay";
+    overlay.innerHTML = refreshBtn?.innerHTML ?? "";
+    d.contentArea.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add("visible"));
+    // 10s 安全兜底：清理视觉 + 释放标记
+    setTimeout(() => clearRefreshMask(d, tile), 10000);
+
+    d.webview.send("terminal:refresh");
   }
 
   function closeCanvasTile(id) {
@@ -1011,6 +1093,7 @@ export function createTileManager({
     setFocusedTileId: (id) => {
       focusedTileId = id;
     },
+    refreshTerminalTile,
     renameTile,
     updateTileForRename,
     closeTilesForDeletedPaths,
