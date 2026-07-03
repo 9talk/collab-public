@@ -36,6 +36,9 @@ function TerminalTab({
   const flushTimerRef = useRef<number | undefined>(undefined);
   const webglRetriesRef = useRef(0);
   const createWebglRef = useRef<(() => void) | null>(null);
+  const flushDataRef = useRef<(() => void) | null>(null);
+  const refreshingRef = useRef(false);
+  const pendingDuringRefreshRef = useRef<Uint8Array[]>([]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -409,10 +412,18 @@ function TerminalTab({
       }
 
       term.write(merged);
+      term.clearTextureAtlas();
     };
+    flushDataRef.current = flushData;
 
     const handleData = (payload: { sessionId: string; data: Uint8Array }) => {
       if (payload.sessionId !== sessionId) return;
+      // During a WebGL refresh, buffer data separately to avoid
+      // losing it if flushData races with dataBufferRef.current = [].
+      if (refreshingRef.current) {
+        pendingDuringRefreshRef.current.push(payload.data);
+        return;
+      }
       dataBufferRef.current.push(payload.data);
       if (flushTimerRef.current === undefined) {
         flushTimerRef.current = window.setTimeout(
@@ -565,6 +576,10 @@ function TerminalTab({
     const unsub = window.api.onTerminalRefresh(() => {
       const t = termRef.current;
       if (!t) return;
+      // Redirect incoming PTY data to a safe buffer while we
+      // swap the WebGL addon, so no data is lost to the race
+      // between flushData and dataBufferRef.current = [].
+      refreshingRef.current = true;
       if (flushTimerRef.current !== undefined) {
         clearTimeout(flushTimerRef.current);
         flushTimerRef.current = undefined;
@@ -574,6 +589,17 @@ function TerminalTab({
       createWebglRef.current?.();
       requestAnimationFrame(() => {
         fitRef.current?.fit();
+        // Replay data that arrived during the refresh.
+        const pending = pendingDuringRefreshRef.current;
+        pendingDuringRefreshRef.current = [];
+        if (pending.length > 0) {
+          dataBufferRef.current.push(...pending);
+          flushTimerRef.current = window.setTimeout(
+            flushDataRef.current,
+            DATA_BUFFER_FLUSH_MS,
+          );
+        }
+        refreshingRef.current = false;
         window.api.sendToHost("term:refreshed", sessionId);
       });
     });
