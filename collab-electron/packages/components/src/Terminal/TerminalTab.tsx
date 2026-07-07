@@ -5,6 +5,10 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { getTheme } from "./theme";
+import {
+  matchesPattern,
+  type FileTypeGroup,
+} from "@collab/shared/external-app";
 import "@xterm/xterm/css/xterm.css";
 import "./TerminalTab.css";
 
@@ -60,8 +64,65 @@ function TerminalTab({
     termRef.current = term;
 
     const linkHandler = {
-      activate: (_event: MouseEvent, text: string) => {
-        window.api.openExternal(text);
+      allowNonHttpProtocols: true,
+      activate: async (_event: MouseEvent, text: string) => {
+        // Determine if the link is a file path (OSC 8 URI or bare absolute path)
+        let filePath: string | null = null;
+        if (text.startsWith("file://")) {
+          filePath = decodeURIComponent(text.slice(7));
+        } else if (text.startsWith("/") || text.startsWith("~/")) {
+          filePath = text;
+        }
+
+        if (!filePath) {
+          window.api.openExternal(text);
+          return;
+        }
+
+        // Resolve editor: match extension against file type groups,
+        // then fall back to the global default editor preference.
+        // This mirrors the logic in nav/App.tsx (selectFile).
+        let matchedEditor: string | null = null;
+        try {
+          const groups = (await window.api.getPref(
+            "externalEditorFileTypes",
+          )) as FileTypeGroup[] | null;
+          if (groups) {
+            const dot = filePath.lastIndexOf(".");
+            const ext = dot >= 0 ? filePath.slice(dot).toLowerCase() : "";
+            for (const group of groups) {
+              if (group.patterns.some((p) => matchesPattern(ext, p))) {
+                matchedEditor = group.editorId || null;
+                break;
+              }
+            }
+          }
+        } catch {
+          // Preference unavailable — fall through
+        }
+
+        if (matchedEditor) {
+          if (matchedEditor === "system-app") {
+            window.api.openPath(filePath);
+          } else {
+            window.api.openFileInExternalEditor(filePath, matchedEditor);
+          }
+          return;
+        }
+
+        // No file-type match: use global editor preference
+        try {
+          const useExt = await window.api.getPref("useExternalEditor");
+          if (useExt) {
+            window.api.openFileInExternalEditor(filePath);
+            return;
+          }
+        } catch {
+          // Preference unavailable — fall through
+        }
+
+        // Fallback: open with system default application
+        window.api.openPath(filePath);
       },
     };
     // Override the default confirm()+window.open() handler for OSC 8 links.

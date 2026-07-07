@@ -1,4 +1,5 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { spawn } from "node:child_process";
 
 export interface ExternalEditor {
@@ -42,6 +43,11 @@ const KNOWN_EDITORS: ExternalEditor[] = [
     id: "qoder",
     name: "Qoder",
     appPath: "/Applications/Qoder.app",
+  },
+  {
+    id: "sublime-text",
+    name: "Sublime Text",
+    appPath: "/Applications/Sublime Text.app",
   },
 ];
 
@@ -105,7 +111,34 @@ export function openFileInEditor(
     openWithCodeFork("/Applications/Qoder.app", filePath, workspacePath);
   } else if (editorId === "zed") {
     spawnEditor("/Applications/Zed.app/Contents/MacOS/cli", [filePath]);
+  } else if (editorId === "sublime-text") {
+    const sublBin =
+      "/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl";
+    const args = sublimeArgs(workspacePath, filePath);
+    spawnEditor(sublBin, args);
   }
+}
+
+function sublimeArgs(workspacePath: string, filePath?: string): string[] {
+  const projectFile = findSublimeProject(workspacePath);
+  if (projectFile) {
+    return filePath
+      ? ["--project", projectFile, filePath]
+      : ["--project", projectFile];
+  }
+  return filePath ? ["-n", workspacePath, filePath] : ["-n", workspacePath];
+}
+
+function findSublimeProject(dir: string): string | null {
+  try {
+    const entries = readdirSync(dir);
+    for (const entry of entries) {
+      if (entry.endsWith(".sublime-project")) {
+        return join(dir, entry);
+      }
+    }
+  } catch {}
+  return null;
 }
 
 export function openWorkspaceInEditor(
@@ -131,5 +164,9 @@ export function openWorkspaceInEditor(
     openWorkspaceWithCodeFork("/Applications/Qoder.app", workspacePath);
   } else if (editorId === "zed") {
     spawnEditor("/Applications/Zed.app/Contents/MacOS/cli", [workspacePath]);
+  } else if (editorId === "sublime-text") {
+    const sublBin =
+      "/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl";
+    spawnEditor(sublBin, sublimeArgs(workspacePath));
   }
 }

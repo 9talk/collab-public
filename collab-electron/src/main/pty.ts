@@ -4,6 +4,7 @@ import * as path from "node:path";
 import * as net from "node:net";
 import * as crypto from "crypto";
 import { displayBasename } from "@collab/shared/path-utils";
+import { hyperlinkFilePaths } from "./hyperlink-paths";
 import {
   writeSessionMeta,
   readSessionMeta,
@@ -170,6 +171,9 @@ function forwardPtyData(
   const safeLen = tail > 0 ? full.length - tail : full.length;
   const text = full.subarray(0, safeLen).toString("utf-8");
 
+  // Enrich PTY output: colorize URLs and wrap file paths with OSC 8 hyperlinks
+  const enriched = hyperlinkFilePaths(text);
+
   // Diagnostic: detect U+FFFD indicating invalid UTF-8 bytes
   if (text.includes("�")) {
     const idx = text.indexOf("�");
@@ -196,14 +200,14 @@ function forwardPtyData(
   if (!shouldBatchWindowsPowerShellOutput(sessionId)) {
     sendToSender(senderWebContentsId, "pty:data", {
       sessionId,
-      data: text,
+      data: enriched,
     });
     scheduleForegroundCheck(sessionId);
     return;
   }
 
   const queued = pendingPtyData.get(sessionId) ?? [];
-  queued.push(Buffer.from(text, "utf-8"));
+  queued.push(Buffer.from(enriched, "utf-8"));
   pendingPtyData.set(sessionId, queued);
   if (!pendingPtyDataTimers.has(sessionId)) {
     pendingPtyDataTimers.set(
