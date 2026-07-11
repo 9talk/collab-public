@@ -80,6 +80,7 @@ export default defineConfig({
           "graph-tile": resolve(__dirname, "src/windows/graph-tile/index.html"),
           "tile-list": resolve(__dirname, "src/windows/tile-list/index.html"),
           "agent-chat": resolve(__dirname, "src/windows/agent-chat/index.html"),
+          todos: resolve(__dirname, "src/windows/todos/index.html"),
         },
       },
     },

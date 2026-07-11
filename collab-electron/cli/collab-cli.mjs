@@ -3,6 +3,10 @@ import { createConnection } from "node:net";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { encode } = require("@toon-format/toon");
 
 const VERSION = "0.1.0";
 const GRID = 20;
@@ -375,6 +379,79 @@ async function cmdBrowserInfo(args) {
   console.log(pretty(result));
 }
 
+// --- todo subcommands -------------------------------------------------------
+
+async function cmdTodoList() {
+  const todos = await rpcCall("todos.list");
+  if (!Array.isArray(todos) || todos.length === 0) {
+    return;
+  }
+
+  console.log(encode({ todos }));
+}
+
+async function cmdTodoAdd(args) {
+  if (args.length === 0) die("todo add requires text");
+  let text = null;
+  let priority = null;
+  let tags = null;
+  const copy = [...args];
+  while (copy.length > 0) {
+    const arg = copy.shift();
+    if (arg === "--priority") {
+      if (copy.length === 0) die("--priority requires a value (p0-p3)");
+      priority = copy.shift();
+    } else if (arg === "--tags") {
+      if (copy.length === 0) die("--tags requires comma-separated values");
+      tags = copy.shift().split(",");
+    } else {
+      if (text !== null) text += " " + arg;
+      else text = arg;
+    }
+  }
+  const params = { text };
+  if (priority) params.priority = priority;
+  if (tags) params.tags = tags;
+  const result = await rpcCall("todos.add", params);
+  console.log(`added todo: ${result.id}`);
+}
+
+async function cmdTodoUpdate(args) {
+  if (args.length === 0) die("todo update requires an id");
+  const id = args.shift();
+  const params = { id };
+  while (args.length > 0) {
+    const flag = args.shift();
+    switch (flag) {
+      case "--text":
+        if (args.length === 0) die("--text requires a value");
+        params.text = args.shift();
+        break;
+      case "--done":
+        params.done = args.shift() === "true";
+        break;
+      case "--priority":
+        if (args.length === 0) die("--priority requires a value (p0-p3|null)");
+        params.priority = args.shift();
+        break;
+      case "--tags":
+        if (args.length === 0) die("--tags requires comma-separated values");
+        params.tags = args.shift().split(",");
+        break;
+      default:
+        die(`unknown option: ${flag}`);
+    }
+  }
+  const result = await rpcCall("todos.update", params);
+  console.log(`updated todo: ${result.id}`);
+}
+
+async function cmdTodoDelete(args) {
+  if (args.length === 0) die("todo delete requires an id");
+  await rpcCall("todos.delete", { id: args[0] });
+  console.log(`deleted todo: ${args[0]}`);
+}
+
 // --- usage ----------------------------------------------------------------
 
 function usage() {
@@ -402,6 +479,10 @@ COMMANDS
   browser eval <id> <expression>    Run JS and return result
   browser wait <id> [--timeout ms]  Wait for page load
   browser info <id>                 Get URL, title, load state
+  todo list                         List all todos
+  todo add <text> [options]        Add a new todo
+  todo update <id> [options]       Update a todo
+  todo delete <id>                 Delete a todo
   help, --help                       Show this help
 
 TILE CREATE OPTIONS
@@ -422,6 +503,16 @@ TERMINAL READ OPTIONS
 
 BROWSER SCREENSHOT OPTIONS
   --out <path>    Save screenshot to file instead of printing base64
+
+TODO ADD OPTIONS
+  --priority p0|p1|p2|p3  Priority level (default: none)
+  --tags a,b,c            Comma-separated tags
+
+TODO UPDATE OPTIONS
+  --text <str>            New text
+  --done true|false       Completion status
+  --priority p0|p1|p2|p3  Priority level (use "null" to clear)
+  --tags a,b,c            Comma-separated tags
 
 COORDINATES
   All coordinates are in grid units.
@@ -545,6 +636,30 @@ try {
           break;
         default:
           die(`unknown browser subcommand: ${sub}`);
+      }
+      break;
+    }
+    case "todo": {
+      if (argv.length < 2) {
+        die("todo requires a subcommand (list, add, update, delete)");
+      }
+      const sub = argv[1];
+      const rest = argv.slice(2);
+      switch (sub) {
+        case "list":
+          await cmdTodoList();
+          break;
+        case "add":
+          await cmdTodoAdd(rest);
+          break;
+        case "update":
+          await cmdTodoUpdate(rest);
+          break;
+        case "delete":
+          await cmdTodoDelete(rest);
+          break;
+        default:
+          die(`unknown todo subcommand: ${sub}`);
       }
       break;
     }

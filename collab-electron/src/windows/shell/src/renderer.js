@@ -518,15 +518,31 @@ async function init() {
 
   let tileListWebview = null;
 
+  const todosContainer = document.createElement("div");
+  todosContainer.id = "todos-container";
+  todosContainer.style.display = "none";
+  todosContainer.style.flex = "1";
+  todosContainer.style.minHeight = "0";
+  panelNav.appendChild(todosContainer);
+
+  let todosWebview = null;
+
   function updateSidebarContent(mode) {
     fileTreeContainer.style.display = mode === "files" ? "flex" : "none";
     tileListContainer.style.display = mode === "tiles" ? "flex" : "none";
+    todosContainer.style.display = mode === "todos" ? "flex" : "none";
     if (mode === "tiles") {
       ensureTileListWebview();
     } else if (tileListWebview) {
       tileListWebview.webview.remove();
       tileListWebview = null;
       lastTileSnapshot = new Map();
+    }
+    if (mode === "todos" && !todosWebview) {
+      todosWebview = createWebview("todos", configs.todos, todosContainer);
+    } else if (mode !== "todos" && todosWebview) {
+      todosWebview.webview.remove();
+      todosWebview = null;
     }
   }
   updateSidebarContent(panelManager.getMode());
@@ -542,7 +558,11 @@ async function init() {
   for (const btn of modeButtons) {
     btn.addEventListener("click", () => {
       const targetMode = btn.dataset.mode;
-      if (targetMode === "files" || targetMode === "tiles") {
+      if (
+        targetMode === "files" ||
+        targetMode === "tiles" ||
+        targetMode === "todos"
+      ) {
         panelManager.setMode(targetMode);
       }
     });

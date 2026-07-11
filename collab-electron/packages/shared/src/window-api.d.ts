@@ -254,6 +254,16 @@ export interface CollabApi {
   openExternal: (url: string) => void;
   openPath: (path: string) => void;
 
+  // External editor
+  listExternalEditors: () => Promise<
+    Array<{
+      id: string;
+      name: string;
+      appPath: string;
+    }>
+  >;
+  openFileInExternalEditor: (filePath: string, editorId?: string) => void;
+
   // Context menu
   showContextMenu: (
     items: Array<{

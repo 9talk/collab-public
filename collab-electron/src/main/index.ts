@@ -573,6 +573,7 @@ ipcMain.handle("shell:get-view-config", () => {
     settings: { src: getRendererURL("settings"), preload },
     tileList: { src: getRendererURL("tile-list"), preload },
     agentChat: { src: getRendererURL("agent-chat"), preload },
+    todos: { src: getRendererURL("todos"), preload },
   };
 });
 

@@ -31,7 +31,7 @@ export function createPanel(side, config) {
     label,
     defaultWidth,
     direction,
-    validModes = ["closed", "files", "tiles"],
+    validModes = ["closed", "files", "tiles", "todos"],
     defaultMode = validModes[1] || "closed",
     prefKey = "sidebar-mode",
     getAllWebviews = () => [],

@@ -63,9 +63,32 @@ function TerminalTab({
     });
     termRef.current = term;
 
+    const showEditorPicker = async (filePath: string): Promise<void> => {
+      try {
+        const editors = await window.api.listExternalEditors();
+        if (editors.length === 0) {
+          window.api.openPath(filePath);
+          return;
+        }
+        const items: Array<{ id: string; label: string }> = [
+          { id: "system-app", label: "系统应用" },
+          ...editors.map((e) => ({ id: e.id, label: e.name })),
+        ];
+        const selectedId = await window.api.showContextMenu(items);
+        if (!selectedId) return;
+        if (selectedId === "system-app") {
+          window.api.openPath(filePath);
+        } else {
+          window.api.openFileInExternalEditor(filePath, selectedId);
+        }
+      } catch {
+        window.api.openPath(filePath);
+      }
+    };
+
     const linkHandler = {
       allowNonHttpProtocols: true,
-      activate: async (_event: MouseEvent, text: string) => {
+      activate: async (event: MouseEvent, text: string) => {
         // Determine if the link is a file path (OSC 8 URI or bare absolute path)
         let filePath: string | null = null;
         if (text.startsWith("file://")) {
@@ -76,6 +99,12 @@ function TerminalTab({
 
         if (!filePath) {
           window.api.openExternal(text);
+          return;
+        }
+
+        // Cmd+Click (macOS) / Ctrl+Click (other platforms): show editor picker
+        if (IS_MAC ? event.metaKey : event.ctrlKey) {
+          await showEditorPicker(filePath);
           return;
         }
 

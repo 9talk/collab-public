@@ -126,7 +126,10 @@ function sublimeArgs(workspacePath: string, filePath?: string): string[] {
       ? ["--project", projectFile, filePath]
       : ["--project", projectFile];
   }
-  return filePath ? ["-n", workspacePath, filePath] : ["-n", workspacePath];
+  // 打开文件时不带 workspace 上下文，只传文件路径
+  if (filePath) return [filePath];
+  // 打开工作区时用 -n 新窗口
+  return ["-n", workspacePath];
 }
 
 function findSublimeProject(dir: string): string | null {

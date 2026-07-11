@@ -8,6 +8,7 @@ import {
   makeEndpointPath,
   prepareEndpoint,
 } from "./ipc-endpoint";
+import { registerTodosRpc } from "./todos-rpc";
 
 const SOCKET_PATH = makeEndpointPath("ipc");
 // Write the breadcrumb to the base directory (~/.collaborator/)
@@ -176,6 +177,8 @@ export function startJsonRpcServer(): Promise<void> {
     registerMethod("rpc.discover", () => ({ methods: discoverMethods() }), {
       description: "List all available RPC methods",
     });
+
+    registerTodosRpc();
 
     server.listen(SOCKET_PATH, () => {
       writeFileSync(SOCKET_PATH_FILE, SOCKET_PATH, "utf-8");
