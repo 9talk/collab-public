@@ -51,6 +51,10 @@ export const zh: Record<TranslationKey, string> = {
   // Terminal pane
   "terminal.title": "终端",
   "terminal.description": "更改将在新终端中生效。",
+  "terminal.tileSize": "Tile 尺寸",
+  "terminal.tileSizeDesc": "新建终端时默认的 tile 尺寸。",
+  "terminal.tileWidth": "宽度",
+  "terminal.tileHeight": "高度",
 
   // Terminal pane (Windows)
   "terminal.target": "终端目标",

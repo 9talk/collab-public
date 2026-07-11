@@ -3,11 +3,14 @@ import { createConnection } from "node:net";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
-import { createRequire } from "node:module";
 
-const require = createRequire(import.meta.url);
-const { encode } = require("@toon-format/toon");
-
+// @toon-format/toon is optional — fall back to JSON if unavailable
+let encode;
+try {
+  encode = (await import("@toon-format/toon")).encode;
+} catch {
+  encode = (obj) => JSON.stringify(obj, null, 2);
+}
 const VERSION = "0.1.0";
 const GRID = 20;
 const COLLAB_DIR = join(homedir(), ".collaborator");

@@ -43,3 +43,4 @@ CLAUDE.md
 docs/
 dev-app-update.yml
 build-debug.log
+cli/collab-cli.bundled.mjs

@@ -34,7 +34,21 @@ const DEFAULT_TILE_SIZES = {
   pdf: { width: 1180, height: 700 },
 };
 
-/** @param {TileType} type */
+/**
+ * Pick the size for a new tile created directly on the canvas.
+ * Uses the most recently created tile's dimensions as reference,
+ * falling back to DEFAULT_TILE_SIZES when the canvas is empty.
+ * @param {TileType} type
+ * @returns {{ width: number, height: number }}
+ */
+export function pickCanvasTileSize(type) {
+  if (tiles.length > 0) {
+    const last = tiles[tiles.length - 1];
+    return { width: last.width, height: last.height };
+  }
+  return defaultSize(type);
+}
+
 export function defaultSize(type) {
   return { ...DEFAULT_TILE_SIZES[type] };
 }

@@ -21,6 +21,7 @@
     "test:updater": "bun format && bun test src/main/updater/github-release-fetcher.test.ts && bun test src/main/updater/downloader.test.ts && bun test src/main/updater/update-manager.test.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "build:cli": "bun build ./cli/collab-cli.mjs --outfile ./cli/collab-cli.bundled.mjs --target node --format esm --external 'node:*'",
     "postinstall": "node scripts/postinstall.mjs"
   },
   "build": {
@@ -59,7 +60,7 @@
         "to": "terminfo"
       },
       {
-        "from": "cli/collab-cli.mjs",
+        "from": "cli/collab-cli.bundled.mjs",
         "to": "collab-cli.mjs"
       },
       {

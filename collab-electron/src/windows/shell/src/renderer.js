@@ -4,6 +4,7 @@ import {
   tiles,
   getTile,
   defaultSize,
+  pickCanvasTileSize,
   inferTileType,
   tileAtPoint,
   selectTile,
@@ -55,6 +56,7 @@ let broadcastCanvasOpacity = () => {};
 const DEFAULT_CANVAS_OPACITY = 50;
 let lastCanvasOpacity = DEFAULT_CANVAS_OPACITY;
 let updateSaveMemConfig = null;
+let filesNavTileSize = null;
 
 window.shellApi.getPref("canvasOpacity").then((v) => {
   lastCanvasOpacity = v != null ? v : DEFAULT_CANVAS_OPACITY;
@@ -81,6 +83,13 @@ window.shellApi.onPrefChanged((key, value) => {
     updateSaveMemConfig?.({ maxTiles: Number(value) || 2 });
   } else if (key === "saveMemDestroyDelay") {
     updateSaveMemConfig?.({ destroyDelay: Number(value) || 5 });
+  } else if (key === "tileSize") {
+    if (value && typeof value === "object") {
+      const val = /** @type {{ width?: number; height?: number }} */ (value);
+      if (typeof val.width === "number") filesNavTileSize = val;
+    } else {
+      filesNavTileSize = null;
+    }
   }
 });
 
@@ -142,6 +151,13 @@ async function init() {
 
   // Store as module-level variable for tile-renderer access
   window.__tileAliases = workspaceAliases;
+
+  window.shellApi.getPref("tileSize").then((v) => {
+    if (v && typeof v === "object") {
+      const val = /** @type {{ width?: number; height?: number }} */ (v);
+      if (typeof val.width === "number") filesNavTileSize = val;
+    }
+  });
 
   function getTerminalCwd() {
     const focusedId = tileManager.getFocusedTileId();
@@ -957,7 +973,7 @@ async function init() {
 
     // Try to find an adjacent tile to inherit cwd from
     const adjacent = findNearestAdjacentTile(canvasX, canvasY);
-    const size = defaultSize("term");
+    const size = pickCanvasTileSize("term");
 
     let cwd;
     if (adjacent) {
@@ -1000,7 +1016,7 @@ async function init() {
 
     if (selected === "new-terminal") {
       const cwd = getTerminalCwd();
-      const size = defaultSize("term");
+      const size = pickCanvasTileSize("term");
       const pos = findAutoPlacementForTerminal(cwd, size);
       const tile = tileManager.createCanvasTile("term", pos.x, pos.y, {
         cwd,
@@ -1016,7 +1032,8 @@ async function init() {
       const screenY = e.clientY - rect.top;
       const cx = (screenX - viewportState.panX) / viewportState.zoom;
       const cy = (screenY - viewportState.panY) / viewportState.zoom;
-      const tile = tileManager.createCanvasTile("browser", cx, cy);
+      const size = pickCanvasTileSize("browser");
+      const tile = tileManager.createCanvasTile("browser", cx, cy, size);
       tileManager.spawnBrowserWebview(tile, true);
       tileManager.saveCanvasImmediate();
       minimap.update();
@@ -1224,7 +1241,7 @@ async function init() {
       window.shellApi.workspaceAdd();
     } else if (action === "new-tile") {
       const cwd = getTerminalCwd();
-      const size = defaultSize("term");
+      const size = pickCanvasTileSize("term");
       const pos = findAutoPlacementForTerminal(cwd, size);
       const tile = tileManager.createCanvasTile("term", pos.x, pos.y, {
         cwd,
@@ -1370,7 +1387,7 @@ async function init() {
           tileManager.focusCanvasTile(existing.id);
           return;
         }
-        const size = defaultSize("term");
+        const size = filesNavTileSize || defaultSize("term");
         const pos = findAutoPlacementForTerminal(cwd, size);
         const tile = tileManager.createCanvasTile("term", pos.x, pos.y, {
           cwd,
@@ -1646,16 +1663,19 @@ async function init() {
           ? "browser"
           : null;
     if (!type) return;
-    const size = defaultSize(type);
+    const size = pickCanvasTileSize(type);
     if (type === "term") {
       const cwd = getTerminalCwd();
       console.log(`[new-tile-btn] term cwd="${cwd}"`);
       const pos = findAutoPlacementForTerminal(cwd, size);
-      const tile = tileManager.createCanvasTile("term", pos.x, pos.y, { cwd });
+      const tile = tileManager.createCanvasTile("term", pos.x, pos.y, {
+        cwd,
+        ...size,
+      });
       tileManager.spawnTerminalWebview(tile, true);
     } else {
       const pos = findAutoPlacementForTerminal("", size);
-      const tile = tileManager.createCanvasTile("browser", pos.x, pos.y);
+      const tile = tileManager.createCanvasTile("browser", pos.x, pos.y, size);
       tileManager.spawnBrowserWebview(tile, true);
     }
     tileManager.saveCanvasImmediate();

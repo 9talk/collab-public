@@ -29,6 +29,11 @@ function getMjsSource(): string {
   if (app.isPackaged) {
     return join(process.resourcesPath, "collab-cli.mjs");
   }
+  // Try bundled version first, fall back to source
+  const bundled = join(app.getAppPath(), "cli", "collab-cli.bundled.mjs");
+  if (existsSync(bundled)) {
+    return bundled;
+  }
   return join(app.getAppPath(), "cli", "collab-cli.mjs");
 }
 

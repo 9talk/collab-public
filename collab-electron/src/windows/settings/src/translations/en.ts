@@ -48,6 +48,11 @@ export const en = {
   // Terminal pane
   "terminal.title": "Terminal",
   "terminal.description": "Changes take effect for new terminals.",
+  "terminal.tileSize": "Tile size",
+  "terminal.tileSizeDesc":
+    "Default tile dimensions when creating new terminals.",
+  "terminal.tileWidth": "Width",
+  "terminal.tileHeight": "Height",
 
   // Terminal pane (Windows)
   "terminal.target": "Terminal target",

@@ -507,6 +507,28 @@ function RadioOption({
 }
 
 function MacTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
+  const [tileWidth, setTileWidth] = useState(1196);
+  const [tileHeight, setTileHeight] = useState(739);
+
+  useEffect(() => {
+    api
+      .getPref("tileSize")
+      .then((v) => {
+        if (v && typeof v === "object") {
+          const val = v as { width?: number; height?: number };
+          if (typeof val.width === "number") setTileWidth(val.width);
+          if (typeof val.height === "number") setTileHeight(val.height);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function saveTileSize(width: number, height: number) {
+    setTileWidth(width);
+    setTileHeight(height);
+    await api.setPref("tileSize", { width, height });
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div className="space-y-1">
@@ -514,6 +536,60 @@ function MacTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
         <p className="text-sm text-muted-foreground">
           {t("terminal.description")}
         </p>
+      </div>
+
+      {/* Tile size */}
+      <div className="space-y-2">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">{t("terminal.tileSize")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("terminal.tileSizeDesc")}
+          </p>
+        </div>
+        <div className="flex gap-4">
+          <div className="flex items-center gap-2">
+            <label
+              className="text-xs text-muted-foreground"
+              style={{ minWidth: 14 }}
+            >
+              {t("terminal.tileWidth")}
+            </label>
+            <input
+              type="number"
+              min={200}
+              max={4000}
+              step={20}
+              value={tileWidth}
+              onChange={(e) => {
+                const w = parseInt(e.target.value, 10) || 1196;
+                void saveTileSize(w, tileHeight);
+              }}
+              className="w-20 rounded-md border border-border bg-background px-2 py-1 text-sm text-right"
+              style={{ color: "var(--foreground)" }}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label
+              className="text-xs text-muted-foreground"
+              style={{ minWidth: 14 }}
+            >
+              {t("terminal.tileHeight")}
+            </label>
+            <input
+              type="number"
+              min={200}
+              max={3000}
+              step={20}
+              value={tileHeight}
+              onChange={(e) => {
+                const h = parseInt(e.target.value, 10) || 739;
+                void saveTileSize(tileWidth, h);
+              }}
+              className="w-20 rounded-md border border-border bg-background px-2 py-1 text-sm text-right"
+              style={{ color: "var(--foreground)" }}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

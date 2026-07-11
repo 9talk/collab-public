@@ -144,6 +144,21 @@ const electronVite = detectMismatchedToolchain("electron-vite");
 const electronBuilder = detectMismatchedToolchain("electron-builder");
 const builtArches = targetArchitectures();
 
+// Bundle CLI so it's self-contained (inlines @toon-format/toon)
+console.log("• Bundling CLI...");
+run("bun", [
+  "build",
+  "./cli/collab-cli.mjs",
+  "--outfile",
+  "./cli/collab-cli.bundled.mjs",
+  "--target",
+  "node",
+  "--format",
+  "esm",
+  "--external",
+  "node:*",
+]);
+
 // Vite build is arch-independent — run once.
 run(process.execPath, [electronVite, "build"]);
 
