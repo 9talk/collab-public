@@ -60,6 +60,10 @@
         "to": "terminfo"
       },
       {
+        "from": "resources/collab-send-file.sh",
+        "to": "collab-send-file.sh"
+      },
+      {
         "from": "cli/collab-cli.bundled.mjs",
         "to": "collab-cli.mjs"
       },
