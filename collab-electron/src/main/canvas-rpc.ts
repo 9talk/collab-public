@@ -135,7 +135,11 @@ export function registerCanvasRpc(win: BrowserWindow): void {
 
   registerMethod(
     "canvas.terminalWriteFocused",
-    (params) => sendToShell("canvas.terminalWriteFocused", params),
+    async (params) => {
+      const result = await sendToShell("canvas.terminalWriteFocused", params);
+      shellWindow?.focus();
+      return result;
+    },
     {
       description: "Write input to the focused terminal tile",
       params: {
