@@ -137,7 +137,11 @@ export function registerCanvasRpc(win: BrowserWindow): void {
     "canvas.terminalWriteFocused",
     async (params) => {
       const result = await sendToShell("canvas.terminalWriteFocused", params);
-      shellWindow?.focus();
+      if (shellWindow) {
+        if (shellWindow.isMinimized()) shellWindow.restore();
+        shellWindow.show();
+        shellWindow.focus();
+      }
       return result;
     },
     {
