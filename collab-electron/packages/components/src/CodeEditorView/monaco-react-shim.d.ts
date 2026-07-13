@@ -4,7 +4,8 @@ declare namespace React {
   interface ReactPortal extends ReactElement {}
   type ReactNode = any;
   type JSXElementConstructor<P> =
-    ((props: P) => ReactElement | null) | (new (props: P) => any);
+    | ((props: P) => ReactElement | null)
+    | (new (props: P) => any);
   type ElementType<
     P = any,
     Tag extends keyof JSX.IntrinsicElements = keyof JSX.IntrinsicElements,

@@ -238,6 +238,25 @@ export function createCanvasRpc({
           result = {};
           break;
         }
+        case "terminalWriteFocused": {
+          const focusedId = tileManager.getFocusedTileId();
+          if (!focusedId) {
+            respondError(requestId, 4, "No focused tile");
+            return;
+          }
+          const ft = getTile(focusedId);
+          if (!ft || ft.type !== "term") {
+            respondError(requestId, 4, "Focused tile is not a terminal");
+            return;
+          }
+          if (!ft.ptySessionId) {
+            respondError(requestId, 4, "Terminal has no session");
+            return;
+          }
+          window.shellApi.ptyWrite(ft.ptySessionId, params.input);
+          result = {};
+          break;
+        }
         case "terminalRead": {
           const tile = requireTile(requestId, params.tileId);
           if (!tile) return;

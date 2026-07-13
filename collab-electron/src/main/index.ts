@@ -912,7 +912,8 @@ app.whenReady().then(async () => {
   registerIntegrationsIpc();
   setupUpdateIPC();
   const autoCheckUpdates = getPref(config, "autoCheckUpdates") as
-    boolean | null;
+    | boolean
+    | null;
   updateManager.init({
     onBeforeQuit: () => shutdownBackgroundServices(),
     autoCheckEnabled: autoCheckUpdates ?? false,

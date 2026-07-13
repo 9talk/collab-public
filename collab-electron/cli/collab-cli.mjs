@@ -247,6 +247,13 @@ async function cmdTerminalWrite(args) {
   console.log(`wrote to ${tileId}`);
 }
 
+async function cmdTerminalWriteFocused(args) {
+  if (args.length === 0) die("terminal write-focused requires <input>");
+  const input = args[0];
+  await rpcCall("canvas.terminalWriteFocused", { input });
+  console.log("wrote to focused terminal");
+}
+
 async function cmdTerminalRead(args) {
   if (args.length === 0) die("terminal read requires a tile id");
   const tileId = args.shift();
@@ -472,6 +479,7 @@ COMMANDS
   tile focus <id> [<id>...]          Bring tiles into view
   tile notify <id>                   Show notification for a tile
   terminal write <id> <input>        Send input to a terminal tile
+  terminal write-focused <input>     Send input to the focused terminal tile
   terminal read <id> [--lines N]     Read output from a terminal tile
   browser navigate <id> <url>        Navigate browser tile to URL
   browser screenshot <id> [--out f]  Capture screenshot (base64 or file)
@@ -592,6 +600,9 @@ try {
       switch (sub) {
         case "write":
           await cmdTerminalWrite(rest);
+          break;
+        case "write-focused":
+          await cmdTerminalWriteFocused(rest);
           break;
         case "read":
           await cmdTerminalRead(rest);
