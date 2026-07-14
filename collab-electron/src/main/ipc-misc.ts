@@ -27,111 +27,239 @@ interface IpcContext {
 }
 
 export function registerMiscHandlers(ctx: IpcContext): void {
-  // Memory stats — uses ps to find all child processes (not just Chromium-managed ones)
+  // Memory stats — returns grouped process nodes for treemap visualization
   ipcMain.handle("memory:stats", () => {
     const metrics = app.getAppMetrics();
     const mainPid = process.pid;
     // Build type map from app.getAppMetrics (Chromium-managed processes)
     const typeByPid = new Map<number, string>();
-    const peakByPid = new Map<number, number>();
     for (const m of metrics) {
       typeByPid.set(m.pid, m.type);
-      peakByPid.set(m.pid, m.memory?.peakWorkingSetSize ?? 0);
     }
-    // Use ps to find ALL descendants of the main process
-    const processes: Array<{
-      type: string;
-      pid: number;
-      memory: { workingSetSize: number; peakWorkingSetSize: number };
-    }> = [];
-    try {
-      const out = execFileSync("ps", ["-eo", "pid,ppid,rss,args"], {
-        encoding: "utf8",
-        timeout: 2000,
-      });
-      // Build maps from ps output
-      const rssByPid = new Map<number, number>();
-      const ppidByPid = new Map<number, number>();
-      const argsByPid = new Map<number, string>();
-      for (const line of out.trim().split("\n").slice(1)) {
-        const parts = line.trim().split(/\s+/);
-        const pid = parseInt(parts[0]!, 10);
-        const ppid = parseInt(parts[1]!, 10);
-        const rssKb = parseInt(parts[2]!, 10);
-        const args = parts.slice(3).join(" ");
-        if (!isNaN(pid) && !isNaN(rssKb)) {
-          rssByPid.set(pid, rssKb * 1024);
-          ppidByPid.set(pid, ppid);
-          argsByPid.set(pid, args);
-        }
-      }
-      // Walk the process tree: find all descendants of mainPid
-      const descendantPids = new Set<number>();
-      descendantPids.add(mainPid);
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (const [pid, ppid] of ppidByPid) {
-          if (descendantPids.has(ppid) && !descendantPids.has(pid)) {
-            descendantPids.add(pid);
-            changed = true;
+
+    // Known shells spawned inside terminal tiles
+    const shellNames = new Set(["zsh", "bash", "sh", "fish", "dash"]);
+
+    function extractProcessInfo(): {
+      groups: Array<{
+        type: string;
+        label: string;
+        rss: number;
+        count: number;
+        processes: Array<{ pid: number; label: string; rss: number }>;
+      }>;
+      totalRss: number;
+      processCount: number;
+    } {
+      // Use ps to find process tree info (Unix/macOS only)
+      try {
+        const out = execFileSync("ps", ["-eo", "pid,ppid,rss,args"], {
+          encoding: "utf8",
+          timeout: 2000,
+        });
+
+        const rssByPid = new Map<number, number>();
+        const ppidByPid = new Map<number, number>();
+        const argsByPid = new Map<number, string>();
+
+        for (const line of out.trim().split("\n").slice(1)) {
+          const parts = line.trim().split(/\s+/);
+          const pid = parseInt(parts[0]!, 10);
+          const ppid = parseInt(parts[1]!, 10);
+          const rssKb = parseInt(parts[2]!, 10);
+          const args = parts.slice(3).join(" ");
+          if (!isNaN(pid) && !isNaN(rssKb)) {
+            rssByPid.set(pid, rssKb * 1024);
+            ppidByPid.set(pid, ppid);
+            argsByPid.set(pid, args);
           }
         }
-      }
-      // Known shells spawned inside terminal tiles
-      const shells = new Set(["zsh", "bash", "sh", "fish", "dash"]);
-      // Classify a process by its args when app.getAppMetrics doesn't know it
-      function classify(pid: number): string {
-        const known = typeByPid.get(pid);
-        if (known) return known;
-        const a = argsByPid.get(pid) ?? "";
-        if (!a) return "Unknown";
-        // PTY sidecar: forked child process running collab-electron sidecar
-        if (a.includes("--sidecar") || a.includes("pty-session")) return "PTY";
-        // Shell spawned inside a terminal tile
-        const firstWord = a.split(/\s+/)[0] ?? "";
-        const base = firstWord.split("/").pop() ?? firstWord;
-        if (shells.has(base) || a.startsWith("-")) return "Shell";
-        // Other child processes — use executable basename
-        return base || a.slice(0, 40);
-      }
-      // Build result from all descendant processes
-      for (const pid of descendantPids) {
-        if (
-          ppidByPid.get(pid) === mainPid &&
-          argsByPid.get(pid)?.startsWith("ps ")
-        )
-          continue;
-        const rss = rssByPid.get(pid) ?? 0;
-        processes.push({
-          type: classify(pid),
-          pid,
-          memory: {
-            workingSetSize: rss,
-            peakWorkingSetSize: peakByPid.get(pid) ?? 0,
-          },
-        });
-      }
-      // Sort by type for consistent display
-      processes.sort((a, b) => a.type.localeCompare(b.type) || a.pid - b.pid);
-    } catch {
-      // Fall back to app.getAppMetrics if ps fails
-      for (const m of metrics) {
-        processes.push({
-          type: m.type,
-          pid: m.pid,
-          memory: {
-            workingSetSize: m.memory?.workingSetSize ?? 0,
-            peakWorkingSetSize: m.memory?.peakWorkingSetSize ?? 0,
-          },
-        });
+
+        // Walk the process tree from mainPid
+        const descendantPids = new Set<number>();
+        descendantPids.add(mainPid);
+        let changed = true;
+        while (changed) {
+          changed = false;
+          for (const [pid, ppid] of ppidByPid) {
+            if (descendantPids.has(ppid) && !descendantPids.has(pid)) {
+              descendantPids.add(pid);
+              changed = true;
+            }
+          }
+        }
+
+        // Filter out external apps (e.g. IntelliJ) spawned as children
+        function isCollaboratorProcess(pid: number): boolean {
+          if (pid === mainPid) return true;
+          const args = argsByPid.get(pid) ?? "";
+          if (!args) return false;
+          const firstWord = args.split(/\s+/)[0] ?? "";
+          const base = firstWord.split("/").pop() ?? firstWord;
+          if (shellNames.has(base)) return true;
+          if (typeByPid.has(pid)) return true;
+          if (args.includes("Collaborator.app")) return true;
+          if (args.startsWith("-") || args.includes("pty-sidecar")) return true;
+          if (firstWord.includes(".app/")) return false;
+          if (args.startsWith("/Applications/")) return false;
+          return true;
+        }
+
+        // Classify a process for grouping
+        function classify(pid: number): string {
+          const known = typeByPid.get(pid);
+          if (known) {
+            switch (known) {
+              case "Browser":
+                return "main";
+              case "GPU":
+                return "gpu";
+              case "Tab":
+                return "renderer";
+              case "Utility":
+                return "utility";
+              default:
+                return known.toLowerCase();
+            }
+          }
+          const a = argsByPid.get(pid) ?? "";
+          if (a.includes("pty-sidecar")) return "pty";
+          const firstWord = a.split(/\s+/)[0] ?? "";
+          const base = firstWord.split("/").pop() ?? firstWord;
+          if (shellNames.has(base) || a.startsWith("-")) return "shell";
+          return "unknown";
+        }
+
+        function shortLabel(pid: number, type: string): string {
+          if (type === "main") return "Main Process";
+          const a = argsByPid.get(pid) ?? "";
+          if (type === "pty") return "PTY Sidecar";
+          if (type === "shell") {
+            const first = a.split(/\s+/)[0] ?? "";
+            return (first.split("/").pop() ?? first) + ` (${pid})`;
+          }
+          if (type === "utility") {
+            if (a.includes("NetworkService")) return "Network Service";
+            if (a.includes("NodeService")) return "Node Service";
+            return `Utility (${pid})`;
+          }
+          if (type === "renderer") return `Renderer (${pid})`;
+          return `Process (${pid})`;
+        }
+
+        function groupLabel(type: string): string {
+          switch (type) {
+            case "main":
+              return "Main Process";
+            case "gpu":
+              return "GPU Process";
+            case "utility":
+              return "Utility Processes";
+            case "pty":
+              return "PTY Service";
+            case "shell":
+              return "Shell Processes";
+            case "renderer":
+              return "Renderer Processes";
+            default:
+              return "Other";
+          }
+        }
+
+        // Build flat list of all collaborator processes
+        const allProcesses: Array<{
+          pid: number;
+          type: string;
+          rss: number;
+        }> = [];
+        for (const pid of descendantPids) {
+          if (
+            ppidByPid.get(pid) === mainPid &&
+            argsByPid.get(pid)?.startsWith("ps ")
+          )
+            continue;
+          if (!isCollaboratorProcess(pid)) continue;
+          allProcesses.push({
+            pid,
+            type: classify(pid),
+            rss: rssByPid.get(pid) ?? 0,
+          });
+        }
+
+        // Group by type
+        const groupMap = new Map<string, Array<{ pid: number; rss: number }>>();
+        for (const p of allProcesses) {
+          if (!groupMap.has(p.type)) groupMap.set(p.type, []);
+          groupMap.get(p.type)!.push({ pid: p.pid, rss: p.rss });
+        }
+
+        // Build result: main first, then sorted by RSS descending
+        const result: Array<{
+          type: string;
+          label: string;
+          rss: number;
+          count: number;
+          processes: Array<{ pid: number; label: string; rss: number }>;
+        }> = [];
+
+        const mainProcs = groupMap.get("main");
+        if (mainProcs) {
+          for (const m of mainProcs) {
+            result.push({
+              type: "main",
+              label: groupLabel("main"),
+              rss: m.rss,
+              count: 1,
+              processes: [
+                { pid: m.pid, label: shortLabel(m.pid, "main"), rss: m.rss },
+              ],
+            });
+          }
+          groupMap.delete("main");
+        }
+
+        const sortedEntries = [...groupMap.entries()].sort(
+          (a, b) =>
+            b[1].reduce((s, p) => s + p.rss, 0) -
+            a[1].reduce((s, p) => s + p.rss, 0),
+        );
+
+        for (const [type, procs] of sortedEntries) {
+          const totalRss = procs.reduce((s, p) => s + p.rss, 0);
+          result.push({
+            type,
+            label: groupLabel(type),
+            rss: totalRss,
+            count: procs.length,
+            processes: procs.map((p) => ({
+              pid: p.pid,
+              label: shortLabel(p.pid, type),
+              rss: p.rss,
+            })),
+          });
+        }
+
+        const totalRss = result.reduce((s, g) => s + g.rss, 0);
+        return { groups: result, totalRss, processCount: allProcesses.length };
+      } catch {
+        // Fallback: app.getAppMetrics only
+        const groups = metrics.map((m) => ({
+          type: m.type.toLowerCase(),
+          label: m.type,
+          rss: 0,
+          count: 1,
+          processes: [{ pid: m.pid, label: m.type, rss: 0 }],
+        }));
+        return {
+          groups: groups.length > 0 ? groups : [],
+          totalRss: 0,
+          processCount: groups.length,
+        };
       }
     }
-    const total = processes.reduce(
-      (sum, p) => sum + p.memory.workingSetSize,
-      0,
-    );
-    return { processes, total };
+
+    const { groups, totalRss, processCount } = extractProcessInfo();
+    return { groups, total: totalRss, processCount };
   });
 
   // Dialog: open folder

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   GearSix,
   Keyboard,
@@ -12,6 +12,7 @@ import {
   FolderOpen,
   Gauge,
 } from "@phosphor-icons/react";
+import { ResponsiveTreeMap } from "@nivo/treemap";
 import { useTranslation } from "./translations";
 import type { SupportedLocale, TranslationKey } from "./translations";
 import {
@@ -41,12 +42,19 @@ interface SettingsApi {
     Array<{ id: string; name: string; appPath: string }>
   >;
   getMemoryStats: () => Promise<{
-    processes: Array<{
+    groups: Array<{
       type: string;
-      pid: number;
-      memory: { workingSetSize: number; peakWorkingSetSize: number };
+      label: string;
+      rss: number;
+      count: number;
+      processes: Array<{
+        pid: number;
+        label: string;
+        rss: number;
+      }>;
     }>;
     total: number;
+    processCount: number;
   }>;
   close: () => void;
 }
@@ -772,25 +780,27 @@ type Pane =
   | "updates"
   | "files";
 
-const tableBorder =
-  "1px solid color-mix(in srgb, var(--foreground) 8%, transparent)";
-
-const cellBase = "px-3 py-1.5 text-sm";
-
 function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
   const [stats, setStats] = useState<{
-    processes: Array<{
+    groups: Array<{
       type: string;
-      pid: number;
-      memory: { workingSetSize: number; peakWorkingSetSize: number };
+      label: string;
+      rss: number;
+      count: number;
+      processes: Array<{ pid: number; label: string; rss: number }>;
     }>;
     total: number;
+    processCount: number;
   } | null>(null);
   const [saveMemMode, setSaveMemMode] = useState(true);
   const [maxTiles, setMaxTiles] = useState(2);
   const [destroyDelay, setDestroyDelay] = useState(5);
-  const [showDetails, setShowDetails] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [tooltipNode, setTooltipNode] = useState<{
+    x: number;
+    y: number;
+    group: (typeof stats)["groups"][number] | null;
+  } | null>(null);
 
   useEffect(() => {
     api
@@ -829,213 +839,242 @@ function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
 
   const formatMB = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(0)} MB`;
 
-  const processTypeLabel = (type: string) => {
-    switch (type) {
-      case "Browser":
-        return t("memory.mainProcess");
-      case "Tab":
-        return t("memory.renderer");
-      case "GPU":
-        return "GPU";
-      case "Utility":
-        return t("memory.utility");
-      case "PTY":
-        return t("memory.ptyService");
-      case "Shell":
-        return t("memory.shell");
-      default:
-        return type;
-    }
+  const TYPE_COLORS: Record<string, string> = {
+    main: "#3B82F6",
+    gpu: "#8B5CF6",
+    utility: "#10B981",
+    pty: "#F59E0B",
+    shell: "#6B7280",
+    renderer: "#EF4444",
+    unknown: "#9CA3AF",
   };
 
-  const processGroups = stats
-    ? Object.entries(
-        stats.processes.reduce(
-          (acc, p) => {
-            const key = p.type;
-            if (!acc[key]) acc[key] = { count: 0, memory: 0 };
-            acc[key].count++;
-            acc[key].memory += p.memory.workingSetSize;
-            return acc;
-          },
-          {} as Record<string, { count: number; memory: number }>,
-        ),
-      ).sort(([, a], [, b]) => b.memory - a.memory)
-    : null;
+  const TYPE_LABELS: Record<string, string> = {
+    main: t("memory.mainProcess"),
+    gpu: "GPU",
+    utility: t("memory.utility"),
+    pty: t("memory.ptyService"),
+    shell: t("memory.shell"),
+    renderer: t("memory.renderer"),
+  };
+
+  // Convert groups to nivo flat treemap data
+  const nivoData = useMemo(() => {
+    if (!stats) return null;
+    return {
+      id: "root",
+      children: stats.groups.map((g, i) => ({
+        id: `${g.type}-${i}`,
+        value: g.rss,
+        type: g.type,
+        labelText: g.count > 1 ? `${g.label} (${g.count})` : g.label,
+        rss: g.rss,
+        count: g.count,
+        groupIndex: i,
+      })),
+    };
+  }, [stats]);
 
   return (
     <div className="space-y-6 p-6">
-      <div className="space-y-1">
-        <h2 className="text-base font-semibold">{t("memory.title")}</h2>
-        <p className="text-sm text-muted-foreground">
-          {t("memory.description")}
-        </p>
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <h2 className="text-base font-semibold">{t("memory.title")}</h2>
+          <p className="text-sm text-muted-foreground">
+            {t("memory.description")}
+          </p>
+        </div>
+        {stats && (
+          <div className="flex items-center gap-2 text-xs tabular-nums">
+            <span
+              className="rounded-full px-2 py-0.5 font-medium"
+              style={{
+                backgroundColor:
+                  "color-mix(in srgb, var(--foreground) 8%, transparent)",
+              }}
+            >
+              {formatMB(stats.total)}
+            </span>
+            <span style={{ color: "var(--muted-foreground)" }}>
+              {stats.processCount} {t("memory.processCount")}
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Memory table */}
-      {stats && processGroups && (
-        <table
-          className="w-full rounded-lg overflow-hidden"
+      {/* Treemap */}
+      {nivoData && stats ? (
+        <div
+          className="rounded-lg"
           style={{
-            border: tableBorder,
-            borderCollapse: "collapse",
+            border:
+              "1px solid color-mix(in srgb, var(--foreground) 8%, transparent)",
           }}
         >
-          <thead>
-            <tr
-              style={{
-                borderBottom: tableBorder,
-                backgroundColor:
-                  "color-mix(in srgb, var(--foreground) 3%, transparent)",
+          <div
+            style={{ height: 400, width: "100%", position: "relative" }}
+            onMouseLeave={() => setTooltipNode(null)}
+          >
+            <ResponsiveTreeMap
+              data={nivoData}
+              identity="id"
+              value="value"
+              tile="squarify"
+              innerPadding={3}
+              outerPadding={3}
+              enableLabel={true}
+              label="labelText"
+              orientLabel={false}
+              enableParentLabel={false}
+              colors={(node) =>
+                TYPE_COLORS[
+                  String((node.data as Record<string, unknown>).type)
+                ] ?? TYPE_COLORS.unknown
+              }
+              nodeOpacity={1}
+              borderWidth={1}
+              borderColor="rgba(255,255,255,0.25)"
+              labelTextColor="#ffffff"
+              isInteractive={true}
+              tooltip={() => null}
+              onMouseEnter={(node, event) => {
+                const d = node.data as Record<string, unknown>;
+                const idx = d.groupIndex as number;
+                const group = stats.groups[idx];
+                if (group) {
+                  setTooltipNode({ x: event.clientX, y: event.clientY, group });
+                }
               }}
-            >
-              <th
-                className={`${cellBase} text-left font-medium`}
-                style={{ width: "40%" }}
+              onMouseMove={(_node, event) => {
+                setTooltipNode((prev) =>
+                  prev ? { ...prev, x: event.clientX, y: event.clientY } : prev,
+                );
+              }}
+              onMouseLeave={() => {
+                setTooltipNode(null);
+              }}
+              theme={{
+                labels: {
+                  text: { fontSize: 10, fontWeight: 600, fill: "#ffffff" },
+                },
+                tooltip: {
+                  container: {
+                    background: "transparent",
+                    boxShadow: "none",
+                    padding: 0,
+                  },
+                },
+              }}
+            />
+
+            {/* Custom fixed-position tooltip */}
+            {tooltipNode && tooltipNode.group && (
+              <div
+                className="rounded-lg px-4 py-3 shadow-xl text-xs leading-relaxed"
+                style={{
+                  position: "fixed",
+                  left: Math.min(tooltipNode.x + 14, window.innerWidth - 320),
+                  top: Math.max(tooltipNode.y - 10, 8),
+                  zIndex: 9999,
+                  width: 280,
+                  background: "var(--background)",
+                  color: "var(--foreground)",
+                  border:
+                    "1px solid color-mix(in srgb, var(--foreground) 10%, transparent)",
+                  pointerEvents: "none",
+                }}
               >
-                {t("memory.type")}
-              </th>
-              <th className={`${cellBase} text-right font-medium tabular-nums`}>
-                {t("memory.resident")}
-              </th>
-              <th
-                className={`${cellBase} text-right font-medium tabular-nums`}
-                style={{ color: "var(--muted-foreground)" }}
-              >
-                %
-              </th>
-              <th
-                className={`${cellBase} text-right font-medium tabular-nums`}
-                style={{ width: 80, color: "var(--muted-foreground)" }}
-              >
-                {t("memory.processCount")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {processGroups.map(([type, info]) => (
-              <tr key={type} style={{ borderBottom: tableBorder }}>
-                <td className={cellBase}>{processTypeLabel(type)}</td>
-                <td
-                  className={`${cellBase} text-right tabular-nums font-medium`}
-                >
-                  {formatMB(info.memory)}
-                </td>
-                <td
-                  className={`${cellBase} text-right tabular-nums`}
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="font-semibold">
+                    {tooltipNode.group.label}
+                  </span>
+                  <span
+                    className="font-medium tabular-nums"
+                    style={{ color: TYPE_COLORS[tooltipNode.group.type] }}
+                  >
+                    {formatMB(tooltipNode.group.rss)}
+                  </span>
+                </div>
+                <div
+                  className="mb-2"
                   style={{ color: "var(--muted-foreground)" }}
                 >
-                  {((info.memory / stats.total) * 100).toFixed(0)}
-                </td>
-                <td
-                  className={`${cellBase} text-right tabular-nums`}
-                  style={{ color: "var(--muted-foreground)" }}
-                >
-                  {info.count}
-                </td>
-              </tr>
-            ))}
-            {/* Total row */}
-            <tr
-              style={{
-                backgroundColor:
-                  "color-mix(in srgb, var(--foreground) 5%, transparent)",
-              }}
-            >
-              <td className={`${cellBase} font-medium`}>{t("memory.total")}</td>
-              <td className={`${cellBase} text-right tabular-nums font-bold`}>
-                {formatMB(stats.total)}
-              </td>
-              <td className={cellBase} />
-              <td className={cellBase} />
-            </tr>
-          </tbody>
-        </table>
-      )}
-      {!stats && (
+                  {tooltipNode.group.count} process
+                  {tooltipNode.group.count > 1 ? "es" : ""} ·{" "}
+                  {((tooltipNode.group.rss / stats.total) * 100).toFixed(0)}%
+                </div>
+                {tooltipNode.group.processes.length > 1 && (
+                  <div
+                    className="rounded-md overflow-hidden"
+                    style={{
+                      border:
+                        "1px solid color-mix(in srgb, var(--foreground) 6%, transparent)",
+                    }}
+                  >
+                    <table className="w-full">
+                      <tbody>
+                        {tooltipNode.group.processes.map((p, i) => (
+                          <tr
+                            key={p.pid}
+                            style={{
+                              borderBottom:
+                                i < tooltipNode.group.processes.length - 1
+                                  ? "1px solid color-mix(in srgb, var(--foreground) 4%, transparent)"
+                                  : "none",
+                            }}
+                          >
+                            <td className="py-1 pr-3 text-muted-foreground whitespace-nowrap">
+                              {p.label}
+                            </td>
+                            <td className="py-1 text-right tabular-nums font-medium whitespace-nowrap">
+                              {formatMB(p.rss)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Color legend */}
+          <div
+            className="flex flex-wrap gap-3 px-4 py-2 text-xs"
+            style={{
+              borderTop:
+                "1px solid color-mix(in srgb, var(--foreground) 8%, transparent)",
+              color: "var(--muted-foreground)",
+            }}
+          >
+            {Object.entries(TYPE_COLORS).map(([type, color]) => {
+              const label = TYPE_LABELS[type];
+              if (!label) return null;
+              return (
+                <span key={type} className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block rounded-sm"
+                    style={{ width: 10, height: 10, backgroundColor: color }}
+                  />
+                  {label}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           {t("memory.loading")}
         </p>
-      )}
-
-      {/* Toggle for detailed process list */}
-      {stats && (
-        <div>
-          <button
-            type="button"
-            onClick={() => setShowDetails(!showDetails)}
-            className="text-xs cursor-pointer"
-            style={{ color: "var(--muted-foreground)" }}
-          >
-            {showDetails
-              ? `▾ ${t("memory.hideDetails")}`
-              : `▸ ${t("memory.showDetails")}`}
-          </button>
-          {showDetails && (
-            <table
-              className="w-full mt-2 rounded-lg overflow-hidden"
-              style={{
-                border: tableBorder,
-                borderCollapse: "collapse",
-              }}
-            >
-              <thead>
-                <tr
-                  style={{
-                    borderBottom: tableBorder,
-                    backgroundColor:
-                      "color-mix(in srgb, var(--foreground) 3%, transparent)",
-                  }}
-                >
-                  <th className={`${cellBase} text-left font-medium`}>
-                    {t("memory.type")}
-                  </th>
-                  <th
-                    className={`${cellBase} text-right font-medium tabular-nums`}
-                  >
-                    PID
-                  </th>
-                  <th
-                    className={`${cellBase} text-right font-medium tabular-nums`}
-                  >
-                    {t("memory.resident")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.processes.map((p, i) => (
-                  <tr
-                    key={i}
-                    style={{
-                      borderBottom:
-                        i < stats.processes.length - 1 ? tableBorder : "none",
-                    }}
-                  >
-                    <td className={cellBase}>{processTypeLabel(p.type)}</td>
-                    <td
-                      className={`${cellBase} text-right tabular-nums`}
-                      style={{ color: "var(--muted-foreground)" }}
-                    >
-                      {p.pid}
-                    </td>
-                    <td
-                      className={`${cellBase} text-right tabular-nums font-medium`}
-                    >
-                      {formatMB(p.memory.workingSetSize)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
       )}
 
       {/* Save memory mode */}
       <div
         className="rounded-lg p-4 space-y-3"
         style={{
-          border: tableBorder,
+          border:
+            "1px solid color-mix(in srgb, var(--foreground) 8%, transparent)",
           backgroundColor:
             "color-mix(in srgb, var(--foreground) 2%, transparent)",
         }}
