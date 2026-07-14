@@ -19,18 +19,16 @@ HAS_SELECTION=false
 if [ -n "$FILE_PATH" ]; then
   if [ -n "$START_LINE" ] && [ "$START_LINE" != "0" ] && [ -n "$END_LINE" ] && [ "$END_LINE" != "0" ] && [ "$END_LINE" -gt "$START_LINE" ]; then
     # 多行选中（起止行差 >= 1）→ @path#Lstart-end
-    OUTPUT="@${FILE_PATH}#L${START_LINE}-${END_LINE}"
+    OUTPUT=" @${FILE_PATH}#L${START_LINE}-${END_LINE} "
   elif [ -n "$START_LINE" ] && [ "$START_LINE" != "0" ] && [ "$END_LINE" != "0" ] && $HAS_SELECTION; then
     # 单行有选中文本 → @path#L行号
-    OUTPUT="@${FILE_PATH}#L${START_LINE}"
+    OUTPUT=" @${FILE_PATH}#L${START_LINE} "
   else
     # 无选中文本 → @path（整个文件）
-    OUTPUT="@${FILE_PATH}"
+    OUTPUT=" @${FILE_PATH} "
   fi
 else
   exit 1
 fi
-
-exec collab-canvas terminal write-focused "$OUTPUT"
 
 exec collab-canvas terminal write-focused "$OUTPUT"
