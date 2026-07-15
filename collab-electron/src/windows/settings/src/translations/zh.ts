@@ -14,6 +14,13 @@ export const zh: Record<TranslationKey, string> = {
   "nav.controls": "控制",
   "nav.updates": "更新",
   "nav.files": "文件",
+  "nav.claude": "Claude",
+  "claude.title": "Claude 集成",
+  "claude.description":
+    "配置与 Claude Code 的深度集成。开启后，终端 tile 将自动恢复 Claude Code 会话。",
+  "claude.enable": "开启深度集成",
+  "claude.timeout": "会话超时（天）",
+  "claude.command": "Claude CLI 命令",
 
   // Appearance pane
   "appearance.title": "外观",

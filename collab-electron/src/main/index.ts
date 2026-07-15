@@ -33,6 +33,7 @@ import {
 import { registerIpcHandlers, setMainWindow, rebuildFileFilter } from "./ipc";
 import { registerCanvasRpc } from "./canvas-rpc";
 import { registerIntegrationsIpc } from "./integrations";
+import { registerClaudeIpc } from "./claude-rpc";
 import {
   registerMethod,
   startJsonRpcServer,
@@ -910,6 +911,7 @@ app.whenReady().then(async () => {
   registerIpcHandlers(config);
   registerBrowserIpc();
   registerIntegrationsIpc();
+  registerClaudeIpc();
   setupUpdateIPC();
   const autoCheckUpdates = getPref(config, "autoCheckUpdates") as
     | boolean

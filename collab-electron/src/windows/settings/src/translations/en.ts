@@ -11,6 +11,15 @@ export const en = {
   "nav.updates": "Updates",
   "nav.files": "Files",
 
+  // Claude pane
+  "nav.claude": "Claude",
+  "claude.title": "Claude Integration",
+  "claude.description":
+    "Configure deep integration with Claude Code. When enabled, terminal tiles will automatically resume Claude Code sessions.",
+  "claude.enable": "Enable deep integration",
+  "claude.timeout": "Session timeout (days)",
+  "claude.command": "Claude CLI command",
+
   // Appearance pane
   "appearance.title": "Appearance",
   "appearance.description": "Customize how Collaborator looks.",

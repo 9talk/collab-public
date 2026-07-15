@@ -11,6 +11,7 @@ import {
   ArrowClockwise,
   FolderOpen,
   Gauge,
+  Robot,
 } from "@phosphor-icons/react";
 import { ResponsiveTreeMap } from "@nivo/treemap";
 import { useTranslation } from "./translations";
@@ -778,7 +779,8 @@ type Pane =
   | "integrations"
   | "controls"
   | "updates"
-  | "files";
+  | "files"
+  | "claude";
 
 function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
   const [stats, setStats] = useState<{
@@ -1642,6 +1644,107 @@ function UpdatesPane({ t }: { t: (key: TranslationKey) => string }) {
   );
 }
 
+function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
+  const [enabled, setEnabled] = useState(false);
+  const [timeout, setTimeout_] = useState(7);
+  const [command, setCommand] = useState("claude");
+
+  useEffect(() => {
+    Promise.all([
+      api.getPref("claudeIntegration"),
+      api.getPref("claudeTimeout"),
+      api.getPref("claudeCommand"),
+    ])
+      .then(([v1, v2, v3]) => {
+        if (typeof v1 === "boolean") setEnabled(v1);
+        if (typeof v2 === "number") setTimeout_(v2);
+        if (typeof v3 === "string") setCommand(v3);
+      })
+      .catch(() => {});
+  }, []);
+
+  async function handleEnabledChange(checked: boolean) {
+    setEnabled(checked);
+    await api.setPref("claudeIntegration", checked);
+  }
+
+  async function handleTimeoutChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = Math.max(7, Number(e.target.value) || 7);
+    setTimeout_(val);
+    await api.setPref("claudeTimeout", val);
+  }
+
+  async function handleCommandChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value;
+    setCommand(val);
+    await api.setPref("claudeCommand", val);
+  }
+
+  return (
+    <div className="space-y-6 p-6">
+      <div className="space-y-1">
+        <h2 className="text-base font-semibold">{t("claude.title")}</h2>
+        <p className="text-sm text-muted-foreground">
+          {t("claude.description")}
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{t("claude.enable")}</p>
+        <ToggleSwitch
+          checked={enabled}
+          onChange={(v) => {
+            void handleEnabledChange(v);
+          }}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium block">
+          {t("claude.timeout")}
+        </label>
+        <input
+          type="number"
+          min={7}
+          value={timeout}
+          onChange={(e) => {
+            void handleTimeoutChange(e);
+          }}
+          className="w-24 rounded border px-2 py-1 text-sm"
+          style={{
+            backgroundColor:
+              "color-mix(in srgb, var(--foreground) 6%, transparent)",
+            borderColor:
+              "color-mix(in srgb, var(--foreground) 15%, transparent)",
+            color: "var(--foreground)",
+          }}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium block">
+          {t("claude.command")}
+        </label>
+        <input
+          type="text"
+          value={command}
+          onChange={(e) => {
+            void handleCommandChange(e);
+          }}
+          className="w-48 rounded border px-2 py-1 text-sm"
+          style={{
+            backgroundColor:
+              "color-mix(in srgb, var(--foreground) 6%, transparent)",
+            borderColor:
+              "color-mix(in srgb, var(--foreground) 15%, transparent)",
+            color: "var(--foreground)",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function CloseButton({ onClick }: { onClick: () => void }) {
   return (
     <div className="flex flex-col items-center gap-0.5">
@@ -1715,6 +1818,7 @@ export default function App() {
     { id: "controls", label: t("nav.controls"), icon: Keyboard },
     { id: "updates", label: t("nav.updates"), icon: ArrowClockwise },
     { id: "files", label: t("nav.files"), icon: FolderOpen },
+    { id: "claude", label: t("nav.claude"), icon: Robot },
   ];
 
   return (
@@ -1774,6 +1878,7 @@ export default function App() {
         {activePane === "controls" && <ControlsPane t={t} />}
         {activePane === "updates" && <UpdatesPane t={t} />}
         {activePane === "files" && <FilesPane t={t} />}
+        {activePane === "claude" && <ClaudePane t={t} />}
       </div>
     </div>
   );
