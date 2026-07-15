@@ -93,9 +93,12 @@ function App() {
     createFreshSession();
   }, []);
 
-  // Claude Code deep integration: auto-resume session after PTY is ready
+  // Claude Code deep integration: auto-resume session after PTY is ready.
+  // Skip when restored === true (reconnected to an existing PTY session,
+  // e.g. saveMemMode rebuild) — the terminal is already running and claude
+  // is likely still active.
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId || restored) return;
     const params = paramsRef.current;
     const tileId = params?.get("tileId");
     if (!tileId) return;
@@ -144,7 +147,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId]);
+  }, [sessionId, restored]);
 
   useEffect(() => {
     if (!sessionId) return;
