@@ -15,7 +15,6 @@ import {
   isSelected,
   getSelectedTiles,
   findAutoPlacementForTerminal,
-  getFirstTerminalIds,
 } from "./canvas-state.js";
 import {
   createTileDOM,
@@ -98,14 +97,10 @@ export function createTileManager({
 
   // -- Canvas persistence --
 
-  function getCanvasStateForSave({ dedupeTerminals = false } = {}) {
-    const firstTermIds = dedupeTerminals ? getFirstTerminalIds() : null;
-    const tilesToSave = dedupeTerminals
-      ? tiles.filter((t) => t.type !== "term" || firstTermIds.has(t.id))
-      : tiles;
+  function getCanvasStateForSave() {
     return {
       version: 1,
-      tiles: tilesToSave.map((t) => ({
+      tiles: tiles.map((t) => ({
         id: t.id,
         type: t.type,
         x: safeCoord(t.x),

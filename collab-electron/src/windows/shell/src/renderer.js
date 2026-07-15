@@ -750,10 +750,9 @@ async function init() {
   };
 
   // Expose canvas state getter for main process to use during quit.
-  // On exit, dedupe terminal tiles by cwd group — only the first tile
-  // per group is persisted; extras are discarded.
+  // Save all tiles as-is (no dedup) for exit persistence
   window.__getCanvasStateForSave = function () {
-    const state = tileManager.getCanvasStateForSave({ dedupeTerminals: true });
+    const state = tileManager.getCanvasStateForSave();
     return toCenterPointState(state);
   };
 

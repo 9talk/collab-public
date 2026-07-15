@@ -287,25 +287,6 @@ function groupTerminalsByWorkspace() {
 }
 
 /**
- * Return the set of terminal tile IDs that are the first (by insertion
- * order) in their cwd group. Used at save time to dedupe terminal tiles
- * so only one tile per workspace is persisted.
- */
-export function getFirstTerminalIds() {
-  const firstIds = new Set();
-  const seenCwds = new Set();
-  for (const tile of tiles) {
-    if (tile.type !== "term") continue;
-    const cwd = tile.cwd || "~";
-    if (!seenCwds.has(cwd)) {
-      seenCwds.add(cwd);
-      firstIds.add(tile.id);
-    }
-  }
-  return firstIds;
-}
-
-/**
  * Find an auto-layout position for a new terminal tile.
  * - If terminals for the same workspace already exist, place to the right
  *   of the rightmost one (horizontal insertion).
