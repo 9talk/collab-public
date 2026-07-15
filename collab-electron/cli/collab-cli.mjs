@@ -462,6 +462,31 @@ async function cmdTodoDelete(args) {
   console.log(`deleted todo: ${args[0]}`);
 }
 
+// --- claude subcommands ------------------------------------------------------
+
+async function cmdClaudeBind(args) {
+  if (args.length < 2) die("claude bind requires <tileId> <sessionId>");
+  await rpcCall("claude.bind", { tileId: args[0], sessionId: args[1] });
+  console.log(`bound ${args[0]} → ${args[1]}`);
+}
+
+async function cmdClaudeGet(args) {
+  if (args.length === 0) die("claude get requires a tileId");
+  const result = await rpcCall("claude.get", { tileId: args[0] });
+  console.log(pretty(result));
+}
+
+async function cmdClaudeList() {
+  const result = await rpcCall("claude.list");
+  console.log(pretty(result));
+}
+
+async function cmdClaudeUnbind(args) {
+  if (args.length === 0) die("claude unbind requires a tileId");
+  await rpcCall("claude.unbind", { tileId: args[0] });
+  console.log(`unbound ${args[0]}`);
+}
+
 // --- usage ----------------------------------------------------------------
 
 function usage() {
@@ -494,6 +519,10 @@ COMMANDS
   todo add <text> [options]        Add a new todo
   todo update <id> [options]       Update a todo
   todo delete <id>                 Delete a todo
+  claude bind <tileId> <sessionId>  Bind a Claude Code session to a tile
+  claude get <tileId>               Get session bound to a tile
+  claude list                       List all Claude session bindings
+  claude unbind <tileId>            Remove a Claude session binding
   help, --help                       Show this help
 
 TILE CREATE OPTIONS
@@ -674,6 +703,30 @@ try {
           break;
         default:
           die(`unknown todo subcommand: ${sub}`);
+      }
+      break;
+    }
+    case "claude": {
+      if (argv.length < 2) {
+        die("claude requires a subcommand (bind, get, list, unbind)");
+      }
+      const sub = argv[1];
+      const rest = argv.slice(2);
+      switch (sub) {
+        case "bind":
+          await cmdClaudeBind(rest);
+          break;
+        case "get":
+          await cmdClaudeGet(rest);
+          break;
+        case "list":
+          await cmdClaudeList();
+          break;
+        case "unbind":
+          await cmdClaudeUnbind(rest);
+          break;
+        default:
+          die(`unknown claude subcommand: ${sub}`);
       }
       break;
     }

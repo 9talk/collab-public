@@ -64,6 +64,10 @@
         "to": "collab-send-file.sh"
       },
       {
+        "from": "resources/collab-claude-hook.sh",
+        "to": "collab-claude-hook.sh"
+      },
+      {
         "from": "cli/collab-cli.bundled.mjs",
         "to": "collab-cli.mjs"
       },

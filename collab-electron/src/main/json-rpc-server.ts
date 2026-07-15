@@ -9,6 +9,7 @@ import {
   prepareEndpoint,
 } from "./ipc-endpoint";
 import { registerTodosRpc } from "./todos-rpc";
+import { registerClaudeRpc } from "./claude-rpc";
 
 const SOCKET_PATH = makeEndpointPath("ipc");
 // Write the breadcrumb to the base directory (~/.collaborator/)
@@ -179,6 +180,7 @@ export function startJsonRpcServer(): Promise<void> {
     });
 
     registerTodosRpc();
+    registerClaudeRpc();
 
     server.listen(SOCKET_PATH, () => {
       writeFileSync(SOCKET_PATH_FILE, SOCKET_PATH, "utf-8");
