@@ -1793,13 +1793,13 @@ function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
                   color: "var(--foreground)",
                 }}
               >
-                claude plugin marketplace add collaborator 9talk/collab-public
+                claude plugin marketplace add 9talk/collab-public
               </code>
               <button
                 type="button"
                 onClick={() => {
                   navigator.clipboard.writeText(
-                    "claude plugin marketplace add collaborator 9talk/collab-public",
+                    "claude plugin marketplace add 9talk/collab-public",
                   );
                 }}
                 className="rounded px-2.5 py-1.5 text-xs font-medium cursor-pointer shrink-0"

@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "collaborator",
-      "source": "collab-electron/packages/collab-claude-plugin",
+      "source": "./collab-electron/packages/collab-claude-plugin",
       "description": "Deep integration between Collaborator and Claude Code: configurable sound notifications, session binding, and tile focus",
       "version": "0.1.0",
       "author": {
