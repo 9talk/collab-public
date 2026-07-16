@@ -1,4 +1,3 @@
 {
-  "name": "collaborator",
-  "hooks": "./hooks/hooks.json"
+  "name": "collaborator"
 }
