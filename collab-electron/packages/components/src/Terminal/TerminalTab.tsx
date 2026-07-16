@@ -20,6 +20,14 @@ const DATA_BUFFER_FLUSH_MS = 5;
 const MAX_WEBGL_RETRIES = 3;
 const IS_MAC = window.api.getPlatform() === "darwin";
 
+// URL regex based on xterm's default strictUrlRegex, with non-ASCII chars
+// (\x80-￿) added to the trailing exclusion set so CJK/fullwidth
+// punctuation like 。 is never included in the matched URL (for both
+// display underlining and opening).
+// xterm default: /(https?|HTTPS?):[/]{2}[^\s"'!*(){}|\\\^<>`]*[^\s"':,.!?{}|\\\^~\[\]`()<>]/
+const URL_RE =
+  /(https?|HTTPS?):[/]{2}[^\s"'!*(){}|\\\^<>`]*[^\s"':,.!?{}|\\\^~\[\]`()<>\x80-￿]/;
+
 interface TerminalTabProps {
   sessionId: string;
   visible: boolean;
@@ -166,9 +174,12 @@ function TerminalTab({
     term.loadAddon(unicode11);
     term.unicode.activeVersion = "11";
 
-    const webLinks = new WebLinksAddon((_event: MouseEvent, uri: string) => {
-      window.api.openExternal(uri);
-    }, linkHandler);
+    const webLinks = new WebLinksAddon(
+      (_event: MouseEvent, uri: string) => {
+        window.api.openExternal(uri);
+      },
+      { urlRegex: URL_RE },
+    );
     term.loadAddon(webLinks);
 
     // WebGL retry counter: tracks consecutive context losses.
