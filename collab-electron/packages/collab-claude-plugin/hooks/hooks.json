@@ -1,0 +1,93 @@
+{
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/claude-beep.sh\" \"Notification\"'",
+            "type": "command"
+          }
+        ],
+        "matcher": "stop"
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/claude-beep.sh\" \"PermissionRequest\"'",
+            "type": "command"
+          },
+          {
+            "command": "bash -c 'collab-canvas tile focus \"$COLLAB_TILE_ID\"' 2>/dev/null || true",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/claude-beep.sh\" \"PreCompact\"'",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/update-mcp-project-path.sh\" \"$(pwd)\"'",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "Setup": [
+      {
+        "hooks": [
+          {
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/claude-beep.sh\" \"Setup\"'",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/claude-beep.sh\" \"Stop\"'",
+            "type": "command"
+          },
+          {
+            "command": "bash -c 'collab-canvas tile notify \"$COLLAB_TILE_ID\"' 2>/dev/null || true",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/claude-beep.sh\" \"UserPromptSubmit\"'",
+            "type": "command"
+          },
+          {
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/collab-claude-hook.sh\" \"$COLLAB_TILE_ID\"' 2>/dev/null || true",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ]
+  }
+}

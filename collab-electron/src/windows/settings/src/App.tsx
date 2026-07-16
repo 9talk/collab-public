@@ -39,6 +39,11 @@ interface SettingsApi {
   getAgents: () => Promise<AgentStatus[]>;
   installSkill: (agentId: string) => Promise<{ ok: boolean }>;
   uninstallSkill: (agentId: string) => Promise<{ ok: boolean }>;
+  getClaudeSounds: () => Promise<Record<string, unknown>>;
+  setClaudeSounds: (
+    sounds: Record<string, unknown>,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  selectSoundFile: () => Promise<string | null>;
   listExternalEditors: () => Promise<
     Array<{ id: string; name: string; appPath: string }>
   >;
@@ -1680,6 +1685,72 @@ function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
     await api.setPref("claudeCommand", val);
   }
 
+  // -- Sound settings --
+
+  const SOUND_EVENTS = [
+    "UserPromptSubmit",
+    "Stop",
+    "PermissionRequest",
+    "PreCompact",
+    "Setup",
+    "Notification",
+  ] as const;
+
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [soundPaths, setSoundPaths] = useState<Record<string, string>>({});
+  const [soundBusy, setSoundBusy] = useState(false);
+
+  useEffect(() => {
+    api
+      .getClaudeSounds()
+      .then((sounds) => {
+        if (typeof sounds.enabled === "boolean")
+          setSoundEnabled(sounds.enabled);
+        const paths: Record<string, string> = {};
+        for (const [key, val] of Object.entries(sounds)) {
+          if (key !== "enabled" && typeof val === "string" && val) {
+            paths[key] = val;
+          }
+        }
+        setSoundPaths(paths);
+      })
+      .catch(() => {});
+  }, []);
+
+  async function saveSoundState(
+    enabled: boolean,
+    paths: Record<string, string>,
+  ) {
+    const data: Record<string, unknown> = { enabled };
+    for (const [ev, p] of Object.entries(paths)) {
+      if (p) data[ev] = p;
+    }
+    await api.setClaudeSounds(data);
+  }
+
+  async function handleSoundToggle(checked: boolean) {
+    setSoundEnabled(checked);
+    await saveSoundState(checked, soundPaths);
+  }
+
+  async function handleSoundPathChange(event: string, path: string) {
+    const next = { ...soundPaths, [event]: path };
+    setSoundPaths(next);
+    await saveSoundState(soundEnabled, next);
+  }
+
+  async function handleSoundBrowse(event: string) {
+    setSoundBusy(true);
+    try {
+      const filePath = await api.selectSoundFile();
+      if (filePath) {
+        await handleSoundPathChange(event, filePath);
+      }
+    } finally {
+      setSoundBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div className="space-y-1">
@@ -1698,6 +1769,80 @@ function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
           }}
         />
       </div>
+
+      {enabled && (
+        <div
+          className="space-y-2 rounded-lg p-4"
+          style={{
+            border:
+              "1px solid color-mix(in srgb, var(--foreground) 8%, transparent)",
+            backgroundColor:
+              "color-mix(in srgb, var(--foreground) 2%, transparent)",
+          }}
+        >
+          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+            {t("claude.marketplaceDesc")}
+          </p>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <code
+                className="flex-1 rounded px-2 py-1.5 text-xs select-all"
+                style={{
+                  backgroundColor:
+                    "color-mix(in srgb, var(--foreground) 6%, transparent)",
+                  color: "var(--foreground)",
+                }}
+              >
+                claude plugin marketplace add collaborator 9talk/collab-public
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    "claude plugin marketplace add collaborator 9talk/collab-public",
+                  );
+                }}
+                className="rounded px-2.5 py-1.5 text-xs font-medium cursor-pointer shrink-0"
+                style={{
+                  backgroundColor:
+                    "color-mix(in srgb, var(--foreground) 8%, transparent)",
+                  color: "var(--foreground)",
+                }}
+              >
+                {t("claude.copy")}
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <code
+                className="flex-1 rounded px-2 py-1.5 text-xs select-all"
+                style={{
+                  backgroundColor:
+                    "color-mix(in srgb, var(--foreground) 6%, transparent)",
+                  color: "var(--foreground)",
+                }}
+              >
+                claude plugin install collaborator@collaborator
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    "claude plugin install collaborator@collaborator",
+                  );
+                }}
+                className="rounded px-2.5 py-1.5 text-xs font-medium cursor-pointer shrink-0"
+                style={{
+                  backgroundColor:
+                    "color-mix(in srgb, var(--foreground) 8%, transparent)",
+                  color: "var(--foreground)",
+                }}
+              >
+                {t("claude.copy")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-2">
         <label className="text-sm font-medium block">
@@ -1741,6 +1886,74 @@ function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
           }}
         />
       </div>
+
+      {/* Sound settings */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{t("claude.soundEnable")}</p>
+        <ToggleSwitch
+          checked={soundEnabled}
+          onChange={(v) => {
+            void handleSoundToggle(v);
+          }}
+        />
+      </div>
+
+      {soundEnabled && (
+        <div
+          className="space-y-2 rounded-lg p-4"
+          style={{
+            border:
+              "1px solid color-mix(in srgb, var(--foreground) 8%, transparent)",
+            backgroundColor:
+              "color-mix(in srgb, var(--foreground) 2%, transparent)",
+          }}
+        >
+          {SOUND_EVENTS.map((event) => (
+            <div key={event} className="flex items-center gap-2">
+              <label
+                className="text-xs shrink-0"
+                style={{
+                  minWidth: 130,
+                  color: "var(--muted-foreground)",
+                }}
+              >
+                {t(`claude.soundEvent.${event}` as any)}
+              </label>
+              <input
+                type="text"
+                value={soundPaths[event] || ""}
+                onChange={(e) => {
+                  void handleSoundPathChange(event, e.target.value);
+                }}
+                placeholder={t("claude.soundPathPlaceholder")}
+                className="flex-1 rounded border px-2 py-1 text-xs"
+                style={{
+                  backgroundColor:
+                    "color-mix(in srgb, var(--foreground) 6%, transparent)",
+                  borderColor:
+                    "color-mix(in srgb, var(--foreground) 15%, transparent)",
+                  color: "var(--foreground)",
+                }}
+              />
+              <button
+                type="button"
+                disabled={soundBusy}
+                onClick={() => {
+                  void handleSoundBrowse(event);
+                }}
+                className="rounded px-2 py-1 text-xs font-medium cursor-pointer disabled:opacity-50 shrink-0"
+                style={{
+                  backgroundColor:
+                    "color-mix(in srgb, var(--foreground) 8%, transparent)",
+                  color: "var(--foreground)",
+                }}
+              >
+                {t("claude.soundBrowse")}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

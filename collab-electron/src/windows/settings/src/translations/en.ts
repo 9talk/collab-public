@@ -19,6 +19,18 @@ export const en = {
   "claude.enable": "Enable deep integration",
   "claude.timeout": "Session timeout (days)",
   "claude.command": "Claude CLI command",
+  "claude.marketplaceDesc":
+    "Install the Collaborator plugin for Claude Code to enable sound notifications and session integration:",
+  "claude.copy": "Copy",
+  "claude.soundEnable": "Sound settings",
+  "claude.soundBrowse": "Browse",
+  "claude.soundPathPlaceholder": "No sound file selected",
+  "claude.soundEvent.UserPromptSubmit": "User prompt submit",
+  "claude.soundEvent.Stop": "Claude response",
+  "claude.soundEvent.PermissionRequest": "Permission request",
+  "claude.soundEvent.PreCompact": "Pre compact",
+  "claude.soundEvent.Setup": "Setup",
+  "claude.soundEvent.Notification": "Notification",
 
   // Appearance pane
   "appearance.title": "Appearance",

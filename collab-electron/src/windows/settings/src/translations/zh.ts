@@ -21,6 +21,18 @@ export const zh: Record<TranslationKey, string> = {
   "claude.enable": "开启深度集成",
   "claude.timeout": "会话超时（天）",
   "claude.command": "Claude CLI 命令",
+  "claude.marketplaceDesc":
+    "安装 Collaborator Claude Code 插件以启用声音通知和会话集成：",
+  "claude.copy": "复制",
+  "claude.soundEnable": "声音设置",
+  "claude.soundBrowse": "选择",
+  "claude.soundPathPlaceholder": "未选择声音文件",
+  "claude.soundEvent.UserPromptSubmit": "用户提交提示",
+  "claude.soundEvent.Stop": "Claude 回复完成",
+  "claude.soundEvent.PermissionRequest": "权限请求",
+  "claude.soundEvent.PreCompact": "上下文压缩前",
+  "claude.soundEvent.Setup": "会话设置",
+  "claude.soundEvent.Notification": "通知",
 
   // Appearance pane
   "appearance.title": "外观",

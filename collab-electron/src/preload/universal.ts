@@ -340,6 +340,12 @@ contextBridge.exposeInMainWorld("api", {
   markPluginOffered: () =>
     ipcRenderer.invoke("integrations:mark-plugin-offered"),
 
+  // Claude sound settings
+  getClaudeSounds: () => ipcRenderer.invoke("integrations:get-claude-sounds"),
+  setClaudeSounds: (sounds: Record<string, string>) =>
+    ipcRenderer.invoke("integrations:set-claude-sounds", sounds),
+  selectSoundFile: () => ipcRenderer.invoke("integrations:select-sound-file"),
+
   // IPC event listeners (nav, viewer, terminal)
   onFocusSearch: (cb: () => void) => {
     const handler = () => cb();

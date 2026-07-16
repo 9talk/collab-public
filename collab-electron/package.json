@@ -74,6 +74,10 @@
       {
         "from": "packages/collab-canvas-skill",
         "to": "collab-canvas-skill"
+      },
+      {
+        "from": "packages/collab-claude-plugin",
+        "to": "collab-claude-plugin"
       }
     ],
     "mac": {

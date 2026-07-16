@@ -1,4 +1,4 @@
-import { app, ipcMain } from "electron";
+import { app, ipcMain, dialog } from "electron";
 import {
   existsSync,
   mkdirSync,
@@ -64,6 +64,9 @@ export function skillSourceDir(): string {
     `Canvas skill source files not found. Searched: ${candidates.join(", ")}`,
   );
 }
+
+// -- plugin source --
+// Plugin is loaded via `claude --plugin-dir <path>`, no install/copy needed.
 
 // -- install paths --
 
@@ -192,5 +195,56 @@ export function registerIntegrationsIpc(): void {
   ipcMain.handle("integrations:mark-plugin-offered", () => {
     markPluginOffered();
     return { ok: true };
+  });
+
+  // -- Claude sound settings IPC --
+
+  const SOUNDS_CONFIG_PATH = join(
+    homedir(),
+    ".collaborator",
+    "claude-sounds.json",
+  );
+
+  ipcMain.handle("integrations:get-claude-sounds", () => {
+    try {
+      const raw = readFileSync(SOUNDS_CONFIG_PATH, "utf-8");
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  });
+
+  ipcMain.handle(
+    "integrations:set-claude-sounds",
+    (_event, sounds: Record<string, string>) => {
+      try {
+        const dir = join(homedir(), ".collaborator");
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(
+          SOUNDS_CONFIG_PATH,
+          JSON.stringify(sounds, null, 2),
+          "utf-8",
+        );
+        return { ok: true };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { ok: false, error: msg };
+      }
+    },
+  );
+
+  ipcMain.handle("integrations:select-sound-file", async () => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: "Select Sound File",
+        properties: ["openFile"],
+      });
+      if (result.canceled || result.filePaths.length === 0) {
+        return null;
+      }
+      return result.filePaths[0];
+    } catch {
+      return null;
+    }
   });
 }
