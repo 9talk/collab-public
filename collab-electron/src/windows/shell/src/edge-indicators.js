@@ -13,6 +13,15 @@ export function isFullyOffScreen(tile, vw, vh, panX, panY, zoom) {
   return right <= 0 || left >= vw || bottom <= 0 || top >= vh;
 }
 
+/** True if the tile is entirely inside the viewport (not clipped by any edge). */
+export function isFullyContainedInViewport(tile, vw, vh, panX, panY, zoom) {
+  const left = tile.x * zoom + panX;
+  const top = tile.y * zoom + panY;
+  const right = left + tile.width * zoom;
+  const bottom = top + tile.height * zoom;
+  return left >= 0 && top >= 0 && right <= vw && bottom <= vh;
+}
+
 export function rayRectIntersect(cx, cy, tx, ty, vw, vh) {
   const dx = tx - cx;
   const dy = ty - cy;
@@ -253,7 +262,7 @@ export function createEdgeIndicators({
 
     for (const tile of tiles) {
       if (
-        !isFullyOffScreen(
+        isFullyContainedInViewport(
           tile,
           vw,
           vh,
