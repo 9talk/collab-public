@@ -51,6 +51,7 @@ function TerminalTab({
   const flushDataRef = useRef<(() => void) | null>(null);
   const refreshingRef = useRef(false);
   const pendingDuringRefreshRef = useRef<Uint8Array[]>([]);
+  const isComposingRef = useRef(false);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -169,6 +170,26 @@ function TerminalTab({
     term.loadAddon(fit);
     term.open(container);
     fitRef.current = fit;
+
+    // IME composition handling: suppress onData during composition
+    // to prevent partial/composed text from being sent to PTY multiple
+    // times, which causes character duplication with CJK input.
+    const textarea = term.textarea;
+    if (textarea) {
+      textarea.addEventListener("compositionstart", () => {
+        isComposingRef.current = true;
+      });
+
+      textarea.addEventListener("compositionend", () => {
+        isComposingRef.current = false;
+      });
+
+      // Reset composition state on blur to recover from stuck
+      // composition (IME crash / window switch during IME input).
+      textarea.addEventListener("blur", () => {
+        isComposingRef.current = false;
+      });
+    }
 
     const unicode11 = new Unicode11Addon();
     term.loadAddon(unicode11);
@@ -420,6 +441,12 @@ function TerminalTab({
 
     term.onData((data: string) => {
       console.log("[terminal onData]", JSON.stringify(data));
+
+      // Suppress sending data to PTY during IME composition; the
+      // completed text is sent once via compositionend instead.
+      if (isComposingRef.current) {
+        return;
+      }
 
       // Tab: attempt slash-command completion
       if (data === "\t") {

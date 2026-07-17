@@ -1771,74 +1771,36 @@ function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
       </div>
 
       {enabled && (
-        <div
-          className="space-y-2 rounded-lg p-4"
-          style={{
-            border:
-              "1px solid color-mix(in srgb, var(--foreground) 8%, transparent)",
-            backgroundColor:
-              "color-mix(in srgb, var(--foreground) 2%, transparent)",
-          }}
-        >
+        <div className="space-y-2">
           <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
             {t("claude.marketplaceDesc")}
           </p>
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <div className="flex items-center gap-2">
               <code
-                className="flex-1 rounded px-2 py-1.5 text-xs select-all"
-                style={{
-                  backgroundColor:
-                    "color-mix(in srgb, var(--foreground) 6%, transparent)",
-                  color: "var(--foreground)",
-                }}
-              >
-                claude plugin marketplace add 9talk/collab-public
-              </code>
-              <button
-                type="button"
+                className="flex-1 text-xs select-all cursor-pointer"
+                style={{ color: "var(--foreground)" }}
                 onClick={() => {
                   navigator.clipboard.writeText(
                     "claude plugin marketplace add 9talk/collab-public",
                   );
                 }}
-                className="rounded px-2.5 py-1.5 text-xs font-medium cursor-pointer shrink-0"
-                style={{
-                  backgroundColor:
-                    "color-mix(in srgb, var(--foreground) 8%, transparent)",
-                  color: "var(--foreground)",
-                }}
               >
-                {t("claude.copy")}
-              </button>
+                claude plugin marketplace add 9talk/collab-public
+              </code>
             </div>
             <div className="flex items-center gap-2">
               <code
-                className="flex-1 rounded px-2 py-1.5 text-xs select-all"
-                style={{
-                  backgroundColor:
-                    "color-mix(in srgb, var(--foreground) 6%, transparent)",
-                  color: "var(--foreground)",
-                }}
-              >
-                claude plugin install collaborator@collaborator
-              </code>
-              <button
-                type="button"
+                className="flex-1 text-xs select-all cursor-pointer"
+                style={{ color: "var(--foreground)" }}
                 onClick={() => {
                   navigator.clipboard.writeText(
                     "claude plugin install collaborator@collaborator",
                   );
                 }}
-                className="rounded px-2.5 py-1.5 text-xs font-medium cursor-pointer shrink-0"
-                style={{
-                  backgroundColor:
-                    "color-mix(in srgb, var(--foreground) 8%, transparent)",
-                  color: "var(--foreground)",
-                }}
               >
-                {t("claude.copy")}
-              </button>
+                claude plugin install collaborator@collaborator
+              </code>
             </div>
           </div>
         </div>
