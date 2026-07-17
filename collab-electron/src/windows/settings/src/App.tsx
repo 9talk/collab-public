@@ -63,6 +63,7 @@ interface SettingsApi {
     processCount: number;
   }>;
   close: () => void;
+  openExternal: (url: string) => void;
 }
 
 const api = (window as unknown as { api: SettingsApi }).api;
@@ -1775,34 +1776,19 @@ function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
           <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
             {t("claude.marketplaceDesc")}
           </p>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <code
-                className="flex-1 text-xs select-all cursor-pointer"
-                style={{ color: "var(--foreground)" }}
-                onClick={() => {
-                  navigator.clipboard.writeText(
-                    "claude plugin marketplace add 9talk/collab-public",
-                  );
-                }}
-              >
-                claude plugin marketplace add 9talk/collab-public
-              </code>
-            </div>
-            <div className="flex items-center gap-2">
-              <code
-                className="flex-1 text-xs select-all cursor-pointer"
-                style={{ color: "var(--foreground)" }}
-                onClick={() => {
-                  navigator.clipboard.writeText(
-                    "claude plugin install collaborator@collaborator",
-                  );
-                }}
-              >
-                claude plugin install collaborator@collaborator
-              </code>
-            </div>
-          </div>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              api.openExternal(
+                "https://github.com/9talk/collab-public/blob/main/CLAUDE-CODE-PLUGIN.md",
+              );
+            }}
+            className="text-xs underline cursor-pointer"
+            style={{ color: "var(--foreground)" }}
+          >
+            {t("claude.pluginGuide")}
+          </a>
         </div>
       )}
 

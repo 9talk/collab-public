@@ -23,6 +23,7 @@ export const zh: Record<TranslationKey, string> = {
   "claude.command": "Claude CLI 命令",
   "claude.marketplaceDesc":
     "安装 Collaborator Claude Code 插件以启用声音通知和会话集成：",
+  "claude.pluginGuide": "参阅安装指引 →",
   "claude.copy": "复制",
   "claude.soundEnable": "声音设置",
   "claude.soundBrowse": "选择",

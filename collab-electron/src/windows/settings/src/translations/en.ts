@@ -21,6 +21,7 @@ export const en = {
   "claude.command": "Claude CLI command",
   "claude.marketplaceDesc":
     "Install the Collaborator plugin for Claude Code to enable sound notifications and session integration:",
+  "claude.pluginGuide": "See installation guide →",
   "claude.copy": "Copy",
   "claude.soundEnable": "Sound settings",
   "claude.soundBrowse": "Browse",
