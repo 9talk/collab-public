@@ -1,0 +1,12 @@
+{
+  "name": "collaborator",
+  "owner": {
+    "name": "Collaborator"
+  },
+  "plugins": [
+    {
+      "name": "collaborator",
+      "source": "./collab-electron/packages/collab-claude-plugin",
+    }
+  ]
+}
