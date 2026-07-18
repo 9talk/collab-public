@@ -37,6 +37,17 @@
         "matcher": ""
       }
     ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "bash -c 'collab-canvas claude unbind \"$COLLAB_TILE_ID\"' 2>/dev/null || true",
+            "type": "command"
+          }
+        ],
+        "matcher": "clear"
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
