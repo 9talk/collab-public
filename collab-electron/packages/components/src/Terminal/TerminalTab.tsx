@@ -67,7 +67,7 @@ function TerminalTab({
       cursorBlink: true,
       scrollback: 200000,
       allowProposedApi: true,
-      macOptionIsMeta: false,
+      macOptionIsMeta: true,
       overviewRuler: { width: 8 },
     });
     termRef.current = term;
@@ -312,45 +312,6 @@ function TerminalTab({
           window.api.ptySendRawKeys(sessionId, "\x1b[13;2u");
         }
         return false;
-      }
-      // Option key on macOS: with macOptionIsMeta disabled (so
-      // macOS composes special characters like —), we manually
-      // send ESC+key for the readline/shell bindings we need.
-      if (
-        IS_MAC &&
-        e.type === "keydown" &&
-        e.altKey &&
-        !e.metaKey &&
-        !e.ctrlKey
-      ) {
-        if (e.key === "ArrowLeft") {
-          window.api.ptyWrite(sessionId, "\x1bb");
-          return false;
-        }
-        if (e.key === "ArrowRight") {
-          window.api.ptyWrite(sessionId, "\x1bf");
-          return false;
-        }
-        if (e.key === "b") {
-          window.api.ptyWrite(sessionId, "\x1bb");
-          return false;
-        }
-        if (e.key === "f") {
-          window.api.ptyWrite(sessionId, "\x1bf");
-          return false;
-        }
-        if (e.key === "d") {
-          window.api.ptyWrite(sessionId, "\x1bd");
-          return false;
-        }
-        if (e.key === "Backspace") {
-          window.api.ptyWrite(sessionId, "\x1b\x7f");
-          return false;
-        }
-        if (e.key === ".") {
-          window.api.ptyWrite(sessionId, "\x1b.");
-          return false;
-        }
       }
       const primaryModifier = IS_MAC ? e.metaKey : e.ctrlKey;
       if (e.type === "keydown" && primaryModifier) {
