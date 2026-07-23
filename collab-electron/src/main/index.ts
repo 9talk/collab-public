@@ -201,10 +201,6 @@ interface ShortcutEntry {
 }
 
 const TOGGLE_SHORTCUTS: Record<string, ShortcutEntry[]> = {
-  KeyB: [
-    { modifier: altCmdOrCtrl, action: "toggle-agent" },
-    { modifier: cmdOrCtrl, action: "sidebar-files" },
-  ],
   Backslash: [{ modifier: cmdOrCtrl, action: "sidebar-files" }],
   Comma: [{ modifier: cmdOrCtrl, action: "toggle-settings" }],
   KeyO: [{ modifier: shiftCmdOrCtrl, action: "add-workspace" }],
@@ -228,7 +224,6 @@ const TOGGLE_SHORTCUT_KEYS: Record<string, ShortcutEntry[]> = {
   ",": TOGGLE_SHORTCUTS.Comma!,
   o: TOGGLE_SHORTCUTS.KeyO!,
   k: TOGGLE_SHORTCUTS.KeyK!,
-  b: TOGGLE_SHORTCUTS.KeyB!,
   n: TOGGLE_SHORTCUTS.KeyN!,
   w: TOGGLE_SHORTCUTS.KeyW!,
 };

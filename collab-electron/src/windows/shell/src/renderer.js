@@ -1301,7 +1301,17 @@ async function init() {
         }
       })();
     } else if (action === "dismiss-notification") {
-      notifications.dismissFirst();
+      const hadNotifications = notifications.dismissFirst();
+      if (!hadNotifications) {
+        const currentId = tileManager.getFocusedTileId();
+        const runningTiles = tiles.filter(
+          (t) => t.type === "term" && t.ptySessionId && t.running === true,
+        );
+        if (runningTiles.length === 0) return;
+        const idx = runningTiles.findIndex((t) => t.id === currentId);
+        const next = runningTiles[(idx + 1) % runningTiles.length];
+        tileManager.focusCanvasTile(next.id, null);
+      }
     }
   }
 
