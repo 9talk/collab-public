@@ -68,7 +68,6 @@ function TerminalTab({
       scrollback: 200000,
       allowProposedApi: true,
       macOptionIsMeta: true,
-      overviewRuler: { width: 8 },
     });
     termRef.current = term;
 
@@ -477,6 +476,15 @@ function TerminalTab({
 
     term.onResize(({ cols, rows }) => {
       window.api.ptyResize(sessionId, cols, rows);
+    });
+
+    // 滚动时清除 WebGL 纹理图集并触发全量刷新，防止向上滚动时渲染卡住。
+    // 此问题由 overviewRuler 配置与 WebGL 渲染器在向上滚动路径中的交互引起：
+    // 滚动条正确更新了内部状态，但 WebGL 渲染器未能同步渲染模型偏移量。
+    // clearTextureAtlas() 会先清除 GPU 纹理缓存再触发 _fullRefresh()，
+    // 而仅调用了 refresh() 可能因纹理图集中的陈旧状态导致渲染器未正确更新。
+    term.onScroll(() => {
+      term.clearTextureAtlas();
     });
 
     const handleCopy = (event: ClipboardEvent) => {
