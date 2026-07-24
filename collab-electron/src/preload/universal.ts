@@ -128,6 +128,13 @@ ipcRenderer.on("terminal:refresh", () => {
   for (const cb of terminalRefreshListeners) cb();
 });
 
+type TerminalClearCb = () => void;
+const terminalClearListeners = new Set<TerminalClearCb>();
+
+ipcRenderer.on("terminal:clear", () => {
+  for (const cb of terminalClearListeners) cb();
+});
+
 ipcRenderer.on("replay:data", (_event, msg) => {
   for (const cb of replayDataListeners) cb(msg);
 });
@@ -479,6 +486,13 @@ contextBridge.exposeInMainWorld("api", {
     terminalRefreshListeners.add(cb);
     return () => {
       terminalRefreshListeners.delete(cb);
+    };
+  },
+
+  onTerminalClear: (cb: () => void) => {
+    terminalClearListeners.add(cb);
+    return () => {
+      terminalClearListeners.delete(cb);
     };
   },
 

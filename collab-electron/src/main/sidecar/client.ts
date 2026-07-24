@@ -183,6 +183,10 @@ export class SidecarClient {
     return result.output;
   }
 
+  async clearBuffer(sessionId: string): Promise<void> {
+    await this.rpc("session.clearBuffer", { sessionId });
+  }
+
   async sendSignal(sessionId: string, signal: string): Promise<void> {
     await this.rpc("session.signal", { sessionId, signal });
   }

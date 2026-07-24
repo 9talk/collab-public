@@ -316,6 +316,7 @@ export interface CollabApi {
   onFocusTab: (cb: (ptySessionId: string) => void) => Unsubscribe;
   onShellBlur: (cb: () => void) => Unsubscribe;
   onTerminalRefresh: (cb: () => void) => Unsubscribe;
+  onTerminalClear: (cb: () => void) => Unsubscribe;
 
   // Canvas pinch forwarding
   forwardPinch: (deltaY: number) => void;

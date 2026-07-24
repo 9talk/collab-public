@@ -165,6 +165,17 @@ export function registerCanvasRpc(win: BrowserWindow): void {
   );
 
   registerMethod(
+    "canvas.terminalClear",
+    (params) => sendToShell("canvas.terminalClear", params),
+    {
+      description: "Clear the screen of a terminal tile",
+      params: {
+        tileId: "ID of the terminal tile to clear",
+      },
+    },
+  );
+
+  registerMethod(
     "canvas.tileFocus",
     (params) => sendToShell("canvas.tileFocus", params),
     {

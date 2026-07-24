@@ -275,6 +275,13 @@ async function cmdTerminalRead(args) {
   console.log(pretty(result));
 }
 
+async function cmdTerminalClear(args) {
+  if (args.length === 0) die("terminal clear requires a tile id");
+  const tileId = args[0];
+  await rpcCall("canvas.terminalClear", { tileId });
+  console.log(`cleared terminal ${tileId}`);
+}
+
 // --- browser subcommands --------------------------------------------------
 
 async function cmdBrowserNavigate(args) {
@@ -506,6 +513,7 @@ COMMANDS
   terminal write <id> <input>        Send input to a terminal tile
   terminal write-focused <input>     Send input to the focused terminal tile
   terminal read <id> [--lines N]     Read output from a terminal tile
+  terminal clear <id>                Clear screen of a terminal tile
   browser navigate <id> <url>        Navigate browser tile to URL
   browser screenshot <id> [--out f]  Capture screenshot (base64 or file)
   browser snapshot <id>              Get DOM tree of browser tile
@@ -622,7 +630,7 @@ try {
     }
     case "terminal": {
       if (argv.length < 2) {
-        die("terminal requires a subcommand (write, read)");
+        die("terminal requires a subcommand (write, read, clear)");
       }
       const sub = argv[1];
       const rest = argv.slice(2);
@@ -635,6 +643,9 @@ try {
           break;
         case "read":
           await cmdTerminalRead(rest);
+          break;
+        case "clear":
+          await cmdTerminalClear(rest);
           break;
         default:
           die(`unknown terminal subcommand: ${sub}`);

@@ -787,6 +787,11 @@ export async function captureSession(
   return await client.captureSession(sessionId, lines);
 }
 
+export async function clearBuffer(sessionId: string): Promise<void> {
+  const client = getSidecarClient();
+  await client.clearBuffer(sessionId);
+}
+
 export async function getForegroundProcess(
   sessionId: string,
 ): Promise<string | null> {

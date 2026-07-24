@@ -241,6 +241,9 @@ contextBridge.exposeInMainWorld("shellApi", {
   ptyCapture: (sessionId: string, lines?: number): Promise<string> =>
     ipcRenderer.invoke("pty:capture", { sessionId, lines }),
 
+  ptyClearBuffer: (sessionId: string): Promise<void> =>
+    ipcRenderer.invoke("pty:clear-buffer", { sessionId }),
+
   onPtyStatusChanged: (
     cb: (payload: { sessionId: string; foreground: string }) => void,
   ) => {

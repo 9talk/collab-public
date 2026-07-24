@@ -710,6 +710,11 @@ ipcMain.handle(
     pty.captureSession(sessionId, lines),
 );
 
+ipcMain.handle(
+  "pty:clear-buffer",
+  (_event, { sessionId }: { sessionId: string }) => pty.clearBuffer(sessionId),
+);
+
 // Terminal screenshot: capturePage and copy to clipboard
 ipcMain.handle(
   "term:screenshot",

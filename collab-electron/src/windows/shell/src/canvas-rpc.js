@@ -276,6 +276,25 @@ export function createCanvasRpc({
           result = { output };
           break;
         }
+        case "terminalClear": {
+          const tile = requireTile(requestId, params.tileId);
+          if (!tile) return;
+          if (tile.type !== "term") {
+            respondError(requestId, 4, "Tile is not a terminal");
+            return;
+          }
+          const dom = tileManager.getTileDOMs().get(tile.id);
+          if (dom?.webview) {
+            dom.webview.send("terminal:clear");
+          }
+          // Also clear the sidecar RingBuffer so reconnects / capture
+          // don't return the old output.
+          if (tile.ptySessionId) {
+            window.shellApi.ptyClearBuffer(tile.ptySessionId);
+          }
+          result = {};
+          break;
+        }
         case "browserNavigate": {
           const tile = requireTile(requestId, params.tileId);
           if (!tile) return;
