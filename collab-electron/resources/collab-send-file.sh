@@ -11,9 +11,16 @@
 # 注意：IDEA 侧 Arguments 必须给宏加双引号：
 #   "$FilePathRelativeToProjectRoot$" $SelectionStartLine$ $SelectionEndLine$ "$SelectedText$"
 
-FILE_PATH="$1"
+RAW_PATH="$1"
 START_LINE="$2"
 END_LINE="$3"
+
+# 将相对路径转为绝对路径（IntelliJ 的 pwd 是项目根目录）
+# 终端 tile 的 cwd 可能和 IntelliJ 项目根目录不同，相对路径会解析错误
+if [ -n "$RAW_PATH" ] && [ "${RAW_PATH:0:1}" != "/" ]; then
+  RAW_PATH="$(pwd)/$RAW_PATH"
+fi
+FILE_PATH="$RAW_PATH"
 
 # $4+ 存在意味着 $SelectedText$ 非空（有选中文本）
 HAS_SELECTION=false
