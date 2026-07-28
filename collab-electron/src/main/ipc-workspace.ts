@@ -65,14 +65,17 @@ function initWorkspaceFiles(workspacePath: string): void {
 }
 
 /**
- * Derive which workspace owns a file path by prefix match.
+ * Derive which workspace owns a file path by longest prefix match.
  */
 export function workspaceForFile(
   filePath: string,
   workspaces: string[],
 ): string | null {
+  // Sort descending by length so a nested workspace (e.g. /a/b) wins
+  // over its parent (e.g. /a) when both are registered.
+  const sorted = [...workspaces].sort((a, b) => b.length - a.length);
   return (
-    workspaces.find((ws) => filePath === ws || filePath.startsWith(ws + "/")) ??
+    sorted.find((ws) => filePath === ws || filePath.startsWith(ws + "/")) ??
     null
   );
 }
