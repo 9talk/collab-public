@@ -504,6 +504,8 @@ async function init() {
       title,
       description,
       status,
+      x: tile.x,
+      y: tile.y,
     };
   }
 
@@ -609,12 +611,15 @@ async function init() {
 
   function syncTileList() {
     const currentIds = new Set();
-    for (const [id] of tileManager.getTileDOMs()) {
-      const tile = getTile(id);
-      if (!tile) continue;
-      currentIds.add(id);
+    // Sort by y (top-to-bottom) then x (left-to-right) to match canvas layout
+    const domMap = tileManager.getTileDOMs();
+    const sorted = [...tiles]
+      .filter((t) => domMap.has(t.id))
+      .sort((a, b) => a.y - b.y || a.x - b.x);
+    for (const tile of sorted) {
+      currentIds.add(tile.id);
       const entry = buildTileListEntry(tile);
-      const prev = lastTileSnapshot.get(id);
+      const prev = lastTileSnapshot.get(tile.id);
       if (
         !prev ||
         prev.title !== entry.title ||
@@ -626,7 +631,7 @@ async function init() {
           entry,
         );
       }
-      lastTileSnapshot.set(id, entry);
+      lastTileSnapshot.set(tile.id, entry);
     }
     for (const id of lastTileSnapshot.keys()) {
       if (!currentIds.has(id)) {
@@ -1497,13 +1502,14 @@ async function init() {
     tileListWebview.webview.addEventListener("dom-ready", () => {
       lastTileSnapshot = new Map();
       const initEntries = [];
-      for (const [id] of tileManager.getTileDOMs()) {
-        const tile = getTile(id);
-        if (tile) {
-          const entry = buildTileListEntry(tile);
-          initEntries.push(entry);
-          lastTileSnapshot.set(id, entry);
-        }
+      const domMap = tileManager.getTileDOMs();
+      const sorted = [...tiles]
+        .filter((t) => domMap.has(t.id))
+        .sort((a, b) => a.y - b.y || a.x - b.x);
+      for (const tile of sorted) {
+        const entry = buildTileListEntry(tile);
+        initEntries.push(entry);
+        lastTileSnapshot.set(tile.id, entry);
       }
       tileListWebview.send("tile-list:init", initEntries);
       const focusedId = tileManager.getFocusedTileId();

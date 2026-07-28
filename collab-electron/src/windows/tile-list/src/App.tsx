@@ -18,6 +18,13 @@ interface TileEntry {
   title: string;
   description: string;
   status: "running" | "exited" | "idle" | null;
+  x: number;
+  y: number;
+}
+
+/** Sort tiles top-to-bottom, left-to-right to match canvas layout. */
+function sortByPosition(a: TileEntry, b: TileEntry) {
+  return a.y - b.y || a.x - b.x;
 }
 
 function isTileEntry(value: unknown): value is TileEntry {
@@ -43,10 +50,14 @@ function resolveAliasWorkspace(
   const path = entry.description;
   if (!path || path === "~" || workspacePaths.length === 0) return null;
   const normalized = path.replace(/\\/g, "/");
-  const matched = workspacePaths.find((wp) => {
-    const w = wp.replace(/\\/g, "/");
-    return normalized === w || normalized.startsWith(w + "/");
-  });
+  // Use longest prefix match: sort by path length descending so the most
+  // specific (longest) match wins, not the first in array order.
+  const matched = [...workspacePaths]
+    .sort((a, b) => b.length - a.length)
+    .find((wp) => {
+      const w = wp.replace(/\\/g, "/");
+      return normalized === w || normalized.startsWith(w + "/");
+    });
   if (!matched) return null;
   const alias = aliases[matched];
   return alias ? { workspacePath: matched, alias } : null;
@@ -181,20 +192,26 @@ function App() {
       (channel: string, ...args: unknown[]) => {
         if (channel === "tile-list:init") {
           const tiles = Array.isArray(args[0])
-            ? args[0].filter(isTileEntry)
+            ? args[0].filter(isTileEntry).sort(sortByPosition)
             : [];
           setEntries(tiles);
         } else if (channel === "tile-list:add") {
           const tile = args[0];
           if (!isTileEntry(tile)) return;
-          setEntries((prev) => [...prev.filter((e) => e.id !== tile.id), tile]);
+          setEntries((prev) => {
+            const next = [...prev.filter((e) => e.id !== tile.id), tile];
+            return next.sort(sortByPosition);
+          });
         } else if (channel === "tile-list:remove") {
           const id = args[0] as string;
           setEntries((prev) => prev.filter((e) => e.id !== id));
         } else if (channel === "tile-list:update") {
           const tile = args[0];
           if (!isTileEntry(tile)) return;
-          setEntries((prev) => prev.map((e) => (e.id === tile.id ? tile : e)));
+          setEntries((prev) => {
+            const next = prev.map((e) => (e.id === tile.id ? tile : e));
+            return next.sort(sortByPosition);
+          });
         } else if (channel === "tile-list:focus") {
           setFocusedId(args[0] as string | null);
         }
