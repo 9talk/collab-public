@@ -23,7 +23,7 @@ export function isFocusSearchShortcut(input) {
   return input.code === "KeyK" || normalizeShortcutKey(input.key) === "k";
 }
 
-export function createWebview(name, config, container, onDndMessage) {
+export function createWebview(name, config, container, onDndMessage, logLabel) {
   const wv = document.createElement("webview");
   wv.setAttribute("src", config.src);
   wv.setAttribute("preload", config.preload);
@@ -40,6 +40,8 @@ export function createWebview(name, config, container, onDndMessage) {
       wv.send(ch, ...args);
     }
     pendingMessages.length = 0;
+    // Register webview name for memory stats display
+    window.shellApi.registerWebviewName(name, wv.getWebContentsId());
     wv.addEventListener("before-input-event", (e) => {
       const detail = e.detail;
       if (!detail || detail.type !== "keyDown") return;
@@ -60,7 +62,7 @@ export function createWebview(name, config, container, onDndMessage) {
 
   wv.addEventListener("console-message", (event) => {
     window.shellApi.logFromWebview(
-      name,
+      logLabel ?? name,
       event.level,
       event.message,
       event.sourceId,

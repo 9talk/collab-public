@@ -358,4 +358,8 @@ contextBridge.exposeInMainWorld("shellApi", {
   // Terminal screenshot
   termScreenshotClipboard: (webContentsId: number): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke("term:screenshot", { webContentsId }),
+
+  // Register webview name for memory stats
+  registerWebviewName: (name: string, webContentsId: number) =>
+    ipcRenderer.send("webview:register-name", name, webContentsId),
 });

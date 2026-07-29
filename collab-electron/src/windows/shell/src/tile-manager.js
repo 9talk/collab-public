@@ -368,6 +368,7 @@ export function createTileManager({
     dom.webview = wv;
 
     wv.addEventListener("dom-ready", () => {
+      window.shellApi.registerWebviewName("终端 Tile", wv.getWebContentsId());
       if (autoFocus) focusCanvasTile(tile.id);
       if (dom._pendingFocus) {
         dom._pendingFocus = false;
@@ -475,6 +476,9 @@ export function createTileManager({
 
     dom.contentArea.appendChild(wv);
     dom.webview = wv;
+    wv.addEventListener("dom-ready", () => {
+      window.shellApi.registerWebviewName("图谱 Tile", wv.getWebContentsId());
+    });
   }
 
   function spawnBrowserWebview(tile, autoFocus = false) {
@@ -555,6 +559,7 @@ export function createTileManager({
     }
 
     wv.addEventListener("dom-ready", () => {
+      window.shellApi.registerWebviewName("浏览器 Tile", wv.getWebContentsId());
       wv.setZoomFactor(0.95);
     });
 
@@ -893,6 +898,9 @@ export function createTileManager({
       wv.style.border = "none";
       dom.contentArea.appendChild(wv);
       dom.webview = wv;
+      wv.addEventListener("dom-ready", () => {
+        window.shellApi.registerWebviewName("PDF", wv.getWebContentsId());
+      });
     } else if (type === "image") {
       const img = document.createElement("img");
       img.src = toCollabFileUrl(filePath);
@@ -918,7 +926,9 @@ export function createTileManager({
       dom.contentArea.appendChild(wv);
       dom.webview = wv;
 
-      wv.addEventListener("dom-ready", () => {});
+      wv.addEventListener("dom-ready", () => {
+        window.shellApi.registerWebviewName("文件 Tile", wv.getWebContentsId());
+      });
     }
 
     saveCanvasImmediate();

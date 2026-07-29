@@ -5,6 +5,7 @@ import {
   Notification,
   shell,
   app,
+  webContents,
   type BrowserWindow,
 } from "electron";
 import { execFileSync } from "node:child_process";
@@ -27,6 +28,22 @@ interface IpcContext {
 }
 
 export function registerMiscHandlers(ctx: IpcContext): void {
+  // Webview name registry (PID → human-readable name, auto-cleaned on destroy)
+  const webviewNames = new Map<number, string>();
+
+  ipcMain.on(
+    "webview:register-name",
+    (_event, name: string, webContentsId: number) => {
+      const wc = webContents.fromId(webContentsId);
+      const pid = wc?.getOSProcessId();
+      if (pid && pid > 0) {
+        webviewNames.set(pid, name);
+        wc.once("destroyed", () => {
+          webviewNames.delete(pid);
+        });
+      }
+    },
+  );
   // Memory stats — returns grouped process nodes for treemap visualization
   ipcMain.handle("memory:stats", () => {
     const metrics = app.getAppMetrics();
@@ -107,6 +124,7 @@ export function registerMiscHandlers(ctx: IpcContext): void {
 
         // Classify a process for grouping
         function classify(pid: number): string {
+          if (pid === mainPid) return "main";
           const known = typeByPid.get(pid);
           if (known) {
             switch (known) {
@@ -127,6 +145,10 @@ export function registerMiscHandlers(ctx: IpcContext): void {
           const firstWord = a.split(/\s+/)[0] ?? "";
           const base = firstWord.split("/").pop() ?? firstWord;
           if (shellNames.has(base) || a.startsWith("-")) return "shell";
+          // Claude Code CLI — spawned inside terminal tiles
+          if (base === "claude") return "agent";
+          // Collaborator tool processes (codegraph MCP, etc.)
+          if (base === "node" || base === "codegraph") return "tool";
           return "unknown";
         }
 
@@ -139,30 +161,43 @@ export function registerMiscHandlers(ctx: IpcContext): void {
             return (first.split("/").pop() ?? first) + ` (${pid})`;
           }
           if (type === "utility") {
-            if (a.includes("NetworkService")) return "Network Service";
-            if (a.includes("NodeService")) return "Node Service";
-            return `Utility (${pid})`;
+            if (a.includes("NetworkService")) return "网络服务";
+            if (a.includes("NodeService")) return "节点服务";
+            return `工具 (${pid})`;
           }
-          if (type === "renderer") return `Renderer (${pid})`;
-          return `Process (${pid})`;
+          if (type === "agent") return `Claude Code (${pid})`;
+          if (type === "tool") {
+            if (a.includes("codegraph")) return `Codegraph (${pid})`;
+            return `Node.js (${pid})`;
+          }
+          if (type === "renderer") {
+            const name = webviewNames.get(pid);
+            if (name) return name;
+            return `渲染进程 (${pid})`;
+          }
+          return `进程 (${pid})`;
         }
 
         function groupLabel(type: string): string {
           switch (type) {
             case "main":
-              return "Main Process";
+              return "主进程";
             case "gpu":
-              return "GPU Process";
+              return "GPU 进程";
             case "utility":
-              return "Utility Processes";
+              return "工具进程";
             case "pty":
-              return "PTY Service";
+              return "PTY 服务";
             case "shell":
-              return "Shell Processes";
+              return "Shell";
+            case "agent":
+              return "Claude Code";
+            case "tool":
+              return "工具";
             case "renderer":
-              return "Renderer Processes";
+              return "渲染进程";
             default:
-              return "Other";
+              return "其他";
           }
         }
 

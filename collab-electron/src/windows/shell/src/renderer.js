@@ -41,13 +41,6 @@ canvasEl.tabIndex = -1;
 document.documentElement.classList.toggle("platform-win", IS_WINDOWS);
 document.body.classList.toggle("platform-win", IS_WINDOWS);
 
-// -- Alpha banner dismiss --
-
-document.getElementById("alpha-dismiss").addEventListener("click", (e) => {
-  e.preventDefault();
-  document.getElementById("alpha-label").hidden = true;
-});
-
 // -- Dark mode --
 
 initDarkMode(() => viewport.updateCanvas());
@@ -231,35 +224,39 @@ async function init() {
     }
   }
 
-  // -- Singleton webviews --
+  // -- Lazy viewer webview (created on first file selection) --
 
-  const singletonViewer = createWebview(
-    "viewer",
-    configs.viewer,
-    panelViewer,
-    handleDndMessage,
-  );
-  singletonViewer.webview.style.display = "none";
-  singletonViewer.webview.addEventListener("focus", () => {
-    noteSurfaceFocus("viewer");
-  });
-  singletonViewer.setBeforeInput((event, detail) => {
-    if (!isFocusSearchShortcut(detail)) return;
-    event.preventDefault();
-    handleShortcut("focus-file-search");
-  });
+  let viewerInstance = null;
 
-  const singletonWebviews = {
-    settings: createWebview(
-      "settings",
-      configs.settings,
-      settingsModal,
+  function ensureViewer() {
+    if (viewerInstance) return viewerInstance;
+    viewerInstance = createWebview(
+      "文件阅读器",
+      configs.viewer,
+      panelViewer,
       handleDndMessage,
-    ),
-  };
-  singletonWebviews.settings.webview.addEventListener("focus", () => {
-    noteSurfaceFocus("settings");
-  });
+      "viewer",
+    );
+    viewerInstance.webview.style.display = "none";
+    viewerInstance.webview.addEventListener("focus", () => {
+      noteSurfaceFocus("viewer");
+    });
+    viewerInstance.setBeforeInput((event, detail) => {
+      if (!isFocusSearchShortcut(detail)) return;
+      event.preventDefault();
+      handleShortcut("focus-file-search");
+    });
+    return viewerInstance;
+  }
+
+  function getViewerIfExists() {
+    return viewerInstance;
+  }
+
+  // -- Singleton webviews (settings only; lazily created by onSettingsToggle) --
+
+  const singletonWebviews = {};
+  singletonWebviews.settings = null;
 
   // -- Panel manager --
 
@@ -277,10 +274,10 @@ async function init() {
       panelViewer.classList.toggle("nav-open", visible);
       if (visible) {
         requestAnimationFrame(() => {
-          singletonViewer.send("nav-visibility", true);
+          getViewerIfExists()?.send("nav-visibility", true);
         });
       } else {
-        singletonViewer.send("nav-visibility", false);
+        getViewerIfExists()?.send("nav-visibility", false);
         canvasEl.focus();
       }
     },
@@ -321,6 +318,7 @@ async function init() {
     wv.style.border = "none";
 
     wv.addEventListener("dom-ready", () => {
+      window.shellApi.registerWebviewName("Agent 终端", wv.getWebContentsId());
       if (agentPanel.isVisible()) {
         wv.focus();
         noteSurfaceFocus("agent");
@@ -374,6 +372,7 @@ async function init() {
     const pendingMessages = [];
 
     wv.addEventListener("dom-ready", () => {
+      window.shellApi.registerWebviewName("Agent 聊天", wv.getWebContentsId());
       ready = true;
       for (const [ch, args] of pendingMessages) {
         wv.send(ch, ...args);
@@ -518,10 +517,11 @@ async function init() {
   fileTreeContainer.style.minHeight = "0";
   panelNav.appendChild(fileTreeContainer);
   const navWebview = createWebview(
-    "nav",
+    "文件导航",
     configs.nav,
     fileTreeContainer,
     handleDndMessage,
+    "nav",
   );
   navWebview.webview.addEventListener("focus", () => {
     noteSurfaceFocus("nav");
@@ -557,7 +557,13 @@ async function init() {
       lastTileSnapshot = new Map();
     }
     if (mode === "todos" && !todosWebview) {
-      todosWebview = createWebview("todos", configs.todos, todosContainer);
+      todosWebview = createWebview(
+        "待办事项",
+        configs.todos,
+        todosContainer,
+        undefined,
+        "todos",
+      );
     } else if (mode !== "todos" && todosWebview) {
       todosWebview.webview.remove();
       todosWebview = null;
@@ -845,7 +851,7 @@ async function init() {
   }
 
   function isViewerVisible() {
-    return singletonViewer.webview.style.display !== "none";
+    return viewerInstance && viewerInstance.webview.style.display !== "none";
   }
 
   function resolveSurface(surface = lastNonModalSurface) {
@@ -900,7 +906,7 @@ async function init() {
         return;
       }
       if (resolved === "viewer" && isViewerVisible()) {
-        singletonViewer.webview.focus();
+        ensureViewer().webview.focus();
         noteSurfaceFocus("viewer");
         return;
       }
@@ -920,7 +926,7 @@ async function init() {
     canvasEl.blur();
     navToggle.blur();
     agentToggle.blur();
-    singletonViewer.webview.blur();
+    if (viewerInstance) viewerInstance.webview.blur();
     workspaceManager.getNavWebview().webview.blur();
     if (agentWebview) agentWebview.webview.blur();
   }
@@ -929,7 +935,7 @@ async function init() {
 
   function getAllWebviews() {
     const all = [workspaceManager.getNavWebview()];
-    all.push(singletonViewer);
+    if (viewerInstance) all.push(viewerInstance);
     if (tileListWebview) all.push(tileListWebview);
     if (singletonWebviews.settings) all.push(singletonWebviews.settings);
     if (agentWebview) all.push(agentWebview);
@@ -1363,14 +1369,20 @@ async function init() {
     } else if (target === "viewer" || target.startsWith("viewer:")) {
       if (channel === "file-selected") {
         const hasSelectedFile = !!args[0];
-        if (!hasSelectedFile) {
-          singletonViewer.webview.blur();
-        }
-        singletonViewer.webview.style.display = hasSelectedFile ? "" : "none";
-        if (!hasSelectedFile) {
+        if (hasSelectedFile) {
+          const v = ensureViewer();
+          v.webview.style.display = "";
+          v.send(channel, ...args);
+        } else {
+          if (viewerInstance) {
+            viewerInstance.webview.blur();
+            viewerInstance.webview.style.display = "none";
+          }
           focusSurface(lastNonModalSurface);
         }
+        return;
       }
+      if (!viewerInstance) return;
       if (channel === "file-renamed") {
         tileManager.updateTileForRename(args[0], args[1]);
       }
@@ -1379,7 +1391,7 @@ async function init() {
         minimap.update();
       }
       if (channel !== "workspace-changed") {
-        singletonViewer.send(channel, ...args);
+        viewerInstance.send(channel, ...args);
       }
       if (
         channel === "fs-changed" ||
@@ -1494,10 +1506,11 @@ async function init() {
   function ensureTileListWebview() {
     if (tileListWebview) return;
     tileListWebview = createWebview(
-      "tile-list",
+      "tile 列表",
       configs.tileList,
       tileListContainer,
       handleDndMessage,
+      "tile-list",
     );
     tileListWebview.webview.addEventListener("dom-ready", () => {
       lastTileSnapshot = new Map();
@@ -1576,10 +1589,11 @@ async function init() {
     if (open) {
       if (!singletonWebviews.settings) {
         singletonWebviews.settings = createWebview(
-          "settings",
+          "设置窗口",
           configs.settings,
           settingsModal,
           handleDndMessage,
+          "settings",
         );
         singletonWebviews.settings.webview.addEventListener("focus", () => {
           noteSurfaceFocus("settings");

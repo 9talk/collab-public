@@ -67,6 +67,7 @@ export const zh: Record<TranslationKey, string> = {
   "memory.processCount": "进程数",
   "memory.ptyService": "PTY 服务",
   "memory.shell": "Shell",
+  "memory.tool": "工具进程",
 
   // Terminal pane
   "terminal.title": "终端",

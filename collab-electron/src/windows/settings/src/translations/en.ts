@@ -66,6 +66,7 @@ export const en = {
   "memory.processCount": "Processes",
   "memory.ptyService": "PTY Service",
   "memory.shell": "Shell",
+  "memory.tool": "Tools",
 
   // Terminal pane
   "terminal.title": "Terminal",

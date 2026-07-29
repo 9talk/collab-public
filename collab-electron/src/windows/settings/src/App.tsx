@@ -854,6 +854,8 @@ function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
     pty: "#F59E0B",
     shell: "#6B7280",
     renderer: "#EF4444",
+    agent: "#EC4899",
+    tool: "#14B8A6",
     unknown: "#9CA3AF",
   };
 
@@ -864,6 +866,8 @@ function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
     pty: t("memory.ptyService"),
     shell: t("memory.shell"),
     renderer: t("memory.renderer"),
+    agent: "Claude Code",
+    tool: t("memory.tool"),
   };
 
   // Convert groups to nivo flat treemap data
