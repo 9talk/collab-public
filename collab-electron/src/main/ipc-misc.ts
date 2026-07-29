@@ -48,6 +48,7 @@ export function registerMiscHandlers(ctx: IpcContext): void {
   ipcMain.handle("memory:stats", () => {
     const metrics = app.getAppMetrics();
     const mainPid = process.pid;
+    const mainWinRendererPid = ctx.mainWindow()?.webContents.getOSProcessId();
     // Build type map from app.getAppMetrics (Chromium-managed processes)
     const typeByPid = new Map<number, string>();
     for (const m of metrics) {
@@ -173,6 +174,7 @@ export function registerMiscHandlers(ctx: IpcContext): void {
           if (type === "renderer") {
             const name = webviewNames.get(pid);
             if (name) return name;
+            if (pid === mainWinRendererPid) return "应用界面";
             return `渲染进程 (${pid})`;
           }
           return `进程 (${pid})`;
