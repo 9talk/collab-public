@@ -253,6 +253,13 @@ async function init() {
     return viewerInstance;
   }
 
+  function destroyViewer() {
+    if (!viewerInstance) return;
+    viewerInstance.webview.blur();
+    viewerInstance.webview.remove();
+    viewerInstance = null;
+  }
+
   // -- Singleton webviews (settings only; lazily created by onSettingsToggle) --
 
   const singletonWebviews = {};
@@ -1374,10 +1381,7 @@ async function init() {
           v.webview.style.display = "";
           v.send(channel, ...args);
         } else {
-          if (viewerInstance) {
-            viewerInstance.webview.blur();
-            viewerInstance.webview.style.display = "none";
-          }
+          destroyViewer();
           focusSurface(lastNonModalSurface);
         }
         return;

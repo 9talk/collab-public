@@ -173,6 +173,7 @@ contextBridge.exposeInMainWorld("api", {
   // Nav + Viewer
   selectFile: (path: string | null) =>
     ipcRenderer.send("nav:select-file", path),
+  closeViewer: () => ipcRenderer.send("nav:close-viewer"),
 
   // Nav
   readDir: (path: string) => ipcRenderer.invoke("fs:readdir", path),

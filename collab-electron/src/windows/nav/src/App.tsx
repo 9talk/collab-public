@@ -721,22 +721,26 @@ export default function App() {
     if (matchedEditor) {
       if (matchedEditor === "system-app") {
         window.api.openPath(path);
+        window.api.closeViewer();
         return;
       }
       if (typeof window.api.openFileInExternalEditor === "function") {
         window.api.openFileInExternalEditor(path, matchedEditor);
+        window.api.closeViewer();
         return;
       }
     }
 
     if (isExternalAppFile(path)) {
       window.api.openPath(path);
+      window.api.closeViewer();
       return;
     }
 
-    if (useExternalEditorRef.current && isCodeFile(path)) {
+    if (useExternalEditorRef.current && (isCodeFile(path) || !ext)) {
       if (typeof window.api.openFileInExternalEditor === "function") {
         window.api.openFileInExternalEditor(path);
+        window.api.closeViewer();
         return;
       }
     }

@@ -53,6 +53,11 @@ export function registerKnowledgeHandlers(ctx: IpcContext): void {
     ctx.forwardToWebview("nav", "file-selected", path);
   });
 
+  // Close viewer without affecting nav selection state
+  ipcMain.on("nav:close-viewer", () => {
+    ctx.forwardToWebview("viewer", "file-selected", null);
+  });
+
   ipcMain.on("nav:select-folder", (_event, path: string) => {
     ctx.trackEvent("folder_selected");
     ctx.forwardToWebview("viewer", "folder-selected", path);

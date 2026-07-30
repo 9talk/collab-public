@@ -124,6 +124,7 @@ export interface CollabApi {
 
   // File selection
   selectFile: (path: string | null) => void;
+  closeViewer: () => void;
 
   // Folder selection
   selectFolder: (path: string) => void;

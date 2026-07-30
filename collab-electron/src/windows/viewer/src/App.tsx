@@ -177,6 +177,21 @@ export default function App() {
   // Listen for file selection from nav view (singleton viewer only)
   useEffect(() => {
     if (isTileMode) return;
+
+    // Clean up buffer listener registered in main.tsx (lazy creation race)
+    if (typeof (window as any).__viewerBufferUnsub === "function") {
+      (window as any).__viewerBufferUnsub();
+      (window as any).__viewerBufferUnsub = undefined;
+    }
+
+    // Pick up path buffered before React mounted
+    const pendingPath = (window as any).__viewerPendingPath;
+    if (pendingPath !== undefined) {
+      (window as any).__viewerPendingPath = undefined;
+      setSelectedPath(pendingPath);
+      setFocusedFolder(null);
+    }
+
     return window.api.onFileSelected((path) => {
       setSelectedPath(path);
       setFocusedFolder(null);

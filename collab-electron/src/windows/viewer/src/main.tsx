@@ -14,6 +14,16 @@ console.warn = (...args: unknown[]) => {
   originalWarn(...args);
 };
 
+// Buffer file-selected events that arrive before React mounts.
+// Viewer is lazily created: dom-ready fires before dynamic import resolves,
+// so the App's onFileSelected useEffect hasn't registered yet.
+// Store the path and an unsubscribe handle so App can clean up on mount.
+(window as any).__viewerPendingPath = undefined;
+const bufferUnsub = window.api.onFileSelected((path) => {
+  (window as any).__viewerPendingPath = path;
+});
+(window as any).__viewerBufferUnsub = bufferUnsub;
+
 async function bootstrap(): Promise<void> {
   const { default: App } = await import("./App");
 
