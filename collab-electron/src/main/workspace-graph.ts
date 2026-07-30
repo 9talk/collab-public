@@ -200,7 +200,14 @@ async function collectFiles(
     const fullPath = join(dirPath, entry.name);
     const relPath = relative(rootPath, fullPath);
 
-    if (entry.isDirectory()) {
+    let stats;
+    try {
+      stats = await stat(fullPath);
+    } catch {
+      continue;
+    }
+
+    if (stats.isDirectory()) {
       if (
         !(await shouldIncludeEntryWithContent(dirPath, entry, filter, rootPath))
       ) {
@@ -535,7 +542,18 @@ async function collectTypeScriptConfigPaths(
 
   for (const entry of entries) {
     const fullPath = join(dirPath, entry.name);
-    if (entry.isDirectory()) {
+    // Follow symlinks to detect directories
+    let isDir = entry.isDirectory();
+    if (entry.isSymbolicLink() && !isDir) {
+      try {
+        const s = await stat(fullPath);
+        isDir = s.isDirectory();
+      } catch {
+        continue;
+      }
+    }
+
+    if (isDir) {
       if (CONFIG_SEARCH_IGNORED_DIRS.has(entry.name)) {
         continue;
       }

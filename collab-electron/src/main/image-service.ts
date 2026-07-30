@@ -154,7 +154,7 @@ async function collectSubdirs(dir: string): Promise<string[]> {
     const entries = await readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
       if (
-        entry.isDirectory() &&
+        (entry.isDirectory() || entry.isSymbolicLink()) &&
         !entry.name.startsWith(".") &&
         entry.name !== "node_modules"
       ) {

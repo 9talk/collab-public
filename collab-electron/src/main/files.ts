@@ -83,8 +83,16 @@ export async function countTreeFiles(
       continue;
     }
 
-    if (e.isDirectory()) {
-      count += await countTreeFiles(join(dirPath, e.name), filter, rootPath);
+    const fullPath = join(dirPath, e.name);
+    let stats;
+    try {
+      stats = await stat(fullPath);
+    } catch {
+      continue;
+    }
+
+    if (stats.isDirectory()) {
+      count += await countTreeFiles(fullPath, filter, rootPath);
     } else {
       count += 1;
     }
@@ -109,26 +117,36 @@ export async function fsReadDir(
       let createdAt = "";
       let modifiedAt = "";
       let fileCount: number | undefined;
-      if (e.isFile()) {
+      const fullPath = join(dirPath, e.name);
+      const isSymlink = e.isSymbolicLink();
+
+      // Resolve symlinks to get the real type
+      let isDirectory = e.isDirectory();
+      let isFile = e.isFile();
+      if (isSymlink && !isDirectory && !isFile) {
         try {
-          const s = await stat(join(dirPath, e.name));
+          const s = await stat(fullPath);
+          isDirectory = s.isDirectory();
+          isFile = s.isFile();
+        } catch {}
+      }
+
+      if (isFile) {
+        try {
+          const s = await stat(fullPath);
           createdAt = s.birthtime.toISOString();
           modifiedAt = s.mtime.toISOString();
         } catch {}
-      } else if (e.isDirectory()) {
+      } else if (isDirectory) {
         try {
-          fileCount = await countTreeFiles(
-            join(dirPath, e.name),
-            filter,
-            rootPath,
-          );
+          fileCount = await countTreeFiles(fullPath, filter, rootPath);
         } catch {}
       }
       const entry: DirEntry = {
         name: e.name,
-        isDirectory: e.isDirectory(),
-        isFile: e.isFile(),
-        isSymlink: e.isSymbolicLink(),
+        isDirectory,
+        isFile,
+        isSymlink,
         createdAt,
         modifiedAt,
       };

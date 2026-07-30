@@ -51,7 +51,18 @@ async function collectMdFiles(dirPath: string): Promise<string[]> {
   }
   for (const entry of entries) {
     const fullPath = join(dirPath, entry.name);
-    if (entry.isDirectory()) {
+    // Follow symlinks to detect directories
+    let isDir = entry.isDirectory();
+    if (entry.isSymbolicLink() && !isDir) {
+      try {
+        const s = await stat(fullPath);
+        isDir = s.isDirectory();
+      } catch {
+        continue;
+      }
+    }
+
+    if (isDir) {
       if (entry.name === "node_modules" || entry.name === ".git") {
         continue;
       }

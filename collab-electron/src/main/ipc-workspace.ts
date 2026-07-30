@@ -160,7 +160,7 @@ async function readTreeRecursive(
     const ctime = stats.birthtime.toISOString();
     const mtime = stats.mtime.toISOString();
 
-    if (entry.isDirectory()) {
+    if (stats.isDirectory()) {
       const children = await readTreeRecursive(fullPath, rootPath, filter);
       folders.push({
         path: fullPath,

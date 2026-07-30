@@ -224,7 +224,17 @@ async function collectPythonConfigPaths(
 
   for (const entry of entries) {
     const fullPath = join(dirPath, entry.name);
-    if (entry.isDirectory()) {
+    let isDir = entry.isDirectory();
+    if (entry.isSymbolicLink() && !isDir) {
+      try {
+        const s = await stat(fullPath);
+        isDir = s.isDirectory();
+      } catch {
+        continue;
+      }
+    }
+
+    if (isDir) {
       if (PYTHON_SEARCH_IGNORED_DIRS.has(entry.name)) {
         continue;
       }
