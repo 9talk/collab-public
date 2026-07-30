@@ -132,7 +132,7 @@ export function registerIpcHandlers(config: AppConfig): void {
   registerKnowledgeHandlers(knowledgeCtx);
   registerCanvasHandlers(canvasCtx);
   registerMiscHandlers(miscCtx);
-  registerWorkspaceRpc({ forwardToWebview, fileFilterRef });
+  registerWorkspaceRpc({ appConfig, forwardToWebview, fileFilterRef });
 }
 
 export function rebuildFileFilter(userPatterns: string[]): void {

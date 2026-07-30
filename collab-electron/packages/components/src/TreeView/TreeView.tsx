@@ -1,12 +1,10 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
 import {
-  CaretRight,
-  CaretDown,
-  Terminal,
-  Plus,
-  Graph,
-  Crosshair,
   ArrowSquareOut,
+  CaretDown,
+  CaretRight,
+  Graph,
+  Terminal,
 } from "@phosphor-icons/react";
 import type { FlatItem } from "./useFileTree";
 import { formatRelativeTime, displayFileName } from "./Helpers";
@@ -217,32 +215,6 @@ export const FolderRow = React.memo(function FolderRow({
           <ArrowSquareOut size={12} weight="bold" />
         </button>
       )}
-      <button
-        className="folder-action-button"
-        data-tooltip="Locate terminal"
-        onClick={(e) => {
-          e.stopPropagation();
-          if (typeof window.api.locateTerminal === "function") {
-            window.api.locateTerminal(item.path);
-          }
-        }}
-      >
-        <Crosshair size={12} weight="bold" />
-      </button>
-      <button
-        className="folder-action-button"
-        data-tooltip="Create in folder"
-        onClick={(e) => {
-          e.stopPropagation();
-          if (onPlusClick) {
-            onPlusClick(item.path);
-          } else {
-            onCreateFile(item.path, "");
-          }
-        }}
-      >
-        <Plus size={12} weight="bold" />
-      </button>
       <button
         className="folder-action-button"
         data-tooltip="Open in terminal"

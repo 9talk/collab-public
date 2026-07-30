@@ -1,7 +1,7 @@
 import { realpathSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { registerMethod } from "./json-rpc-server";
-import { loadConfig, saveConfig, type AppConfig } from "./config";
+import { saveConfig, type AppConfig } from "./config";
 import {
   initWorkspaceFiles,
   startSingleWorkspaceServices,
@@ -11,6 +11,7 @@ import type { FileFilter } from "./file-filter";
 import { trackEvent } from "./analytics";
 
 interface WorkspaceRpcContext {
+  appConfig: AppConfig;
   forwardToWebview: (
     target: string,
     channel: string,
@@ -23,9 +24,8 @@ export function registerWorkspaceRpc(ctx: WorkspaceRpcContext): void {
   registerMethod(
     "workspace.list",
     () => {
-      const config = loadConfig();
       const aliases: Record<string, string> = {};
-      return { workspaces: config.workspaces, aliases };
+      return { workspaces: ctx.appConfig.workspaces, aliases };
     },
     {
       description: "List all workspaces",
@@ -42,10 +42,9 @@ export function registerWorkspaceRpc(ctx: WorkspaceRpcContext): void {
       }
 
       const chosen = realpathSync(p.path);
-      const config = loadConfig();
 
-      if (config.workspaces.includes(chosen)) {
-        return { workspaces: config.workspaces };
+      if (ctx.appConfig.workspaces.includes(chosen)) {
+        return { workspaces: ctx.appConfig.workspaces };
       }
 
       const collabDir = join(chosen, ".collaborator");
@@ -54,12 +53,12 @@ export function registerWorkspaceRpc(ctx: WorkspaceRpcContext): void {
         initWorkspaceFiles(chosen);
       }
 
-      config.workspaces.push(chosen);
-      saveConfig(config);
+      ctx.appConfig.workspaces.push(chosen);
+      saveConfig(ctx.appConfig);
       trackEvent("workspace_added", { is_new: isNew });
 
-      const userIgnored = Array.isArray(config.ui.ignoredFiles)
-        ? (config.ui.ignoredFiles as string[])
+      const userIgnored = Array.isArray(ctx.appConfig.ui.ignoredFiles)
+        ? (ctx.appConfig.ui.ignoredFiles as string[])
         : [];
       startSingleWorkspaceServices(
         chosen,
@@ -70,7 +69,7 @@ export function registerWorkspaceRpc(ctx: WorkspaceRpcContext): void {
       );
       ctx.forwardToWebview("nav", "workspace-added", chosen);
 
-      return { workspaces: config.workspaces };
+      return { workspaces: ctx.appConfig.workspaces };
     },
     {
       description: "Add a workspace by path",
