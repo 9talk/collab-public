@@ -58,7 +58,7 @@ function ensureGitignoreEntry(workspacePath: string): void {
   appendFileSync(gitignorePath, `${suffix}.collaborator\n`, "utf-8");
 }
 
-function initWorkspaceFiles(workspacePath: string): void {
+export function initWorkspaceFiles(workspacePath: string): void {
   const collabDir = join(workspacePath, ".collaborator");
   mkdirSync(collabDir, { recursive: true });
   ensureGitignoreEntry(workspacePath);

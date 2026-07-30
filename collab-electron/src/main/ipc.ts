@@ -18,6 +18,7 @@ import {
 import { registerKnowledgeHandlers } from "./ipc-knowledge";
 import { registerCanvasHandlers } from "./ipc-canvas";
 import { registerMiscHandlers } from "./ipc-misc";
+import { registerWorkspaceRpc } from "./workspace-rpc";
 
 const FS_CHANGE_DELETED = 3;
 
@@ -131,6 +132,7 @@ export function registerIpcHandlers(config: AppConfig): void {
   registerKnowledgeHandlers(knowledgeCtx);
   registerCanvasHandlers(canvasCtx);
   registerMiscHandlers(miscCtx);
+  registerWorkspaceRpc({ forwardToWebview, fileFilterRef });
 }
 
 export function rebuildFileFilter(userPatterns: string[]): void {

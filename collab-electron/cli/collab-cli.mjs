@@ -494,6 +494,21 @@ async function cmdClaudeUnbind(args) {
   console.log(`unbound ${args[0]}`);
 }
 
+// --- workspace subcommands ----------------------------------------------------
+
+async function cmdWorkspaceList() {
+  const result = await rpcCall("workspace.list");
+  console.log(pretty(result));
+}
+
+async function cmdWorkspaceAdd(args) {
+  if (args.length === 0) die("workspace add requires a directory path");
+  const { resolve } = await import("node:path");
+  const dir = resolve(args[0]);
+  const result = await rpcCall("workspace.add", { path: dir });
+  console.log(pretty(result));
+}
+
 // --- usage ----------------------------------------------------------------
 
 function usage() {
@@ -531,6 +546,8 @@ COMMANDS
   claude get <tileId>               Get session bound to a tile
   claude list                       List all Claude session bindings
   claude unbind <tileId>            Remove a Claude session binding
+  workspace list                    List all workspaces
+  workspace add <path>              Add a workspace by path
   help, --help                       Show this help
 
 TILE CREATE OPTIONS
@@ -738,6 +755,24 @@ try {
           break;
         default:
           die(`unknown claude subcommand: ${sub}`);
+      }
+      break;
+    }
+    case "workspace": {
+      if (argv.length < 2) {
+        die("workspace requires a subcommand (list, add)");
+      }
+      const sub = argv[1];
+      const rest = argv.slice(2);
+      switch (sub) {
+        case "list":
+          await cmdWorkspaceList();
+          break;
+        case "add":
+          await cmdWorkspaceAdd(rest);
+          break;
+        default:
+          die(`unknown workspace subcommand: ${sub}`);
       }
       break;
     }

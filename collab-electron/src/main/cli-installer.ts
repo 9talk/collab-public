@@ -1,7 +1,6 @@
 import { app } from "electron";
 import {
   chmodSync,
-  copyFileSync,
   existsSync,
   mkdirSync,
   unlinkSync,
@@ -25,6 +24,8 @@ const WRAPPER_PATH = join(
 );
 const MJS_PATH = join(INSTALL_DIR, "collab-cli.mjs");
 
+// For unpackaged/dev: the mjs sits alongside the binary in the cli/ directory
+// For packaged: the mjs is in Contents/Resources/
 function getMjsSource(): string {
   if (app.isPackaged) {
     return join(process.resourcesPath, "collab-cli.mjs");
@@ -37,7 +38,7 @@ function getMjsSource(): string {
   return join(app.getAppPath(), "cli", "collab-cli.mjs");
 }
 
-function generateUnixWrapper(): string {
+function generateUnixWrapper(mjsPath: string): string {
   return `#!/usr/bin/env bash
 set -euo pipefail
 NODE_BIN="$(cat "$HOME/.collaborator/node-path" 2>/dev/null)" || true
@@ -45,11 +46,11 @@ if [[ -z "$NODE_BIN" || ! -x "$NODE_BIN" ]]; then
   echo "error: collaborator is not running (no node-path file)" >&2
   exit 2
 fi
-ELECTRON_RUN_AS_NODE=1 exec "$NODE_BIN" "$(dirname "$0")/collab-cli.mjs" "$@"
+ELECTRON_RUN_AS_NODE=1 exec "$NODE_BIN" "${mjsPath}" "$@"
 `;
 }
 
-function generateWindowsWrapper(): string {
+function generateWindowsWrapper(mjsPath: string): string {
   return `@echo off
 setlocal
 set "NP_FILE=%USERPROFILE%\\.collaborator\\node-path"
@@ -59,7 +60,7 @@ if not exist "%NP_FILE%" (
 )
 set /p NODE_BIN=<"%NP_FILE%"
 set ELECTRON_RUN_AS_NODE=1
-"%NODE_BIN%" "%~dp0collab-cli.mjs" %*
+"%NODE_BIN%" "${mjsPath}" %*
 `;
 }
 
@@ -83,9 +84,15 @@ export function installCli(): void {
 
   mkdirSync(INSTALL_DIR, { recursive: true });
 
-  copyFileSync(mjsSource, MJS_PATH);
+  // Remove the standalone mjs copy if it exists from a previous install
+  if (existsSync(MJS_PATH)) {
+    unlinkSync(MJS_PATH);
+  }
 
-  const wrapper = IS_WIN ? generateWindowsWrapper() : generateUnixWrapper();
+  // Only install the shell wrapper — it references the mjs inside the app bundle
+  const wrapper = IS_WIN
+    ? generateWindowsWrapper(mjsSource)
+    : generateUnixWrapper(mjsSource);
   writeFileSync(WRAPPER_PATH, wrapper, "utf-8");
   if (!IS_WIN) {
     chmodSync(WRAPPER_PATH, 0o755);
