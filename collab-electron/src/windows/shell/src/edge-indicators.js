@@ -256,9 +256,14 @@ export function createEdgeIndicators({
     const vh = canvasEl.clientHeight;
     const vcx = vw / 2;
     const vcy = vh / 2;
+    const INSET = 8;
+    const DOT_SPACING = 14;
 
     const activeIds = new Set();
     const tiles = getTiles();
+
+    // First pass: compute ray intersection for every off-screen tile
+    const positions = [];
 
     for (const tile of tiles) {
       if (
@@ -283,8 +288,55 @@ export function createEdgeIndicators({
         tile.y * viewportState.zoom +
         viewportState.panY +
         (tile.height * viewportState.zoom) / 2;
-      const { x: dotX, y: dotY } = rayRectIntersect(vcx, vcy, tcx, tcy, vw, vh);
+      const { x, y } = rayRectIntersect(vcx, vcy, tcx, tcy, vw, vh);
 
+      positions.push({ tile, x, y });
+    }
+
+    // Second pass: spread overlapping dots on the same viewport edge
+    const edgeGroups = { top: [], bottom: [], left: [], right: [] };
+
+    for (const p of positions) {
+      if (p.y <= INSET) edgeGroups.top.push(p);
+      else if (p.y >= vh - INSET) edgeGroups.bottom.push(p);
+      else if (p.x <= INSET) edgeGroups.left.push(p);
+      else edgeGroups.right.push(p);
+    }
+
+    for (const edge of ["top", "bottom"]) {
+      const group = edgeGroups[edge];
+      if (group.length <= 1) continue;
+
+      group.sort((a, b) => a.x - b.x);
+      const span = (group.length - 1) * DOT_SPACING;
+      const mid = (group[0].x + group[group.length - 1].x) / 2;
+      const start = Math.max(
+        INSET,
+        Math.min(mid - span / 2, vw - INSET - span),
+      );
+      for (let i = 0; i < group.length; i++) {
+        group[i].x = start + i * DOT_SPACING;
+      }
+    }
+
+    for (const edge of ["left", "right"]) {
+      const group = edgeGroups[edge];
+      if (group.length <= 1) continue;
+
+      group.sort((a, b) => a.y - b.y);
+      const span = (group.length - 1) * DOT_SPACING;
+      const mid = (group[0].y + group[group.length - 1].y) / 2;
+      const start = Math.max(
+        INSET,
+        Math.min(mid - span / 2, vh - INSET - span),
+      );
+      for (let i = 0; i < group.length; i++) {
+        group[i].y = start + i * DOT_SPACING;
+      }
+    }
+
+    // Third pass: render/update dots
+    for (const { tile, x: dotX, y: dotY } of positions) {
       let dot = edgeDotMap.get(tile.id);
       if (dot) {
         const fadeTimer = edgeDotFadeOuts.get(tile.id);
