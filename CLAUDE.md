@@ -45,7 +45,6 @@ By default it removes the existing app and cleans up `dist/`. Pass `--keep` to p
 ```bash
 cd /Users/dingxin/collab-public/collab-electron
 ./scripts/install-local.sh          # default: removes old app + dist
-./scripts/install-local.sh --keep   # keeps old app and dist
 ```
 
 This script handles:
