@@ -90,12 +90,15 @@ export function openFileInEditor(
   editorId: string,
   filePath: string,
   workspacePath: string,
+  line?: number,
 ): void {
   if (editorId === "intellij-idea") {
-    spawnEditor("/Applications/IntelliJ IDEA.app/Contents/MacOS/idea", [
-      workspacePath,
-      filePath,
-    ]);
+    const args = [workspacePath];
+    if (line && Number.isFinite(line)) {
+      args.push("--line", String(line));
+    }
+    args.push(filePath);
+    spawnEditor("/Applications/IntelliJ IDEA.app/Contents/MacOS/idea", args);
   } else if (editorId === "visual-studio-code") {
     spawnEditor(
       "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",

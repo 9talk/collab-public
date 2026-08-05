@@ -11,6 +11,17 @@
         "matcher": "stop"
       }
     ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/collab-claude-edit-hook.sh\" \"$COLLAB_TILE_ID\"' 2>/dev/null || true",
+            "type": "command"
+          }
+        ],
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit"
+      }
+    ],
     "PermissionRequest": [
       {
         "hooks": [

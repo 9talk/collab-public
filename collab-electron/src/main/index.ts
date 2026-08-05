@@ -34,6 +34,7 @@ import { registerIpcHandlers, setMainWindow, rebuildFileFilter } from "./ipc";
 import { registerCanvasRpc } from "./canvas-rpc";
 import { registerIntegrationsIpc } from "./integrations";
 import { registerClaudeIpc } from "./claude-rpc";
+import { registerClaudeEditsRpc, findLatestEditLine } from "./claude-edits-rpc";
 import {
   registerMethod,
   startJsonRpcServer,
@@ -784,7 +785,9 @@ ipcMain.on(
       );
       return;
     }
-    openFileInEditor(resolvedEditorId, filePath, ws);
+    const line = findLatestEditLine(filePath);
+    console.log("[external-editor] open-file: line =", line);
+    openFileInEditor(resolvedEditorId, filePath, ws, line ?? undefined);
   },
 );
 
@@ -912,6 +915,7 @@ app.whenReady().then(async () => {
   registerBrowserIpc();
   registerIntegrationsIpc();
   registerClaudeIpc();
+  registerClaudeEditsRpc();
   setupUpdateIPC();
   const autoCheckUpdates = getPref(config, "autoCheckUpdates") as
     | boolean

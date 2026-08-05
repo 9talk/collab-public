@@ -494,6 +494,24 @@ async function cmdClaudeUnbind(args) {
   console.log(`unbound ${args[0]}`);
 }
 
+async function cmdClaudeEdit(args) {
+  if (args.length < 2) {
+    die("claude edit requires <tileId> <eventFile>");
+  }
+  const { readFileSync } = await import("node:fs");
+  let event;
+  try {
+    event = JSON.parse(readFileSync(args[1], "utf-8"));
+  } catch {
+    die(`cannot read event file: ${args[1]}`);
+  }
+  await rpcCall("claude.edit", {
+    tileId: args[0],
+    event,
+  });
+  console.log(`forwarded edit event ${args[1]}`);
+}
+
 // --- workspace subcommands ----------------------------------------------------
 
 async function cmdWorkspaceList() {
@@ -752,6 +770,9 @@ try {
           break;
         case "unbind":
           await cmdClaudeUnbind(rest);
+          break;
+        case "edit":
+          await cmdClaudeEdit(rest);
           break;
         default:
           die(`unknown claude subcommand: ${sub}`);
