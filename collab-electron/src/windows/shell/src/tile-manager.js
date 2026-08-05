@@ -452,9 +452,16 @@ export function createTileManager({
       clearRefreshMask(tileDOMs.get(tile.id), tile);
     });
 
-    // TEMP: forward console messages to shell DevTools
+    // Forward console messages to the main-process log file (electron-log),
+    // tagged with the terminal-tile panel so OSC 8 / PTY diagnostics are
+    // captured in ~/.collaborator/logs/main-YYYY-MM-DD.log.
     wv.addEventListener("console-message", (event) => {
-      console.log(`[terminal-tile:${tile.id}]`, event.message);
+      window.shellApi.logFromWebview(
+        "terminalTile",
+        event.level,
+        event.message,
+        event.sourceId,
+      );
     });
   }
   function spawnGraphWebview(tile) {
