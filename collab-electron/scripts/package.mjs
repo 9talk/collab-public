@@ -172,7 +172,9 @@ if (builtArches.length === 1) {
   builderArgs.push(`-c.mac.target=${target}`);
   builderArgs.push("--" + builtArches[0]);
 }
-run(process.execPath, [electronBuilder, ...builderArgs]);
+// bun running electron-builder deadlocks during asar packing (kevent64 +
+// __ulock_wait2, asar stops growing). Always use node for the builder.
+run(process.env.NODE ?? "node", [electronBuilder, ...builderArgs]);
 
 // electron-builder's npmRebuild rewrites node-pty's native binary in-place
 // for the last target architecture. On a cross-compile (e.g. x64 pass on an
