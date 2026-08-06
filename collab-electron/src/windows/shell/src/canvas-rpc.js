@@ -39,10 +39,8 @@ export function findAutoPlacement(existingTiles, width, height) {
  *
  * Methods: tileList, tileCreate, tileRemove, tileMove, tileResize,
  *          viewportGet, viewportSet, terminalWrite, terminalRead,
- *          tileFocus, tileNotify, browserNavigate, browserScreenshot,
- *          browserSnapshot, browserClick, browserType,
- *          browserScroll, browserEvaluate, browserWait,
- *          browserInfo.
+ *          terminalWriteFocused, terminalClear, tileFocus, tileNotify,
+ *          tileReorder.
  */
 export function createCanvasRpc({
   tileManager,
@@ -71,21 +69,6 @@ export function createCanvasRpc({
     return tile;
   }
 
-  function requireBrowserWcId(requestId, tileId) {
-    const tile = requireTile(requestId, tileId);
-    if (!tile) return null;
-    if (tile.type !== "browser") {
-      respondError(requestId, 4, "Tile is not a browser");
-      return null;
-    }
-    const dom = tileManager.getTileDOMs().get(tileId);
-    if (!dom || !dom.webview) {
-      respondError(requestId, 4, "Browser webview not ready");
-      return null;
-    }
-    return dom.webview.getWebContentsId();
-  }
-
   return async function handleCanvasRpc(request) {
     const { requestId, method, params } = request;
 
@@ -112,50 +95,22 @@ export function createCanvasRpc({
           break;
         }
         case "tileCreate": {
-          const tileType = params.tileType || "note";
-          const size = defaultSize(tileType);
+          const tileType = params.tileType || "term";
+          if (tileType !== "term") {
+            respondError(requestId, 4, `Unsupported tile type: ${tileType}`);
+            return;
+          }
+          const size = defaultSize("term");
           let pos;
           if (params.position) {
             pos = { x: params.position.x, y: params.position.y };
-          } else if (tileType === "term") {
+          } else {
             const cwd = params.cwd || "";
             pos = findAutoPlacementForTerminal(cwd, size);
-          } else {
-            pos = findAutoPlacement(tiles, size.width, size.height);
           }
 
-          let tile;
-          if (tileType === "term") {
-            tile = tileManager.createCanvasTile("term", pos.x, pos.y);
-            tileManager.spawnTerminalWebview(tile);
-          } else if (tileType === "browser") {
-            tile = tileManager.createCanvasTile("browser", pos.x, pos.y, {
-              url: params.url,
-            });
-            tileManager.spawnBrowserWebview(tile, false);
-          } else if (tileType === "pdf") {
-            tile = tileManager.createFileTile(
-              "pdf",
-              pos.x,
-              pos.y,
-              params.filePath,
-            );
-          } else if (tileType === "graph") {
-            const wsPath = "";
-            tile = tileManager.createGraphTile(
-              pos.x,
-              pos.y,
-              params.filePath,
-              wsPath,
-            );
-          } else {
-            tile = tileManager.createFileTile(
-              tileType,
-              pos.x,
-              pos.y,
-              params.filePath,
-            );
-          }
+          const tile = tileManager.createCanvasTile("term", pos.x, pos.y);
+          tileManager.spawnTerminalWebview(tile);
           tileManager.saveCanvasImmediate();
           result = { tileId: tile.id };
           break;
@@ -293,123 +248,6 @@ export function createCanvasRpc({
             window.shellApi.ptyClearBuffer(tile.ptySessionId);
           }
           result = {};
-          break;
-        }
-        case "browserNavigate": {
-          const tile = requireTile(requestId, params.tileId);
-          if (!tile) return;
-          if (tile.type !== "browser") {
-            respondError(requestId, 4, "Tile is not a browser");
-            return;
-          }
-          const dom = tileManager.getTileDOMs().get(tile.id);
-          if (!dom?.webview) {
-            respondError(requestId, 4, "Browser has no webview");
-            return;
-          }
-          const wcId = dom.webview.getWebContentsId();
-          result = await window.shellApi.browserNavigate(wcId, params.url);
-          tile.url = params.url;
-          if (dom.urlInput) dom.urlInput.value = params.url;
-          break;
-        }
-        case "browserScreenshot": {
-          const tile = requireTile(requestId, params.tileId);
-          if (!tile) return;
-          if (tile.type !== "browser") {
-            respondError(requestId, 4, "Tile is not a browser");
-            return;
-          }
-          const dom = tileManager.getTileDOMs().get(tile.id);
-          if (!dom?.webview) {
-            respondError(requestId, 4, "Browser has no webview");
-            return;
-          }
-          const wcId = dom.webview.getWebContentsId();
-          result = await window.shellApi.browserScreenshot(wcId);
-          break;
-        }
-        case "browserSnapshot": {
-          const tile = requireTile(requestId, params.tileId);
-          if (!tile) return;
-          if (tile.type !== "browser") {
-            respondError(requestId, 4, "Tile is not a browser");
-            return;
-          }
-          const dom = tileManager.getTileDOMs().get(tile.id);
-          if (!dom?.webview) {
-            respondError(requestId, 4, "Browser has no webview");
-            return;
-          }
-          const wcId = dom.webview.getWebContentsId();
-          result = await window.shellApi.browserSnapshot(wcId);
-          break;
-        }
-        case "browserClick": {
-          const tile = requireTile(requestId, params.tileId);
-          if (!tile) return;
-          if (tile.type !== "browser") {
-            respondError(requestId, 4, "Tile is not a browser");
-            return;
-          }
-          const dom = tileManager.getTileDOMs().get(tile.id);
-          if (!dom?.webview) {
-            respondError(requestId, 4, "Browser has no webview");
-            return;
-          }
-          const wcId = dom.webview.getWebContentsId();
-          result = await window.shellApi.browserClick(wcId, params.selector);
-          break;
-        }
-        case "browserType": {
-          const tile = requireTile(requestId, params.tileId);
-          if (!tile) return;
-          if (tile.type !== "browser") {
-            respondError(requestId, 4, "Tile is not a browser");
-            return;
-          }
-          const dom = tileManager.getTileDOMs().get(tile.id);
-          if (!dom?.webview) {
-            respondError(requestId, 4, "Browser has no webview");
-            return;
-          }
-          const wcId = dom.webview.getWebContentsId();
-          result = await window.shellApi.browserType(
-            wcId,
-            params.selector,
-            params.text,
-          );
-          break;
-        }
-        case "browserScroll": {
-          const wcId = requireBrowserWcId(requestId, params.tileId);
-          if (wcId == null) return;
-          result = await window.shellApi.browserScroll(
-            wcId,
-            params.x ?? 0,
-            params.y ?? 0,
-          );
-          break;
-        }
-        case "browserEvaluate": {
-          const wcId = requireBrowserWcId(requestId, params.tileId);
-          if (wcId == null) return;
-          result = await window.shellApi.browserEvaluate(
-            wcId,
-            params.expression,
-          );
-          break;
-        }
-        case "browserWait": {
-          const wcId = requireBrowserWcId(requestId, params.tileId);
-          if (wcId == null) return;
-          result = await window.shellApi.browserWait(wcId, params.timeout);
-          break;
-        }
-        case "browserInfo": {
-          const wcId = requireBrowserWcId(requestId, params.tileId);
-          if (wcId == null) return;
-          result = await window.shellApi.browserInfo(wcId);
           break;
         }
         case "tileFocus": {

@@ -3,7 +3,6 @@ import {
   ArrowSquareOut,
   CaretDown,
   CaretRight,
-  Graph,
   Terminal,
 } from "@phosphor-icons/react";
 import type { FlatItem } from "./useFileTree";
@@ -14,7 +13,6 @@ import { getFileIcon } from "./fileIcons";
 import { useImageThumbnail } from "./useImageThumbnail";
 
 const ICON_SIZE = 14;
-export const ENABLE_GRAPH_TILES = false;
 
 interface FolderRowProps {
   item: FlatItem;
@@ -225,20 +223,6 @@ export const FolderRow = React.memo(function FolderRow({
       >
         <Terminal size={12} weight="bold" />
       </button>
-      {ENABLE_GRAPH_TILES && (
-        <button
-          className="folder-action-button"
-          data-tooltip="Open graph view"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (typeof window.api.createGraphTile === "function") {
-              window.api.createGraphTile(item.path);
-            }
-          }}
-        >
-          <Graph size={12} weight="bold" />
-        </button>
-      )}
     </div>
   );
 });

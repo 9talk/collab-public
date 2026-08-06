@@ -1,4 +1,4 @@
-export { TreeView, FolderRow, FileRow, ENABLE_GRAPH_TILES } from "./TreeView";
+export { TreeView, FolderRow, FileRow } from "./TreeView";
 export type { FileRowProps } from "./TreeView";
 export { SearchSortControls } from "./SearchSortControls";
 export type { SearchSortControlsHandle } from "./SearchSortControls";

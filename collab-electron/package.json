@@ -129,8 +129,6 @@
     }
   },
   "dependencies": {
-    "@agentclientprotocol/claude-agent-acp": "^0.26.0",
-    "@agentclientprotocol/sdk": "^0.18.2",
     "@assistant-ui/react": "^0.14.13",
     "@assistant-ui/react-markdown": "^0.14.1",
     "@blocknote/core": "0.47.0",

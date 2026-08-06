@@ -20,8 +20,6 @@
 
   --panel-nav-min: 100;
   --panel-nav-max: 1000;
-  --panel-agent-min: 200;
-  --panel-agent-max: 1000;
 
   --toolbar-height: 38px;
   --nav-inset: 12px;
@@ -155,39 +153,8 @@ body.platform-win {
   box-shadow: inset 8px 0 12px -6px rgba(0, 0, 0, 0.15);
 }
 
-#panel-viewer.agent-open::after {
-  box-shadow: inset -8px 0 12px -6px rgba(0, 0, 0, 0.15);
-}
-
-#panel-viewer.nav-open.agent-open::after {
-  box-shadow:
-    inset 8px 0 12px -6px rgba(0, 0, 0, 0.15),
-    inset -8px 0 12px -6px rgba(0, 0, 0, 0.15);
-}
-
 .platform-win #panel-viewer {
   background: rgba(var(--canvas-bg-rgb), var(--canvas-opacity));
-}
-
-#panel-agent {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-height: 0;
-  border-left: 1px solid var(--border);
-  background: rgba(var(--bg-rgb), calc(1 - (1 - var(--canvas-opacity)) / 2));
-}
-
-.platform-win #panel-agent {
-  background: rgba(var(--bg-rgb), calc(1 - (1 - var(--canvas-opacity)) / 2));
-}
-
-#panel-agent webview {
-  flex: 1;
-}
-
-#panel-agent webview.agent-terminal {
-  padding: 12px 6px 12px 12px;
 }
 
 #grid-canvas {

@@ -13,7 +13,6 @@ import {
   useDragDrop,
   sortModeOrder,
   TREE_SORT_MODE_STORAGE_KEY,
-  ENABLE_GRAPH_TILES,
 } from "@collab/components/TreeView";
 import { WorkspaceTree } from "@collab/components/TreeView/WorkspaceTree";
 import type { WorkspaceFileTreeHandle } from "@collab/components/TreeView/useWorkspaceFileTree";
@@ -872,14 +871,6 @@ export default function App() {
             label: workspaceAliases[item.path] ? "Edit Alias" : "Set Alias",
           },
           { id: "separator", label: "" },
-          ...(ENABLE_GRAPH_TILES
-            ? [
-                {
-                  id: "open-graph",
-                  label: "Open as Graph",
-                },
-              ]
-            : []),
           {
             id: "copy-path",
             label: "Copy Filepath",
@@ -934,14 +925,6 @@ export default function App() {
               ]
             : []),
           { id: "separator", label: "" },
-          ...(ENABLE_GRAPH_TILES
-            ? [
-                {
-                  id: "open-graph",
-                  label: "Open as Graph",
-                },
-              ]
-            : []),
           {
             id: "copy-path",
             label: "Copy Filepath",
@@ -1022,9 +1005,6 @@ export default function App() {
           } else if (item && !wsPaths.includes(item.path)) {
             await window.api.trashFile(item.path);
           }
-          break;
-        case "open-graph":
-          if (item) window.api.createGraphTile(item.path);
           break;
         case "copy-path":
           if (item) navigator.clipboard.writeText(item.path);

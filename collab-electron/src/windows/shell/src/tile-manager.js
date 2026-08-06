@@ -6,7 +6,6 @@ import {
   bringToFront,
   generateId,
   defaultSize,
-  inferTileType,
   snapToGrid,
   selectTile,
   deselectTile,
@@ -25,8 +24,6 @@ import {
   updateLockButton,
   updateTileStatus,
 } from "./tile-renderer.js";
-import { toCollabFileUrl } from "@collab/shared/collab-file-url";
-import { workspaceRootMatch } from "@collab/shared/path-utils";
 import {
   attachDrag,
   attachResize,
@@ -323,7 +320,7 @@ export function createTileManager({
 
         if (onPanToTile && tile) onPanToTile(tile);
 
-        if (mouseEvent && mouseEvent.button === 0 && tile.type !== "browser") {
+        if (mouseEvent && mouseEvent.button === 0) {
           forwardClickToWebview(dom.webview, mouseEvent);
         }
       }
@@ -464,183 +461,6 @@ export function createTileManager({
       );
     });
   }
-  function spawnGraphWebview(tile) {
-    const dom = tileDOMs.get(tile.id);
-    if (!dom) return;
-
-    const wv = document.createElement("webview");
-    const graphConfig = configs.graphTile;
-    const params = new URLSearchParams();
-    params.set("folder", tile.folderPath);
-    params.set("workspace", tile.workspacePath ?? "");
-    const qs = params.toString();
-    wv.setAttribute("src", `${graphConfig.src}?${qs}`);
-    wv.setAttribute("preload", graphConfig.preload);
-    wv.setAttribute("webpreferences", "contextIsolation=yes, sandbox=yes");
-    wv.style.width = "100%";
-    wv.style.height = "100%";
-    wv.style.border = "none";
-
-    dom.contentArea.appendChild(wv);
-    dom.webview = wv;
-    wv.addEventListener("dom-ready", () => {
-      window.shellApi.registerWebviewName("图谱 Tile", wv.getWebContentsId());
-    });
-  }
-
-  function spawnBrowserWebview(tile, autoFocus = false) {
-    const dom = tileDOMs.get(tile.id);
-    if (!dom) return;
-
-    if (!tile.url) {
-      if (autoFocus && dom.urlInput) {
-        dom.urlInput.focus();
-      }
-      return;
-    }
-
-    let url = tile.url;
-    if (!/^https?:\/\//i.test(url)) {
-      const isLocal =
-        /^localhost(:|$)/i.test(url) || /^127\.0\.0\.1(:|$)/.test(url);
-      url = (isLocal ? "http://" : "https://") + url;
-      tile.url = url;
-    }
-    const blocked = /^(javascript|file|data):/i;
-    if (blocked.test(url)) return;
-
-    const wv = document.createElement("webview");
-    wv.setAttribute("src", url);
-    wv.setAttribute("allowpopups", "");
-    wv.setAttribute("partition", "persist:browser");
-    wv.setAttribute("webpreferences", "contextIsolation=yes, sandbox=yes");
-    wv.style.width = "100%";
-    wv.style.height = "100%";
-    wv.style.border = "none";
-
-    dom.contentArea.appendChild(wv);
-    dom.webview = wv;
-
-    const stopSvg = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>`;
-    const reloadSvg = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3v4h-4"/><path d="M12.36 10a5 5 0 1 1-.96-5.36L13 7"/></svg>`;
-
-    function updateNavState() {
-      if (dom.navBack) {
-        dom.navBack.disabled = !wv.canGoBack();
-      }
-      if (dom.navForward) {
-        dom.navForward.disabled = !wv.canGoForward();
-      }
-    }
-
-    // Replace buttons with clones to strip stale listeners
-    for (const key of ["navBack", "navForward", "navReload"]) {
-      if (dom[key]) {
-        const fresh = dom[key].cloneNode(true);
-        dom[key].replaceWith(fresh);
-        dom[key] = fresh;
-      }
-    }
-
-    if (dom.navBack) {
-      dom.navBack.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (wv.canGoBack()) wv.goBack();
-      });
-    }
-    if (dom.navForward) {
-      dom.navForward.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (wv.canGoForward()) wv.goForward();
-      });
-    }
-    if (dom.navReload) {
-      dom.navReload.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (wv.isLoading()) {
-          wv.stop();
-        } else {
-          wv.reload();
-        }
-      });
-    }
-
-    wv.addEventListener("dom-ready", () => {
-      window.shellApi.registerWebviewName("浏览器 Tile", wv.getWebContentsId());
-      wv.setZoomFactor(0.95);
-    });
-
-    function clearErrors() {
-      for (const el of [
-        ...dom.contentArea.querySelectorAll(".tile-load-error"),
-      ]) {
-        el.remove();
-      }
-    }
-
-    wv.addEventListener("did-start-loading", () => {
-      clearErrors();
-      wv.style.display = "";
-      if (dom.navReload) {
-        dom.navReload.innerHTML = stopSvg;
-        dom.navReload.title = "Stop";
-      }
-    });
-
-    wv.addEventListener("did-stop-loading", () => {
-      if (dom.navReload) {
-        dom.navReload.innerHTML = reloadSvg;
-        dom.navReload.title = "Reload";
-      }
-      updateNavState();
-    });
-
-    wv.addEventListener("did-navigate", (e) => {
-      tile.url = e.url;
-      if (dom.urlInput) dom.urlInput.value = e.url;
-      updateTileTitle(dom, tile);
-      updateNavState();
-      saveCanvasDebounced();
-    });
-
-    wv.addEventListener("did-navigate-in-page", (e) => {
-      if (e.isMainFrame) {
-        tile.url = e.url;
-        if (dom.urlInput) dom.urlInput.value = e.url;
-        updateTileTitle(dom, tile);
-        updateNavState();
-        saveCanvasDebounced();
-      }
-    });
-
-    wv.addEventListener("did-fail-load", (e) => {
-      if (e.errorCode === -3) return;
-      if (!e.isMainFrame) return;
-      clearErrors();
-      wv.style.display = "none";
-      const errDiv = document.createElement("div");
-      errDiv.className = "tile-load-error";
-      errDiv.style.cssText = "padding:20px;color:#888;font-size:13px;";
-      errDiv.textContent = `Failed to load: ${e.validatedURL || tile.url}`;
-      dom.contentArea.appendChild(errDiv);
-    });
-
-    wv.addEventListener("render-process-gone", () => {
-      const crashDiv = document.createElement("div");
-      crashDiv.style.cssText = "padding:20px;color:#888;font-size:13px;";
-      crashDiv.textContent =
-        "Page crashed. Edit the URL and press Enter to reload.";
-      if (dom.webview) {
-        dom.contentArea.removeChild(dom.webview);
-        dom.webview = null;
-      }
-      dom.contentArea.appendChild(crashDiv);
-    });
-
-    if (autoFocus) {
-      wv.addEventListener("dom-ready", () => focusCanvasTile(tile.id));
-    }
-  }
 
   // -- Tile CRUD --
 
@@ -670,25 +490,6 @@ export function createTileManager({
         clearSelection();
         syncSelectionVisuals();
         focusCanvasTile(id, e);
-      },
-      onOpenInViewer: (id) => {
-        const t = getTile(id);
-        if (t?.filePath) {
-          window.shellApi.trackEvent("tile_opened_in_viewer", { type: t.type });
-          window.shellApi.selectFile(t.filePath);
-        }
-      },
-      onNavigate: (id, url) => {
-        const t = getTile(id);
-        if (!t || t.type !== "browser") return;
-        t.url = url;
-        const d = tileDOMs.get(id);
-        if (d?.webview) {
-          d.contentArea.removeChild(d.webview);
-          d.webview = null;
-        }
-        spawnBrowserWebview(t);
-        saveCanvasImmediate();
       },
       onDuplicate: (id) => {
         const t = getTile(id);
@@ -891,67 +692,6 @@ export function createTileManager({
     saveCanvasImmediate();
   }
 
-  function createFileTile(type, cx, cy, filePath, extra = {}) {
-    const tile = createCanvasTile(type, cx, cy, { ...extra, filePath });
-    const dom = tileDOMs.get(tile.id);
-    if (!dom) return tile;
-
-    if (type === "pdf") {
-      const wv = document.createElement("webview");
-      wv.setAttribute("src", toCollabFileUrl(filePath));
-      wv.setAttribute("webpreferences", "contextIsolation=yes, sandbox=yes");
-      wv.style.width = "100%";
-      wv.style.height = "100%";
-      wv.style.border = "none";
-      dom.contentArea.appendChild(wv);
-      dom.webview = wv;
-      wv.addEventListener("dom-ready", () => {
-        window.shellApi.registerWebviewName("PDF", wv.getWebContentsId());
-      });
-    } else if (type === "image") {
-      const img = document.createElement("img");
-      img.src = toCollabFileUrl(filePath);
-      img.style.width = "100%";
-      img.style.height = "100%";
-      img.style.objectFit = "contain";
-      img.draggable = false;
-      dom.contentArea.appendChild(img);
-    } else {
-      const wv = document.createElement("webview");
-      const viewerConfig = configs.viewer;
-      const mode = type === "note" ? "note" : "code";
-      wv.setAttribute(
-        "src",
-        `${viewerConfig.src}?tilePath=${encodeURIComponent(filePath)}&tileMode=${mode}`,
-      );
-      wv.setAttribute("preload", viewerConfig.preload);
-      wv.setAttribute("webpreferences", "contextIsolation=yes, sandbox=yes");
-      wv.style.width = "100%";
-      wv.style.height = "100%";
-      wv.style.border = "none";
-
-      dom.contentArea.appendChild(wv);
-      dom.webview = wv;
-
-      wv.addEventListener("dom-ready", () => {
-        window.shellApi.registerWebviewName("文件 Tile", wv.getWebContentsId());
-      });
-    }
-
-    saveCanvasImmediate();
-    return tile;
-  }
-
-  function createGraphTile(cx, cy, folderPath, workspacePath) {
-    const tile = createCanvasTile("graph", cx, cy, {
-      folderPath,
-      workspacePath,
-    });
-    spawnGraphWebview(tile);
-    saveCanvasImmediate();
-    return tile;
-  }
-
   function clearCanvas(viewportObj) {
     const tileIds = tiles.map((t) => t.id);
     for (const id of tileIds) {
@@ -991,78 +731,11 @@ export function createTileManager({
         if (!saveMemMode) {
           spawnTerminalWebview(tile);
         }
-      } else if (saved.type === "graph" && saved.folderPath) {
-        const tile = createCanvasTile("graph", cx, cy, {
-          id: saved.id,
-          width: saved.width,
-          height: saved.height,
-          zIndex: saved.zIndex,
-          folderPath: saved.folderPath,
-          workspacePath: saved.workspacePath,
-        });
-        spawnGraphWebview(tile);
-      } else if (saved.type === "browser") {
-        const tile = createCanvasTile("browser", cx, cy, {
-          id: saved.id,
-          width: saved.width,
-          height: saved.height,
-          zIndex: saved.zIndex,
-          url: saved.url,
-        });
-        spawnBrowserWebview(tile);
-      } else if (saved.filePath) {
-        createFileTile(saved.type, cx, cy, saved.filePath, {
-          id: saved.id,
-          width: saved.width,
-          height: saved.height,
-          zIndex: saved.zIndex,
-        });
       }
     }
   }
 
   // -- Tile updates for external events --
-
-  function updateTileForRename(oldPath, newPath) {
-    let anyUpdated = false;
-    for (const t of tiles) {
-      if (t.filePath === oldPath) {
-        t.filePath = newPath;
-        t.type = inferTileType(newPath);
-        const dom = tileDOMs.get(t.id);
-        if (dom) updateTileTitle(dom, t);
-        anyUpdated = true;
-      }
-      if (
-        t.type === "graph" &&
-        t.folderPath &&
-        workspaceRootMatch(oldPath, t.folderPath)
-      ) {
-        t.folderPath = newPath + t.folderPath.slice(oldPath.length);
-        const dom = tileDOMs.get(t.id);
-        if (dom) {
-          updateTileTitle(dom, t);
-          if (dom.webview) {
-            dom.webview.send("scope-changed", t.folderPath);
-          }
-        }
-        anyUpdated = true;
-      }
-    }
-    if (anyUpdated) saveCanvasDebounced();
-  }
-
-  function closeTilesForDeletedPaths(deletedPaths) {
-    const deleted = new Set(deletedPaths);
-    for (const t of [...tiles]) {
-      if (t.filePath && deleted.has(t.filePath)) {
-        closeCanvasTile(t.id);
-      }
-      if (t.type === "graph" && t.folderPath && deleted.has(t.folderPath)) {
-        closeCanvasTile(t.id);
-      }
-    }
-  }
 
   function broadcastToTileWebviews(channel, ...args) {
     for (const [, dom] of tileDOMs) {
@@ -1092,10 +765,6 @@ export function createTileManager({
     repositionAllTiles,
     syncSelectionVisuals,
     spawnTerminalWebview,
-    spawnGraphWebview,
-    spawnBrowserWebview,
-    createFileTile,
-    createGraphTile,
     clearCanvas,
     getCanvasStateForSave,
     restoreCanvasState,
@@ -1107,8 +776,6 @@ export function createTileManager({
     },
     refreshTerminalTile,
     renameTile,
-    updateTileForRename,
-    closeTilesForDeletedPaths,
     broadcastToTileWebviews,
     saveCanvasDebounced,
     saveCanvasImmediate,

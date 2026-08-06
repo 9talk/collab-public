@@ -1,5 +1,5 @@
 /**
- * @typedef {'term' | 'note' | 'code' | 'image' | 'graph' | 'browser' | 'pdf'} TileType
+ * @typedef {'term'} TileType
  *
  * @typedef {Object} Tile
  * @property {string} id
@@ -8,9 +8,6 @@
  * @property {number} y - Canvas Y coordinate
  * @property {number} width - Canvas width
  * @property {number} height - Canvas height
- * @property {string} [filePath] - For file tiles
- * @property {string} [folderPath] - For graph tiles
- * @property {string} [url] - URL for browser tiles
  * @property {string} [cwd] - Working directory for terminal tiles
  * @property {string} [ptySessionId] - PTY session ID for terminal tiles
  * @property {string} [userTitle] - Manual title override set by user
@@ -26,12 +23,6 @@ let nextZIndex = 1;
 
 const DEFAULT_TILE_SIZES = {
   term: { width: 1196, height: 739 },
-  note: { width: 1180, height: 700 },
-  code: { width: 1180, height: 700 },
-  image: { width: 1180, height: 700 },
-  graph: { width: 1180, height: 700 },
-  browser: { width: 1180, height: 700 },
-  pdf: { width: 1180, height: 700 },
 };
 
 /**
@@ -82,15 +73,6 @@ export function addTile(tile) {
 export function getTile(id) {
   return tiles.find((t) => t.id === id) || null;
 }
-
-const IMAGE_EXTENSIONS = new Set([
-  ".png",
-  ".jpg",
-  ".jpeg",
-  ".gif",
-  ".svg",
-  ".webp",
-]);
 
 const GRID_CELL = 20;
 
@@ -254,14 +236,6 @@ export function tileAtPoint(cx, cy) {
     }
   }
   return null;
-}
-
-export function inferTileType(filePath) {
-  const ext = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
-  if (ext === ".md") return "note";
-  if (ext === ".pdf") return "pdf";
-  if (IMAGE_EXTENSIONS.has(ext)) return "image";
-  return "code";
 }
 
 // ── Auto-placement for terminals ──

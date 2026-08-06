@@ -191,8 +191,6 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.send("nav:open-in-terminal", path),
   revealInFinder: (path: string) =>
     ipcRenderer.send("nav:reveal-in-finder", path),
-  createGraphTile: (folderPath: string) =>
-    ipcRenderer.send("nav:create-graph-tile", folderPath),
   locateTerminal: (folderPath: string) =>
     ipcRenderer.send("nav:locate-terminal", folderPath),
   runInTerminal: (command: string) =>
@@ -524,72 +522,6 @@ contextBridge.exposeInMainWorld("api", {
         ipcRenderer.removeListener(ch, handler);
       }
     };
-  },
-  // -- ACP agent --
-  agentSpawn: (
-    cwd: string,
-  ): Promise<{
-    sessionId: string;
-    resumed: boolean;
-    cachedMessages: unknown[];
-  }> => ipcRenderer.invoke("agent:spawn", { cwd }),
-
-  agentPrompt: (sessionId: string, text: string): Promise<void> =>
-    ipcRenderer.invoke("agent:prompt", { sessionId, text }),
-
-  agentCancel: (sessionId: string): Promise<void> =>
-    ipcRenderer.invoke("agent:cancel", { sessionId }),
-
-  agentKill: (sessionId: string): Promise<void> =>
-    ipcRenderer.invoke("agent:kill", { sessionId }),
-
-  agentSaveMessages: (messages: unknown[]): Promise<void> =>
-    ipcRenderer.invoke("agent:save-messages", { messages }),
-
-  onAgentUpdate: (cb: (params: unknown) => void) => {
-    const handler = (_event: unknown, params: unknown) => cb(params);
-    ipcRenderer.on("agent:update", handler);
-    return () => ipcRenderer.removeListener("agent:update", handler);
-  },
-
-  onAgentPromptComplete: (
-    cb: (data: { sessionId: string; stopReason: string }) => void,
-  ) => {
-    const handler = (
-      _event: unknown,
-      data: { sessionId: string; stopReason: string },
-    ) => cb(data);
-    ipcRenderer.on("agent:prompt-complete", handler);
-    return () => ipcRenderer.removeListener("agent:prompt-complete", handler);
-  },
-
-  onAgentPromptError: (
-    cb: (data: { sessionId: string; error: string }) => void,
-  ) => {
-    const handler = (
-      _event: unknown,
-      data: { sessionId: string; error: string },
-    ) => cb(data);
-    ipcRenderer.on("agent:prompt-error", handler);
-    return () => ipcRenderer.removeListener("agent:prompt-error", handler);
-  },
-
-  onAgentExit: (cb: (data: { sessionId: string }) => void) => {
-    const handler = (_event: unknown, data: { sessionId: string }) => cb(data);
-    ipcRenderer.on("agent:exit", handler);
-    return () => ipcRenderer.removeListener("agent:exit", handler);
-  },
-
-  onAgentSessionReady: (cb: (data: { sessionId: string }) => void) => {
-    const handler = (_event: unknown, data: { sessionId: string }) => cb(data);
-    ipcRenderer.on("agent:session-ready", handler);
-    return () => ipcRenderer.removeListener("agent:session-ready", handler);
-  },
-
-  onAgentSessionFailed: (cb: (data: { sessionId: string }) => void) => {
-    const handler = (_event: unknown, data: { sessionId: string }) => cb(data);
-    ipcRenderer.on("agent:session-failed", handler);
-    return () => ipcRenderer.removeListener("agent:session-failed", handler);
   },
 });
 

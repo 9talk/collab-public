@@ -5,7 +5,6 @@ import {
   getTile,
   defaultSize,
   pickCanvasTileSize,
-  inferTileType,
   tileAtPoint,
   selectTile,
   clearSelection,
@@ -113,10 +112,6 @@ async function init() {
     workspaceData,
     prefNavWidth,
     prefSidebarMode,
-    prefAgentWidth,
-    prefAgentMode,
-    prefAgentPty,
-    prefSidebarAgentGui,
     prefLastTerminalCwd,
     prefWorkspaceAliases,
   ] = await Promise.all([
@@ -124,10 +119,6 @@ async function init() {
     window.shellApi.workspaceList(),
     window.shellApi.getPref("panel-width-nav"),
     window.shellApi.getPref("sidebar-mode"),
-    window.shellApi.getPref("panel-width-agent"),
-    window.shellApi.getPref("sidebar-mode-agent"),
-    window.shellApi.getPref("agent-pty-session"),
-    window.shellApi.getPref("sidebar-agent-gui"),
     window.shellApi.getPref("lastTerminalCwd"),
     window.shellApi.getPref("workspace_aliases"),
   ]);
@@ -182,9 +173,6 @@ async function init() {
   const loadingOverlay = document.getElementById("loading-overlay");
   const loadingStatusEl = document.getElementById("loading-status");
   const tileLayer = document.getElementById("tile-layer");
-  const panelAgent = document.getElementById("panel-agent");
-  const agentResizeHandle = document.getElementById("agent-resize");
-  const agentToggle = document.getElementById("agent-toggle");
 
   // -- State --
 
@@ -295,176 +283,6 @@ async function init() {
   });
   panelManager.initPrefs(prefNavWidth, prefSidebarMode);
 
-  const useAgentGui = prefSidebarAgentGui === true;
-  let agentWebview = null;
-
-  let agentPtySessionId = prefAgentPty || null;
-
-  function ensureAgentTerminal() {
-    if (agentWebview) return;
-
-    const termConfig = configs.terminalTile;
-    const params = new URLSearchParams();
-    params.set("tileId", "agent");
-
-    if (agentPtySessionId) {
-      params.set("sessionId", agentPtySessionId);
-      params.set("restored", "1");
-    } else {
-      const homeDir = window.shellApi.getHomePath?.() || "~";
-      params.set("cwd", `${homeDir}/.collaborator`);
-    }
-
-    const qs = params.toString();
-    const wv = document.createElement("webview");
-    wv.setAttribute("src", `${termConfig.src}?${qs}`);
-    wv.setAttribute("preload", termConfig.preload);
-    wv.setAttribute("webpreferences", "contextIsolation=yes, sandbox=yes");
-    wv.classList.add("agent-terminal");
-    wv.style.flex = "1";
-    wv.style.border = "none";
-
-    wv.addEventListener("dom-ready", () => {
-      window.shellApi.registerWebviewName("Agent 终端", wv.getWebContentsId());
-      if (agentPanel.isVisible()) {
-        wv.focus();
-        noteSurfaceFocus("agent");
-      }
-    });
-
-    wv.addEventListener("ipc-message", (event) => {
-      if (event.channel === "pty-session-id") {
-        agentPtySessionId = event.args[0];
-        window.shellApi.setPref("agent-pty-session", agentPtySessionId);
-      }
-    });
-
-    wv.addEventListener("console-message", (event) => {
-      window.shellApi.logFromWebview(
-        "agent-term",
-        event.level,
-        event.message,
-        event.sourceId,
-      );
-    });
-
-    wv.addEventListener("focus", () => {
-      noteSurfaceFocus("agent");
-    });
-
-    panelAgent.appendChild(wv);
-    agentWebview = {
-      webview: wv,
-      send(ch, ...args) {
-        wv.send(ch, ...args);
-      },
-    };
-  }
-
-  function ensureAgentChat() {
-    if (agentWebview) return;
-
-    const chatConfig = configs.agentChat;
-    const homeDir = window.shellApi.getHomePath?.() || "~";
-    const cwd = `${homeDir}/.collaborator`;
-    const src = `${chatConfig.src}?cwd=${encodeURIComponent(cwd)}`;
-    const wv = document.createElement("webview");
-    wv.setAttribute("src", src);
-    wv.setAttribute("preload", chatConfig.preload);
-    wv.setAttribute("webpreferences", "contextIsolation=yes, sandbox=yes");
-    wv.style.flex = "1";
-    wv.style.border = "none";
-
-    let ready = false;
-    const pendingMessages = [];
-
-    wv.addEventListener("dom-ready", () => {
-      window.shellApi.registerWebviewName("Agent 聊天", wv.getWebContentsId());
-      ready = true;
-      for (const [ch, args] of pendingMessages) {
-        wv.send(ch, ...args);
-      }
-      pendingMessages.length = 0;
-      if (agentPanel.isVisible()) {
-        wv.focus();
-        noteSurfaceFocus("agent");
-      }
-    });
-
-    wv.addEventListener("console-message", (event) => {
-      window.shellApi.logFromWebview(
-        "agent-chat",
-        event.level,
-        event.message,
-        event.sourceId,
-      );
-    });
-
-    wv.addEventListener("focus", () => {
-      noteSurfaceFocus("agent");
-    });
-
-    panelAgent.appendChild(wv);
-    agentWebview = {
-      webview: wv,
-      send(ch, ...args) {
-        if (ready) wv.send(ch, ...args);
-        else pendingMessages.push([ch, args]);
-      },
-    };
-  }
-
-  // Set up agent IPC forwarding once (listeners guard on agentWebview)
-  window.shellApi.onAgentUpdate((data) => {
-    if (agentWebview) agentWebview.send("agent:update", data);
-  });
-  window.shellApi.onAgentPromptComplete((data) => {
-    if (agentWebview) agentWebview.send("agent:prompt-complete", data);
-  });
-  window.shellApi.onAgentPromptError((data) => {
-    if (agentWebview) agentWebview.send("agent:prompt-error", data);
-  });
-  window.shellApi.onAgentExit((data) => {
-    if (agentWebview) agentWebview.send("agent:exit", data);
-  });
-  window.shellApi.onAgentSessionReady((data) => {
-    if (agentWebview) agentWebview.send("agent:session-ready", data);
-  });
-  window.shellApi.onAgentSessionFailed((data) => {
-    if (agentWebview) agentWebview.send("agent:session-failed", data);
-  });
-
-  const agentPanel = createPanel("agent", {
-    panel: panelAgent,
-    resizeHandle: agentResizeHandle,
-    toggle: agentToggle,
-    label: "Agent",
-    defaultWidth: 400,
-    direction: -1,
-    validModes: ["closed", "open"],
-    defaultMode: "closed",
-    prefKey: "sidebar-mode-agent",
-    getAllWebviews,
-    onVisibilityChanged(visible) {
-      panelViewer.classList.toggle("agent-open", visible);
-      if (visible) {
-        if (useAgentGui) ensureAgentChat();
-        else ensureAgentTerminal();
-        if (agentWebview) {
-          agentWebview.webview.focus();
-          noteSurfaceFocus("agent");
-        }
-      } else {
-        if (agentWebview) {
-          agentWebview.webview.remove();
-          agentWebview = null;
-        }
-        canvasEl.focus();
-      }
-    },
-  });
-  // agentPanel.initPrefs deferred until after tileManager (getAllWebviews references it)
-
   function syncTerminalTileMeta(tile, meta) {
     if (!meta) return;
     tile.cwd = meta.cwdHostPath || meta.cwd || tile.cwd;
@@ -485,23 +303,6 @@ async function init() {
       title = label.parent ? label.parent + label.name : label.name;
       description = tile.cwd || "~";
       status = tile.ptySessionId ? "running" : "idle";
-    } else if (tile.type === "browser") {
-      title = tile.url || "Browser";
-      description = "Browser";
-    } else if (tile.type === "graph") {
-      title = "Graph";
-      description = tile.folderPath || "Graph";
-    } else if (tile.type === "note") {
-      title = tile.filePath ? tile.filePath.split("/").pop() || "Note" : "Note";
-      description = "Note";
-    } else if (tile.type === "code") {
-      title = tile.filePath ? tile.filePath.split("/").pop() || "Code" : "Code";
-      description = "Code";
-    } else if (tile.type === "image") {
-      title = tile.filePath
-        ? tile.filePath.split("/").pop() || "Image"
-        : "Image";
-      description = "Image";
     }
 
     return {
@@ -612,9 +413,6 @@ async function init() {
       Math.max(0, Math.min(100, Number(lastCanvasOpacity) || 0)) / 100;
     workspaceManager.getNavWebview().send("canvas-opacity", opacity);
     tileListWebview?.send("canvas-opacity", opacity);
-    if (agentWebview) {
-      agentWebview.send("canvas-opacity", opacity);
-    }
   };
   broadcastCanvasOpacity();
 
@@ -829,13 +627,6 @@ async function init() {
   edgeIndicators.update();
   minimap.update();
 
-  // -- Agent panel init (after tileManager, since getAllWebviews references it) --
-
-  agentPanel.initPrefs(prefAgentWidth, prefAgentMode);
-  agentPanel.setupResize(() => {
-    agentPanel.updateTogglePosition();
-  });
-
   // -- Surface focus management --
 
   function noteSurfaceFocus(surface) {
@@ -872,10 +663,6 @@ async function init() {
     if (surface === "nav" && !panelManager.isVisible()) {
       surface = null;
     }
-    if (surface === "agent" && !agentPanel.isVisible()) {
-      surface = null;
-    }
-    if (surface === "agent") return "agent";
     if (surface === "viewer") return "viewer";
     if (surface === "nav") return "nav";
     if (panelManager.isVisible()) return "nav";
@@ -891,12 +678,6 @@ async function init() {
         noteSurfaceFocus("canvas-tile");
         return;
       }
-    }
-
-    if (surface === "agent" && agentWebview && agentPanel.isVisible()) {
-      agentWebview.webview.focus();
-      noteSurfaceFocus("agent");
-      return;
     }
 
     requestAnimationFrame(() => {
@@ -926,16 +707,13 @@ async function init() {
     const panelsEl = document.getElementById("panels");
     panelsEl.inert = inert;
     navToggle.inert = inert;
-    agentToggle.inert = inert;
   }
 
   function blurNonModalSurfaces() {
     canvasEl.blur();
     navToggle.blur();
-    agentToggle.blur();
     if (viewerInstance) viewerInstance.webview.blur();
     workspaceManager.getNavWebview().webview.blur();
-    if (agentWebview) agentWebview.webview.blur();
   }
 
   // -- getAllWebviews aggregator --
@@ -945,7 +723,6 @@ async function init() {
     if (viewerInstance) all.push(viewerInstance);
     if (tileListWebview) all.push(tileListWebview);
     if (singletonWebviews.settings) all.push(singletonWebviews.settings);
-    if (agentWebview) all.push(agentWebview);
     for (const [, dom] of tileManager.getTileDOMs()) {
       if (dom.webview) {
         all.push({
@@ -1028,7 +805,6 @@ async function init() {
 
     const selected = await window.shellApi.showContextMenu([
       { id: "new-terminal", label: "New terminal tile" },
-      { id: "new-browser", label: "New browser tile" },
     ]);
 
     if (selected === "new-terminal") {
@@ -1043,17 +819,6 @@ async function init() {
       tileManager.saveCanvasImmediate();
       minimap.update();
       edgeIndicators.panToTile(tile);
-    } else if (selected === "new-browser") {
-      const rect = canvasEl.getBoundingClientRect();
-      const screenX = e.clientX - rect.left;
-      const screenY = e.clientY - rect.top;
-      const cx = (screenX - viewportState.panX) / viewportState.zoom;
-      const cy = (screenY - viewportState.panY) / viewportState.zoom;
-      const size = pickCanvasTileSize("browser");
-      const tile = tileManager.createCanvasTile("browser", cx, cy, size);
-      tileManager.spawnBrowserWebview(tile, true);
-      tileManager.saveCanvasImmediate();
-      minimap.update();
     }
   });
 
@@ -1244,8 +1009,6 @@ async function init() {
       panelManager.toggle();
     } else if (action === "sidebar-tiles") {
       panelManager.toggleToMode("tiles");
-    } else if (action === "toggle-agent") {
-      agentPanel.toggle();
     } else if (action === "focus-file-search") {
       panelManager.setMode("files");
       focusSurface("nav");
@@ -1285,6 +1048,8 @@ async function init() {
         if (dom?.webview) dom.webview.blur();
         requestAnimationFrame(() => {
           tileManager.refreshTerminalTile(focusedId);
+          relayoutTerminalTiles();
+          tileManager.focusCanvasTile(focusedId);
         });
       }
     } else if (
@@ -1352,20 +1117,6 @@ async function init() {
     }
   });
 
-  // -- Browser tile Cmd+L focus URL --
-
-  window.shellApi.onBrowserTileFocusUrl((webContentsId) => {
-    for (const [, dom] of tileManager.getTileDOMs()) {
-      if (!dom.webview || !dom.urlInput) continue;
-      if (dom.webview.getWebContentsId() === webContentsId) {
-        dom.urlInput.readOnly = false;
-        dom.urlInput.focus();
-        dom.urlInput.select();
-        break;
-      }
-    }
-  });
-
   // -- IPC forwarding --
 
   window.shellApi.onForwardToWebview((target, channel, ...args) => {
@@ -1387,19 +1138,11 @@ async function init() {
         return;
       }
       if (!viewerInstance) return;
-      if (channel === "file-renamed") {
-        tileManager.updateTileForRename(args[0], args[1]);
-      }
-      if (channel === "files-deleted") {
-        tileManager.closeTilesForDeletedPaths(args[0]);
-        minimap.update();
-      }
       if (channel !== "workspace-changed") {
         viewerInstance.send(channel, ...args);
       }
       if (
         channel === "fs-changed" ||
-        channel === "file-renamed" ||
         channel === "wikilinks-updated" ||
         channel.startsWith("agent:") ||
         channel === "replay:data"
@@ -1427,42 +1170,6 @@ async function init() {
         tileManager.saveCanvasImmediate();
         minimap.update();
         edgeIndicators.panToTile(tile);
-      }
-      if (channel === "open-browser-tile") {
-        const url = args[0];
-        const sourceWcId = args[1];
-        let srcTile = null;
-        for (const [id, d] of tileManager.getTileDOMs()) {
-          if (d.webview && d.webview.getWebContentsId() === sourceWcId) {
-            srcTile = getTile(id);
-            break;
-          }
-        }
-        const x = srcTile ? srcTile.x + 40 : 0;
-        const y = srcTile ? srcTile.y + 40 : 0;
-        const extra = { url };
-        if (srcTile) {
-          extra.width = srcTile.width;
-          extra.height = srcTile.height;
-        }
-        const newTile = tileManager.createCanvasTile("browser", x, y, extra);
-        tileManager.spawnBrowserWebview(newTile, true);
-        tileManager.saveCanvasImmediate();
-        minimap.update();
-      }
-      if (channel === "create-graph-tile") {
-        const folderPath = args[0];
-        const size = defaultSize("graph");
-        const rect = canvasEl.getBoundingClientRect();
-        const cx =
-          (rect.width / 2 - viewportState.panX) / viewportState.zoom -
-          size.width / 2;
-        const cy =
-          (rect.height / 2 - viewportState.panY) / viewportState.zoom -
-          size.height / 2;
-        const wsPath = workspaceData.workspaces[0] ?? "";
-        tileManager.createGraphTile(cx, cy, folderPath, wsPath);
-        minimap.update();
       }
       if (channel === "locate-terminal") {
         const folderPath = args[0];
@@ -1568,17 +1275,12 @@ async function init() {
   const panelsEl = document.getElementById("panels");
   new ResizeObserver(() => {
     panelManager.updateTogglePosition();
-    agentPanel.updateTogglePosition();
   }).observe(panelsEl);
 
   // -- Nav toggle --
 
   navToggle.addEventListener("click", () => {
     panelManager.toggle();
-  });
-
-  agentToggle.addEventListener("click", () => {
-    agentPanel.toggle();
   });
 
   // -- Settings --
@@ -1685,32 +1387,15 @@ async function init() {
   });
 
   newTileBtn.addEventListener("click", async () => {
-    const selected = await window.shellApi.showContextMenu([
-      { id: "new-terminal", label: "New terminal tile" },
-      { id: "new-browser", label: "New browser tile" },
-    ]);
-    const type =
-      selected === "new-terminal"
-        ? "term"
-        : selected === "new-browser"
-          ? "browser"
-          : null;
-    if (!type) return;
-    const size = pickCanvasTileSize(type);
-    if (type === "term") {
-      const cwd = getTerminalCwd();
-      console.log(`[new-tile-btn] term cwd="${cwd}"`);
-      const pos = findAutoPlacementForTerminal(cwd, size);
-      const tile = tileManager.createCanvasTile("term", pos.x, pos.y, {
-        cwd,
-        ...size,
-      });
-      tileManager.spawnTerminalWebview(tile, true);
-    } else {
-      const pos = findAutoPlacementForTerminal("", size);
-      const tile = tileManager.createCanvasTile("browser", pos.x, pos.y, size);
-      tileManager.spawnBrowserWebview(tile, true);
-    }
+    const cwd = getTerminalCwd();
+    console.log(`[new-tile-btn] term cwd="${cwd}"`);
+    const size = pickCanvasTileSize("term");
+    const pos = findAutoPlacementForTerminal(cwd, size);
+    const tile = tileManager.createCanvasTile("term", pos.x, pos.y, {
+      cwd,
+      ...size,
+    });
+    tileManager.spawnTerminalWebview(tile, true);
     tileManager.saveCanvasImmediate();
     minimap.update();
     const newTile = tiles[tiles.length - 1];
@@ -1721,7 +1406,7 @@ async function init() {
     window.shellApi.toggleSettings();
   });
 
-  relayoutBtn.addEventListener("click", () => {
+  function relayoutTerminalTiles() {
     const positions = computeTerminalLayout();
     for (const [id, x, y] of positions) {
       const tile = getTile(id);
@@ -1732,7 +1417,9 @@ async function init() {
     tileManager.repositionAllTiles();
     tileManager.saveCanvasImmediate();
     minimap.update();
-  });
+  }
+
+  relayoutBtn.addEventListener("click", relayoutTerminalTiles);
 
   updatePill.addEventListener("click", () => {
     if (
@@ -1854,12 +1541,6 @@ async function init() {
       window.shellApi.ptyWrite(targetTile.ptySessionId, escaped.join(" "));
       tileManager.focusCanvasTile(targetTile.id);
       return;
-    }
-
-    for (let i = 0; i < filePaths.length; i++) {
-      const filePath = filePaths[i];
-      const type = inferTileType(filePath);
-      tileManager.createFileTile(type, cx + i * 30, cy + i * 30, filePath);
     }
   });
 

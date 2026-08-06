@@ -73,10 +73,6 @@ export function registerKnowledgeHandlers(ctx: IpcContext): void {
     shell.showItemInFolder(path);
   });
 
-  ipcMain.on("nav:create-graph-tile", (_event, folderPath: string) => {
-    ctx.forwardToWebview("canvas", "create-graph-tile", folderPath);
-  });
-
   ipcMain.on("nav:locate-terminal", (_event, folderPath: string) => {
     ctx.forwardToWebview("canvas", "locate-terminal", folderPath);
   });

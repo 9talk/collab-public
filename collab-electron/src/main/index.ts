@@ -13,7 +13,6 @@ import {
   Notification,
   protocol,
   screen,
-  session,
   shell,
   webContents as webContentsModule,
   type WebContents,
@@ -62,8 +61,6 @@ import {
 } from "./external-editor";
 import { workspaceForFile } from "./ipc-workspace";
 import { readSessionMeta } from "./session-meta";
-import { registerBrowserIpc } from "./ipc-browser";
-import { registerAgentIpc } from "./acp-agent";
 import * as canvasPersistence from "./canvas-persistence";
 
 // macOS apps launched from Finder don't inherit the user's shell
@@ -257,45 +254,6 @@ function attachShortcutListener(target: WebContents): void {
   });
 }
 
-function isBrowserTileWebview(wc: WebContents): boolean {
-  try {
-    return wc.session === session.fromPartition("persist:browser");
-  } catch {
-    return false;
-  }
-}
-
-function attachBrowserShortcuts(
-  wc: WebContents,
-  hostWindow: BrowserWindow,
-): void {
-  wc.on("before-input-event", (event, input) => {
-    if (input.type !== "keyDown") return;
-    const cmd = input.meta || input.control;
-    if (!cmd) {
-      if (input.key === "Escape" && wc.isLoading()) {
-        event.preventDefault();
-        wc.stop();
-      }
-      return;
-    }
-
-    if (input.code === "KeyL" || input.key === "l") {
-      event.preventDefault();
-      hostWindow.webContents.send("browser-tile:focus-url", wc.id);
-    } else if (input.code === "BracketLeft" || input.key === "[") {
-      event.preventDefault();
-      if (wc.canGoBack()) wc.goBack();
-    } else if (input.code === "BracketRight" || input.key === "]") {
-      event.preventDefault();
-      if (wc.canGoForward()) wc.goForward();
-    } else if (input.code === "KeyR" || input.key === "r") {
-      event.preventDefault();
-      wc.reload();
-    }
-  });
-}
-
 function registerToggleShortcuts(win: BrowserWindow): void {
   attachShortcutListener(win.webContents);
 
@@ -306,9 +264,6 @@ function registerToggleShortcuts(win: BrowserWindow): void {
       wc.insertCSS("html, body { background: transparent !important; }");
 
       attachShortcutListener(wc);
-      if (isBrowserTileWebview(wc)) {
-        attachBrowserShortcuts(wc, win);
-      }
       if (globalZoomLevel !== 0) {
         wc.setZoomLevel(globalZoomLevel);
       }
@@ -411,12 +366,6 @@ function buildAppMenu(): void {
           accelerator: "CommandOrControl+B",
           registerAccelerator: false,
           click: () => sendShortcut("sidebar-files"),
-        },
-        {
-          label: "Toggle Agent",
-          accelerator: "CommandOrControl+Alt+B",
-          registerAccelerator: false,
-          click: () => sendShortcut("toggle-agent"),
         },
         { type: "separator" },
         {
@@ -566,10 +515,8 @@ ipcMain.handle("shell:get-view-config", () => {
     viewer: { src: getRendererURL("viewer"), preload },
     terminal: { src: getRendererURL("terminal"), preload },
     terminalTile: { src: getRendererURL("terminal-tile"), preload },
-    graphTile: { src: getRendererURL("graph-tile"), preload },
     settings: { src: getRendererURL("settings"), preload },
     tileList: { src: getRendererURL("tile-list"), preload },
-    agentChat: { src: getRendererURL("agent-chat"), preload },
     todos: { src: getRendererURL("todos"), preload },
   };
 });
@@ -857,37 +804,12 @@ app.on("web-contents-created", (_event, contents) => {
     return true;
   };
 
-  contents.setWindowOpenHandler(({ url, disposition }) => {
-    if (isBrowserTileWebview(contents)) {
-      if (
-        disposition === "foreground-tab" ||
-        disposition === "background-tab"
-      ) {
-        mainWindow?.webContents.send(
-          "shell:forward",
-          "canvas",
-          "open-browser-tile",
-          url,
-          contents.id,
-        );
-        return { action: "deny" };
-      }
-      return {
-        action: "allow",
-        overrideBrowserWindowOptions: {
-          width: 500,
-          height: 600,
-          webPreferences: {
-            partition: "persist:browser",
-          },
-        },
-      };
-    }
+  contents.setWindowOpenHandler(({ url }) => {
     if (isExternal(url)) shell.openExternal(url);
     return { action: "deny" };
   });
   contents.on("will-navigate", (event, url) => {
-    if (isExternal(url) && !isBrowserTileWebview(contents)) {
+    if (isExternal(url)) {
       event.preventDefault();
       shell.openExternal(url);
     }
@@ -895,12 +817,6 @@ app.on("web-contents-created", (_event, contents) => {
 });
 
 app.whenReady().then(async () => {
-  // Set a standard Chrome user-agent on the browser tile session so sites
-  // (especially Google OAuth) treat it as a real browser, not an embedded webview.
-  const browserSession = session.fromPartition("persist:browser");
-  const electronUA = browserSession.getUserAgent();
-  browserSession.setUserAgent(electronUA.replace(/\s*Electron\/\S+/, ""));
-
   protocol.handle("collab-file", (request) => {
     const filePath = fromCollabFileUrl(request.url);
     return net.fetch(pathToFileURL(filePath).toString());
@@ -912,7 +828,6 @@ app.whenReady().then(async () => {
   installCli();
   watcher.startWorker();
   registerIpcHandlers(config);
-  registerBrowserIpc();
   registerIntegrationsIpc();
   registerClaudeIpc();
   registerClaudeEditsRpc();
@@ -933,7 +848,6 @@ app.whenReady().then(async () => {
 
   buildAppMenu();
   createWindow();
-  registerAgentIpc(mainWindow!, config);
   registerToggleShortcuts(mainWindow!);
 
   // Register F1 as a global shortcut: bring app to front when in background,

@@ -7,7 +7,6 @@ import {
   bringToFront,
   generateId,
   defaultSize,
-  inferTileType,
   tileAtPoint,
   snapToGrid,
   selectTile,
@@ -270,37 +269,6 @@ describe("snapToGrid", () => {
     snapToGrid(tile);
     expect(tile.x).toBe(-20);
     expect(tile.y).toBe(-20);
-  });
-});
-
-// -- inferTileType --
-
-describe("inferTileType", () => {
-  test("returns 'note' for .md files", () => {
-    expect(inferTileType("/path/to/file.md")).toBe("note");
-  });
-
-  test("returns 'image' for image extensions", () => {
-    for (const ext of [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]) {
-      expect(inferTileType(`/path/to/file${ext}`)).toBe("image");
-    }
-  });
-
-  test("returns 'code' for other extensions", () => {
-    expect(inferTileType("/path/to/file.ts")).toBe("code");
-    expect(inferTileType("/path/to/file.js")).toBe("code");
-    expect(inferTileType("/path/to/file.py")).toBe("code");
-    expect(inferTileType("/path/to/file.txt")).toBe("code");
-  });
-
-  test("handles uppercase extensions", () => {
-    expect(inferTileType("/path/file.MD")).toBe("note");
-    expect(inferTileType("/path/file.PNG")).toBe("image");
-    expect(inferTileType("/path/file.JPG")).toBe("image");
-  });
-
-  test("handles paths with dots in directories", () => {
-    expect(inferTileType("/path/.hidden/file.md")).toBe("note");
   });
 });
 

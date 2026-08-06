@@ -99,69 +99,6 @@ describe("getTileLabel", () => {
     expect(label.name).toBe("app");
     expect(label.parent).toBe("/Users/me/projects/");
   });
-
-  test("returns hostname for browser tiles with URL", () => {
-    const label = getTileLabel({
-      type: "browser",
-      id: "t1",
-      url: "https://example.com/page",
-    });
-    expect(label.name).toBe("example.com");
-  });
-
-  test("returns raw URL for browser tiles with invalid URL", () => {
-    const label = getTileLabel({
-      type: "browser",
-      id: "t1",
-      url: "not-a-url",
-    });
-    expect(label.name).toBe("not-a-url");
-  });
-
-  test("returns 'Browser' for browser tiles without URL", () => {
-    const label = getTileLabel({ type: "browser", id: "t1" });
-    expect(label.name).toBe("Browser");
-  });
-
-  test("returns folder name for graph tiles with folderPath", () => {
-    const label = getTileLabel({
-      type: "graph",
-      id: "t1",
-      folderPath: "/Users/me/projects/myapp",
-    });
-    expect(label.name).toBe("myapp");
-    expect(label.parent).toBe("/Users/me/projects/");
-  });
-
-  test("returns 'Graph' for graph tiles without folderPath", () => {
-    const label = getTileLabel({ type: "graph", id: "t1" });
-    expect(label.name).toBe("Graph");
-  });
-
-  test("returns filename for file-based tiles", () => {
-    const label = getTileLabel({
-      type: "note",
-      id: "t1",
-      filePath: "/Users/me/docs/readme.md",
-    });
-    expect(label.name).toBe("readme.md");
-    expect(label.parent).toBe("/Users/me/docs/");
-  });
-
-  test("returns tile type for tiles without filePath", () => {
-    const label = getTileLabel({ type: "code", id: "t1" });
-    expect(label.name).toBe("code");
-  });
-
-  test("returns filename for image tiles", () => {
-    const label = getTileLabel({
-      type: "image",
-      id: "t1",
-      filePath: "/photos/cat.png",
-    });
-    expect(label.name).toBe("cat.png");
-    expect(label.parent).toBe("/photos/");
-  });
 });
 
 // -- positionTile --
