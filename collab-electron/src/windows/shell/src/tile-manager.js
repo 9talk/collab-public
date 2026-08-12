@@ -253,9 +253,18 @@ export function createTileManager({
 
   function forwardClickToWebview(webview, mouseEvent) {
     if (!webview.isConnected) return;
-    if (typeof webview.isLoading === "function" && webview.isLoading()) {
-      return;
+    // isLoading() throws when the guest hasn't attached or emitted dom-ready
+    // yet (e.g. a save-memory rebuild in progress); treat that as still
+    // loading and skip the click forward.
+    let loading = true;
+    try {
+      if (typeof webview.isLoading === "function") {
+        loading = webview.isLoading();
+      }
+    } catch {
+      /* not attached or dom-ready not emitted yet */
     }
+    if (loading) return;
     const rect = webview.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
     const x = Math.round(
