@@ -1073,11 +1073,18 @@ async function init() {
         tileManager.focusCanvasTile(target.id, null);
         notifications.dismissByTileId(target.id);
       }
-    } else if (action === "nav-history-back") {
+    } else if (
+      action === "nav-history-back" ||
+      action === "nav-history-forward"
+    ) {
       (async () => {
-        let tileId = await window.shellApi.navigationGoBack();
+        const go =
+          action === "nav-history-back"
+            ? window.shellApi.navigationGoBack
+            : window.shellApi.navigationGoForward;
+        let tileId = await go();
         while (tileId && !getTile(tileId)) {
-          tileId = await window.shellApi.navigationGoBack();
+          tileId = await go();
         }
         if (tileId) {
           tileManager.focusCanvasTile(tileId, null);
