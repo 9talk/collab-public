@@ -4,7 +4,8 @@ const ZOOM_RUBBER_BAND_K = 400;
 const CELL = 20;
 const MAJOR = 80;
 
-const isMac = window.shellApi.getPlatform() === "darwin";
+const isMac =
+  typeof window !== "undefined" && window.shellApi?.getPlatform() === "darwin";
 
 export function shouldZoom(e, mac = isMac) {
   return e.ctrlKey || (mac && e.metaKey);
@@ -12,6 +13,19 @@ export function shouldZoom(e, mac = isMac) {
 
 function isDark() {
   return document.documentElement.classList.contains("dark");
+}
+
+/**
+ * Whether the grid canvas backing store is stale relative to the element's
+ * current layout size and devicePixelRatio. A stale store gets stretched by
+ * the compositor (dots widen and the grid misaligns with tiles), so callers
+ * rebuild it via resizeGridCanvas().
+ */
+export function gridBufferSizeMismatch(gridCanvas, clientW, clientH, dpr) {
+  return (
+    gridCanvas.width !== Math.round(clientW * dpr) ||
+    gridCanvas.height !== Math.round(clientH * dpr)
+  );
 }
 
 export function createViewport(canvasEl, gridCanvas, tilesRef) {
@@ -38,6 +52,21 @@ export function createViewport(canvasEl, gridCanvas, tilesRef) {
   }
 
   function drawGrid() {
+    // Self-heal: if the backing store doesn't match the current layout size
+    // or dpr (e.g. dpr settles asynchronously at startup), rebuild it before
+    // drawing, otherwise the compositor stretches the bitmap and the dots
+    // widen and misalign with tiles.
+    if (
+      gridBufferSizeMismatch(
+        gridCanvas,
+        canvasEl.clientWidth,
+        canvasEl.clientHeight,
+        window.devicePixelRatio || 1,
+      )
+    ) {
+      resizeGridCanvas();
+    }
+
     const w = canvasEl.clientWidth;
     const h = canvasEl.clientHeight;
     if (w === 0 || h === 0) return;
@@ -231,6 +260,35 @@ export function createViewport(canvasEl, gridCanvas, tilesRef) {
   }).observe(canvasEl);
 
   resizeGridCanvas();
+
+  // The window can settle after initial load (multi-display dpr races, layout
+  // arriving late), leaving the grid buffer stale until the next resize.
+  // Re-check shortly after init and rebuild if needed.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (
+        gridBufferSizeMismatch(
+          gridCanvas,
+          canvasEl.clientWidth,
+          canvasEl.clientHeight,
+          window.devicePixelRatio || 1,
+        )
+      ) {
+        console.log(
+          "[grid-canvas] backing store stale after startup, rebuilding:",
+          {
+            bufferW: gridCanvas.width,
+            bufferH: gridCanvas.height,
+            clientW: canvasEl.clientWidth,
+            clientH: canvasEl.clientHeight,
+            dpr: window.devicePixelRatio || 1,
+          },
+        );
+        resizeGridCanvas();
+        if (state) updateCanvas();
+      }
+    });
+  });
 
   return {
     init(viewportState, callback) {

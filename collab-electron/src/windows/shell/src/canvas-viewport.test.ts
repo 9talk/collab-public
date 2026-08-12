@@ -5,7 +5,7 @@
  * After modularization, update imports to use ./canvas-viewport.js.
  */
 import { describe, test, expect } from "bun:test";
-import { shouldZoom } from "./canvas-viewport.js";
+import { shouldZoom, gridBufferSizeMismatch } from "./canvas-viewport.js";
 
 // -- shouldZoom modifier key routing --
 
@@ -168,6 +168,49 @@ describe("computeZoomStep", () => {
     expect(state.zoom).toBeCloseTo(original.zoom, 2);
     expect(state.panX).toBeCloseTo(original.panX, 0);
     expect(state.panY).toBeCloseTo(original.panY, 0);
+  });
+});
+
+// -- gridBufferSizeMismatch --
+
+describe("gridBufferSizeMismatch", () => {
+  test("matches when backing store equals client size × dpr", () => {
+    const gridCanvas = { width: 2400, height: 1600 };
+    expect(gridBufferSizeMismatch(gridCanvas, 1200, 800, 2)).toBe(false);
+  });
+
+  test("detects stale width from a dpr change (startup race)", () => {
+    // Store was built when dpr was 1, rendering now uses dpr 2
+    const gridCanvas = { width: 1200, height: 800 };
+    expect(gridBufferSizeMismatch(gridCanvas, 1200, 800, 2)).toBe(true);
+  });
+
+  test("detects stale height", () => {
+    const gridCanvas = { width: 2400, height: 800 };
+    expect(gridBufferSizeMismatch(gridCanvas, 1200, 800, 2)).toBe(true);
+  });
+
+  test("detects stale width from a client size change", () => {
+    const gridCanvas = { width: 2400, height: 1600 };
+    expect(gridBufferSizeMismatch(gridCanvas, 1300, 800, 2)).toBe(true);
+  });
+
+  test("dpr change with same client size is detected", () => {
+    const gridCanvas = { width: 2400, height: 1600 };
+    expect(gridBufferSizeMismatch(gridCanvas, 1200, 800, 1)).toBe(true);
+  });
+
+  test("rounds sub-pixel store sizes before comparing", () => {
+    // Math.round(clientW * dpr) is the canonical store size
+    const gridCanvas = { width: 2399, height: 1600 };
+    expect(gridBufferSizeMismatch(gridCanvas, 1199.6, 800, 2)).toBe(false);
+    const offByOne = { width: 2400, height: 1600 };
+    expect(gridBufferSizeMismatch(offByOne, 1199.6, 800, 2)).toBe(true);
+  });
+
+  test("matches a zero-sized element", () => {
+    const gridCanvas = { width: 0, height: 0 };
+    expect(gridBufferSizeMismatch(gridCanvas, 0, 0, 2)).toBe(false);
   });
 });
 
