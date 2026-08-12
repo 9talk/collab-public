@@ -109,4 +109,47 @@ if (process.platform === "win32") {
   }
 }
 
+// Patch @xterm/addon-search: _findInLine recurses through wrapped lines.
+// A single logical line wrapped across tens of thousands of physical rows
+// (e.g. one enormous no-newline output) overflows the call stack on any
+// search, and the incremental auto-search then re-triggers it on every
+// PTY write (onWriteParsed -> _updateMatches -> findPrevious), spamming
+// "Maximum call stack size exceeded" and ballooning memory via the line
+// cache. Rewrite the recursion as a loop. Keep in sync with the addon
+// version pinned in package.json.
+const searchAddonDir = join("node_modules", "@xterm", "addon-search", "lib");
+if (existsSync(searchAddonDir)) {
+  for (const file of ["addon-search.mjs", "addon-search.js"]) {
+    const path = join(searchAddonDir, file);
+    if (!existsSync(path)) continue;
+    let code = readFileSync(path, "utf8");
+    let changed = false;
+    if (file.endsWith(".mjs")) {
+      const from =
+        "_findInLine(e,t,n={},i=!1){let s=t.startRow,a=t.startCol;if(this._terminal.buffer.active.getLine(s)?.isWrapped){if(i){t.startCol+=this._terminal.cols;return}return t.startRow--,t.startCol+=this._terminal.cols,this._findInLine(e,t,n)}";
+      const to =
+        "_findInLine(e,t,n={},i=!1){let s=t.startRow,a=t.startCol;while(this._terminal.buffer.active.getLine(s)?.isWrapped){if(i){t.startCol+=this._terminal.cols;return}t.startRow--,t.startCol+=this._terminal.cols,s=t.startRow}";
+      if (code.includes(from)) {
+        code = code.replace(from, to);
+        changed = true;
+      }
+    } else {
+      const from =
+        "_findInLine(e,t,s={},i=!1){const r=t.startRow,n=t.startCol,o=this._terminal.buffer.active.getLine(r);if(o?.isWrapped)return i?void(t.startCol+=this._terminal.cols):(t.startRow--,t.startCol+=this._terminal.cols,this._findInLine(e,t,s));";
+      const to =
+        "_findInLine(e,t,s={},i=!1){let r=t.startRow,n=t.startCol,o=this._terminal.buffer.active.getLine(r);while(o?.isWrapped){if(i){t.startCol+=this._terminal.cols;return}t.startRow--,t.startCol+=this._terminal.cols,r=t.startRow,o=this._terminal.buffer.active.getLine(r)}";
+      if (code.includes(from)) {
+        code = code.replace(from, to);
+        changed = true;
+      }
+    }
+    if (changed) {
+      writeFileSync(path, code);
+      console.log("Patched @xterm/addon-search " + file);
+    } else {
+      console.warn("addon-search patch pattern not found in " + file);
+    }
+  }
+}
+
 execSync("bun x electron-rebuild -f -w node-pty", { stdio: "inherit" });
