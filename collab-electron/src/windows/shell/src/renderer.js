@@ -1033,13 +1033,27 @@ async function init() {
       edgeIndicators.panToTile(tile);
     } else if (action === "close-tile") {
       const focusedId = tileManager.getFocusedTileId();
-      if (focusedId) {
-        tileManager.closeCanvasTile(focusedId);
-        tileManager.setFocusedTileId(null);
-        canvasEl.focus();
-        noteSurfaceFocus("canvas");
-        minimap.update();
-      }
+      if (!focusedId) return;
+      const tile = tileManager.getTile(focusedId);
+      const isRunning = tile?.type === "term" && !!tile.running;
+      window.shellApi
+        .showConfirmDialog({
+          message: "关闭此终端?",
+          detail: isRunning
+            ? "终端仍有进程在运行,关闭后将终止会话。"
+            : undefined,
+          buttons: ["取消", "关闭"],
+        })
+        .then((response) => {
+          if (response !== 1) return;
+          // 确认期间 tile 可能已被其他路径关闭(如 pty 退出),重新校验
+          if (!tileManager.getTile(focusedId)) return;
+          tileManager.closeCanvasTile(focusedId);
+          tileManager.setFocusedTileId(null);
+          canvasEl.focus();
+          noteSurfaceFocus("canvas");
+          minimap.update();
+        });
     } else if (action === "refresh-terminal") {
       console.log("[refresh-terminal] shortcut triggered");
       const focusedId = tileManager.getFocusedTileId();
