@@ -91,6 +91,27 @@ function TerminalTab({
     });
     termRef.current = term;
 
+    // Apply user-configured scrollback (default 200000). Setting
+    // term.options.scrollback at runtime is supported by xterm: the
+    // buffer is trimmed to the new limit if it exceeds it.
+    window.api
+      .getPref("terminalScrollback")
+      .then((v) => {
+        if (typeof v === "number" && v > 0) {
+          term.options.scrollback = v;
+        }
+      })
+      .catch(() => {});
+    const offPrefChanged = window.api.onPrefChanged((key, value) => {
+      if (
+        key === "terminalScrollback" &&
+        typeof value === "number" &&
+        value > 0
+      ) {
+        term.options.scrollback = value;
+      }
+    });
+
     const showEditorPicker = async (filePath: string): Promise<void> => {
       try {
         const editors = await window.api.listExternalEditors();
@@ -638,6 +659,7 @@ function TerminalTab({
       container.removeEventListener("dragover", handleDragOver);
       container.removeEventListener("drop", handleDrop);
       window.api.offPtyData(sessionId, handleData);
+      offPrefChanged();
       offShellBlur();
       offTerminalClear();
       term.dispose();

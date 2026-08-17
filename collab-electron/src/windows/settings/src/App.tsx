@@ -521,9 +521,16 @@ function RadioOption({
   );
 }
 
+const PRESET_TILE_SIZES: Array<{
+  width: number;
+  height: number;
+  desc: TranslationKey;
+}> = [{ width: 1200, height: 700, desc: "terminal.presets.common" }];
+
 function MacTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
   const [tileWidth, setTileWidth] = useState(1196);
   const [tileHeight, setTileHeight] = useState(739);
+  const [scrollback, setScrollback] = useState(200000);
 
   useEffect(() => {
     api
@@ -536,12 +543,23 @@ function MacTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
         }
       })
       .catch(() => {});
+    api
+      .getPref("terminalScrollback")
+      .then((v) => {
+        if (typeof v === "number") setScrollback(v);
+      })
+      .catch(() => {});
   }, []);
 
   async function saveTileSize(width: number, height: number) {
     setTileWidth(width);
     setTileHeight(height);
     await api.setPref("tileSize", { width, height });
+  }
+
+  async function saveScrollback(value: number) {
+    setScrollback(value);
+    await api.setPref("terminalScrollback", value);
   }
 
   return (
@@ -604,6 +622,89 @@ function MacTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
               style={{ color: "var(--foreground)" }}
             />
           </div>
+        </div>
+      </div>
+
+      {/* Preset tile sizes */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium">{t("terminal.presets")}</p>
+        <table className="w-full text-sm">
+          <thead>
+            <tr
+              className="text-xs text-muted-foreground"
+              style={{
+                borderBottom:
+                  "1px solid color-mix(in srgb, var(--foreground) 6%, transparent)",
+              }}
+            >
+              <th className="py-1.5 pr-2 text-left font-normal">
+                {t("terminal.presets.width")}
+              </th>
+              <th className="py-1.5 pr-2 text-left font-normal">
+                {t("terminal.presets.height")}
+              </th>
+              <th className="py-1.5 pr-2 text-left font-normal">
+                {t("terminal.presets.desc")}
+              </th>
+              <th className="py-1.5 text-left font-normal">
+                {t("terminal.presets.action")}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {PRESET_TILE_SIZES.map((preset) => (
+              <tr
+                key={`${preset.width}x${preset.height}`}
+                style={{
+                  borderBottom:
+                    "1px solid color-mix(in srgb, var(--foreground) 6%, transparent)",
+                }}
+              >
+                <td className="py-2 pr-2">{preset.width}</td>
+                <td className="py-2 pr-2">{preset.height}</td>
+                <td className="py-2 pr-2 text-muted-foreground">
+                  {t(preset.desc)}
+                </td>
+                <td className="py-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void saveTileSize(preset.width, preset.height);
+                    }}
+                    className="cursor-pointer rounded-md border border-border bg-background px-2.5 py-1 text-xs"
+                    style={{ color: "var(--foreground)" }}
+                  >
+                    {t("terminal.presets.apply")}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Scrollback lines */}
+      <div className="space-y-2">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">{t("terminal.scrollback")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("terminal.scrollbackDesc")}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={1000}
+            max={1000000}
+            step={10000}
+            value={scrollback}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10) || 200000;
+              void saveScrollback(v);
+            }}
+            className="w-28 rounded-md border border-border bg-background px-2 py-1 text-sm text-right"
+            style={{ color: "var(--foreground)" }}
+          />
         </div>
       </div>
     </div>

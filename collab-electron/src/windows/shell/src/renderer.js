@@ -49,6 +49,7 @@ const DEFAULT_CANVAS_OPACITY = 50;
 let lastCanvasOpacity = DEFAULT_CANVAS_OPACITY;
 let updateSaveMemConfig = null;
 let filesNavTileSize = null;
+let tileManager = null;
 
 window.shellApi.getPref("canvasOpacity").then((v) => {
   lastCanvasOpacity = v != null ? v : DEFAULT_CANVAS_OPACITY;
@@ -81,6 +82,15 @@ window.shellApi.onPrefChanged((key, value) => {
       if (typeof val.width === "number") filesNavTileSize = val;
     } else {
       filesNavTileSize = null;
+    }
+  } else if (key === "terminalScrollback") {
+    // 实时转发给所有 terminal tile，让 xterm 立即调整滚动缓冲区
+    if (typeof value === "number") {
+      tileManager?.broadcastToTileWebviews(
+        "pref-changed",
+        "terminalScrollback",
+        value,
+      );
     }
   }
 });
@@ -455,7 +465,7 @@ async function init() {
   // -- Tile manager --
 
   let minimapRef = null;
-  const tileManager = createTileManager({
+  tileManager = createTileManager({
     tileLayer,
     viewportState,
     configs,

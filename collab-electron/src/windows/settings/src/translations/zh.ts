@@ -76,6 +76,15 @@ export const zh: Record<TranslationKey, string> = {
   "terminal.tileSizeDesc": "新建终端时默认的 tile 尺寸。",
   "terminal.tileWidth": "宽度",
   "terminal.tileHeight": "高度",
+  "terminal.scrollback": "回滚行数",
+  "terminal.scrollbackDesc": "终端滚动缓冲区保留的最大行数，实时生效。",
+  "terminal.presets": "预设尺寸",
+  "terminal.presets.width": "宽度",
+  "terminal.presets.height": "高度",
+  "terminal.presets.desc": "描述",
+  "terminal.presets.action": "操作",
+  "terminal.presets.apply": "使用此预设尺寸",
+  "terminal.presets.common": "常见 tile 尺寸。",
 
   // Terminal pane (Windows)
   "terminal.target": "终端目标",

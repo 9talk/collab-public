@@ -69,7 +69,12 @@ function sendToSender(
   if (!wc) return;
   const sender = wc.fromId(senderWebContentsId);
   if (sender && !sender.isDestroyed()) {
-    sender.send(channel, payload);
+    try {
+      sender.send(channel, payload);
+    } catch {
+      // 渲染 frame 已处置（webview 被省内存回收或渲染进程崩溃）时
+      // 静默跳过，避免主进程日志被刷屏。
+    }
   }
 }
 

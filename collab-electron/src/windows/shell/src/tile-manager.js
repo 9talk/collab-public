@@ -177,20 +177,56 @@ export function createTileManager({
     destroyTimers.clear();
   }
 
-  function destroyTerminalWebview(tileId) {
+  function showTilePlaceholder(dom, tileId, text) {
+    if (!dom._placeholder) {
+      dom._placeholder = document.createElement("div");
+      dom._placeholder.className = "tile-placeholder";
+      dom._placeholder.addEventListener("click", () => focusCanvasTile(tileId));
+      dom.contentArea.appendChild(dom._placeholder);
+    }
+    dom._placeholder.textContent = text;
+  }
+
+  function destroyTerminalWebview(tileId, placeholderText = "Click to focus") {
     const dom = tileDOMs.get(tileId);
     if (!dom?.webview) return;
     dom.contentArea.removeChild(dom.webview);
     dom.webview = null;
     destroyTimers.delete(tileId);
     // Add placeholder so the user knows the tile is still alive
-    if (!dom._placeholder) {
-      dom._placeholder = document.createElement("div");
-      dom._placeholder.className = "tile-placeholder";
-      dom._placeholder.textContent = "Click to focus";
-      dom._placeholder.addEventListener("click", () => focusCanvasTile(tileId));
-      dom.contentArea.appendChild(dom._placeholder);
+    showTilePlaceholder(dom, tileId, placeholderText);
+  }
+
+  // 聚焦 tile 崩溃后自动重建的次数上限；连续崩溃说明重建条件未消除
+  // （如引擎级 bug 持续触发），超限后退回手动点击重建，避免崩溃循环。
+  const MAX_CRASH_AUTO_REBUILD = 3;
+
+  // 渲染进程崩溃后 webview 无法自愈。聚焦的 tile 自动重建以尽快恢复
+  // 会话（sidecar ring buffer 容量有限，拖得越久内容丢失越多）；
+  // 非聚焦 tile 显示重建入口，等待用户点击。
+  function recoverCrashedTerminalWebview(tileId) {
+    const dom = tileDOMs.get(tileId);
+    if (!dom?.webview) return;
+    dom.contentArea.removeChild(dom.webview);
+    dom.webview = null;
+    destroyTimers.delete(tileId);
+
+    const tile = getTile(tileId);
+    const wasFocused = focusedTileId === tileId;
+    if (wasFocused) focusedTileId = null;
+
+    if (wasFocused && tile?.type === "term") {
+      if (!tile._crashCount) tile._crashCount = 0;
+      tile._crashCount++;
+      if (tile._crashCount <= MAX_CRASH_AUTO_REBUILD) {
+        dom._pendingFocus = true;
+        spawnTerminalWebview(tile);
+        return;
+      }
+      tile._crashCount = 0;
     }
+
+    showTilePlaceholder(dom, tileId, "界面已崩溃, 请点击重建");
   }
 
   function enforceLimit() {
@@ -374,6 +410,8 @@ export function createTileManager({
     dom.webview = wv;
 
     wv.addEventListener("dom-ready", () => {
+      // 重建成功后归零崩溃计数
+      tile._crashCount = 0;
       window.shellApi.registerWebviewName("终端 Tile", wv.getWebContentsId());
       if (autoFocus) focusCanvasTile(tile.id);
       if (dom._pendingFocus) {
@@ -453,9 +491,10 @@ export function createTileManager({
       }
     });
 
-    // Webview 崩溃时清理遮罩
+    // Webview 崩溃时回收坏 webview，显示重建入口，避免永久黑屏
     wv.addEventListener("render-process-gone", () => {
       clearRefreshMask(tileDOMs.get(tile.id), tile);
+      recoverCrashedTerminalWebview(tile.id);
     });
 
     // Forward console messages to the main-process log file (electron-log),
@@ -748,7 +787,12 @@ export function createTileManager({
 
   function broadcastToTileWebviews(channel, ...args) {
     for (const [, dom] of tileDOMs) {
-      if (dom.webview) dom.webview.send(channel, ...args);
+      if (!dom.webview) continue;
+      try {
+        dom.webview.send(channel, ...args);
+      } catch {
+        // 崩溃/回收窗口期的 webview 不可 send，跳过
+      }
     }
   }
 

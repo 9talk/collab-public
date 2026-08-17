@@ -76,6 +76,16 @@ export const en = {
     "Default tile dimensions when creating new terminals.",
   "terminal.tileWidth": "Width",
   "terminal.tileHeight": "Height",
+  "terminal.scrollback": "Scrollback lines",
+  "terminal.scrollbackDesc":
+    "Max rows retained in the terminal scrollback buffer. Applies immediately.",
+  "terminal.presets": "Preset sizes",
+  "terminal.presets.width": "Width",
+  "terminal.presets.height": "Height",
+  "terminal.presets.desc": "Description",
+  "terminal.presets.action": "Action",
+  "terminal.presets.apply": "Use this preset",
+  "terminal.presets.common": "Common tile size.",
 
   // Terminal pane (Windows)
   "terminal.target": "Terminal target",
