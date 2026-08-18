@@ -352,6 +352,7 @@ export function registerMiscHandlers(ctx: IpcContext): void {
         message: string;
         detail?: string;
         buttons?: string[];
+        defaultId?: number;
       },
     ) => {
       const win = ctx.mainWindow();
@@ -361,6 +362,7 @@ export function registerMiscHandlers(ctx: IpcContext): void {
         message: opts.message,
         detail: opts.detail,
         buttons: opts.buttons ?? ["OK", "Cancel"],
+        defaultId: opts.defaultId,
       });
       return result.response;
     },

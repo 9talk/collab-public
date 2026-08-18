@@ -222,6 +222,49 @@ export function findNearestAdjacentTile(canvasX, canvasY) {
   return best;
 }
 
+/**
+ * 按独立规则查找离 fromTile 最近的 terminal tile。
+ * 优先顺序:同行左侧 → 同行右侧 → 上方 → 下方。
+ * "同行"指垂直区间有重叠;同一优先级内取中心距离最近者。
+ * @param {string} fromTileId - 被关闭 tile 的 id,已存在 canvas-state 的 tiles 中
+ * @returns {Tile | null}
+ */
+export function findNearestTerminalTile(fromTileId) {
+  const from = tiles.find((t) => t.id === fromTileId);
+  if (!from) return null;
+  const fromCx = from.x + from.width / 2;
+  const fromCy = from.y + from.height / 2;
+  const candidates = tiles.filter(
+    (t) => t.id !== fromTileId && t.type === "term",
+  );
+  if (!candidates.length) return null;
+
+  const sameRow = (b) => from.y + from.height > b.y && b.y + b.height > from.y;
+  const horizDist = (b) => Math.abs(b.x + b.width / 2 - fromCx);
+  const vertDist = (b) => Math.abs(b.y + b.height / 2 - fromCy);
+
+  const rowCands = candidates.filter(sameRow);
+  const left = rowCands
+    .filter((b) => b.x + b.width / 2 <= fromCx)
+    .sort((a, b) => horizDist(a) - horizDist(b));
+  const right = rowCands
+    .filter((b) => b.x + b.width / 2 > fromCx)
+    .sort((a, b) => horizDist(a) - horizDist(b));
+  if (left.length) return left[0];
+  if (right.length) return right[0];
+
+  const above = candidates
+    .filter((b) => !sameRow(b) && b.y + b.height / 2 < fromCy)
+    .sort((a, b) => vertDist(a) - vertDist(b));
+  const below = candidates
+    .filter((b) => !sameRow(b) && b.y + b.height / 2 >= fromCy)
+    .sort((a, b) => vertDist(a) - vertDist(b));
+  if (above.length) return above[0];
+  if (below.length) return below[0];
+
+  return null;
+}
+
 /** @returns {Tile | null} */
 export function tileAtPoint(cx, cy) {
   const sorted = [...tiles].sort((a, b) => b.zIndex - a.zIndex);

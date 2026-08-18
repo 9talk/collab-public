@@ -15,6 +15,7 @@ import {
   clearSelection,
   isSelected,
   getSelectedTiles,
+  findNearestTerminalTile,
 } from "./canvas-state.js";
 
 // Reset tiles array between tests by splicing out all entries.
@@ -529,5 +530,74 @@ describe("findNearestAdjacentTile", () => {
     // click to the right AND far above — outside both influence axes
     const result = findNearestAdjacentTile(500, -70);
     expect(result).toBeNull();
+  });
+});
+
+// -- findNearestTerminalTile --
+
+describe("findNearestTerminalTile", () => {
+  function term(id, x, y) {
+    addTile({ id, type: "term", x, y, width: 100, height: 100, zIndex: 0 });
+  }
+
+  test("prefers same-row left neighbor over right neighbor", () => {
+    term("from", 200, 0);
+    term("left", 0, 0);
+    term("right", 400, 0);
+    expect(findNearestTerminalTile("from")?.id).toBe("left");
+  });
+
+  test("picks the closest left neighbor when several are on the left", () => {
+    term("from", 200, 0);
+    term("farLeft", 0, 0);
+    term("nearLeft", 100, 0);
+    expect(findNearestTerminalTile("from")?.id).toBe("nearLeft");
+  });
+
+  test("falls back to right neighbor when no left neighbor exists", () => {
+    term("from", 0, 0);
+    term("right", 200, 0);
+    expect(findNearestTerminalTile("from")?.id).toBe("right");
+  });
+
+  test("prefers same-row right neighbor over one above", () => {
+    term("from", 100, 0);
+    term("sameRowRight", 300, 0);
+    term("above", 100, -200);
+    expect(findNearestTerminalTile("from")?.id).toBe("sameRowRight");
+  });
+
+  test("prefers one above over one below", () => {
+    term("from", 100, 100);
+    term("above", 100, 0);
+    term("below", 100, 300);
+    expect(findNearestTerminalTile("from")?.id).toBe("above");
+  });
+
+  test("picks the vertically closest tile above", () => {
+    term("from", 100, 200);
+    term("aboveNear", 100, 80);
+    term("aboveFar", 100, 0);
+    expect(findNearestTerminalTile("from")?.id).toBe("aboveNear");
+  });
+
+  test("ignores non-terminal tiles", () => {
+    term("from", 100, 0);
+    addTile({
+      id: "note",
+      type: "note",
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+      zIndex: 0,
+    });
+    term("right", 300, 0);
+    expect(findNearestTerminalTile("from")?.id).toBe("right");
+  });
+
+  test("returns null when no other terminal exists", () => {
+    term("from", 100, 100);
+    expect(findNearestTerminalTile("from")?.id).toBeUndefined();
   });
 });

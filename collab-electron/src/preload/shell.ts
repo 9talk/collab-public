@@ -195,6 +195,7 @@ contextBridge.exposeInMainWorld("shellApi", {
     message: string;
     detail?: string;
     buttons?: string[];
+    defaultId?: number;
   }): Promise<number> => ipcRenderer.invoke("dialog:confirm", opts),
 
   showContextMenu: (

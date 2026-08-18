@@ -12,6 +12,7 @@ import {
   getNearestTileInDirection,
   findAutoPlacementForTerminal,
   findNearestAdjacentTile,
+  findNearestTerminalTile,
   computeTerminalLayout,
   TERM_GAP,
 } from "./canvas-state.js";
@@ -1046,6 +1047,8 @@ async function init() {
       if (!focusedId) return;
       const tile = tileManager.getTile(focusedId);
       const isRunning = tile?.type === "term" && !!tile.running;
+      // 关闭前捕获最近的 terminal tile,确认关闭后聚焦它
+      const nearestBeforeClose = findNearestTerminalTile(focusedId);
       window.shellApi
         .showConfirmDialog({
           message: "关闭此终端?",
@@ -1053,6 +1056,7 @@ async function init() {
             ? "终端仍有进程在运行,关闭后将终止会话。"
             : undefined,
           buttons: ["取消", "关闭"],
+          defaultId: 1,
         })
         .then((response) => {
           if (response !== 1) return;
@@ -1063,6 +1067,15 @@ async function init() {
           canvasEl.focus();
           noteSurfaceFocus("canvas");
           minimap.update();
+          // 关闭后重新排列剩余终端,保持布局紧凑
+          relayoutTerminalTiles();
+          // 聚焦被关闭 tile 最近处的 terminal tile
+          if (nearestBeforeClose?.id) {
+            const target = tileManager.getTile(nearestBeforeClose.id);
+            if (target && target.id !== focusedId) {
+              tileManager.focusCanvasTile(target.id);
+            }
+          }
         });
     } else if (action === "refresh-terminal") {
       console.log("[refresh-terminal] shortcut triggered");
