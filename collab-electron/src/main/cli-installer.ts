@@ -41,7 +41,7 @@ function getMjsSource(): string {
 function generateUnixWrapper(mjsPath: string): string {
   return `#!/usr/bin/env bash
 set -euo pipefail
-NODE_BIN="$(cat "$HOME/.collaborator/node-path" 2>/dev/null)" || true
+NODE_BIN="$(cat "$HOME/.collab/node-path" 2>/dev/null)" || true
 if [[ -z "$NODE_BIN" || ! -x "$NODE_BIN" ]]; then
   echo "error: collaborator is not running (no node-path file)" >&2
   exit 2
@@ -53,7 +53,7 @@ ELECTRON_RUN_AS_NODE=1 exec "$NODE_BIN" "${mjsPath}" "$@"
 function generateWindowsWrapper(mjsPath: string): string {
   return `@echo off
 setlocal
-set "NP_FILE=%USERPROFILE%\\.collaborator\\node-path"
+set "NP_FILE=%USERPROFILE%\\.collab\\node-path"
 if not exist "%NP_FILE%" (
   echo error: collaborator is not running ^(no node-path file^) >&2
   exit /b 2

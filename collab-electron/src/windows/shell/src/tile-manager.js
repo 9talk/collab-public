@@ -499,7 +499,7 @@ export function createTileManager({
 
     // Forward console messages to the main-process log file (electron-log),
     // tagged with the terminal-tile panel so OSC 8 / PTY diagnostics are
-    // captured in ~/.collaborator/logs/main-YYYY-MM-DD.log.
+    // captured in ~/.collab/logs/main-YYYY-MM-DD.log.
     wv.addEventListener("console-message", (event) => {
       window.shellApi.logFromWebview(
         "terminalTile",

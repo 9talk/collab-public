@@ -4,7 +4,7 @@
 # Usage:
 #   claude-beep.sh <event-name>
 #
-# Reads ~/.collaborator/claude-sounds.json for:
+# Reads ~/.collab/claude-sounds.json for:
 #   - "enabled": if false, no sound plays
 #   - "<event-name>": path to sound file for that event
 # If the event has no configured sound file, no sound is played.
@@ -12,13 +12,13 @@
 EVENT="${1:-}"
 [ -z "$EVENT" ] && exit 0
 
-CONFIG="$HOME/.collaborator/claude-sounds.json"
+CONFIG="$HOME/.collab/claude-sounds.json"
 [ ! -f "$CONFIG" ] && exit 0
 
 export CLAUDE_SOUND_EVENT="$EVENT"
 SOUND=$(python3 <<-'PYEOF' 2>/dev/null
 import json, os
-cfg = os.path.expanduser("~/.collaborator/claude-sounds.json")
+cfg = os.path.expanduser("~/.collab/claude-sounds.json")
 event = os.environ.get("CLAUDE_SOUND_EVENT", "")
 try:
     with open(cfg) as f:

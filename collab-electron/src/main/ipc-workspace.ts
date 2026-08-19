@@ -13,6 +13,7 @@ import { saveConfig, type AppConfig } from "./config";
 import {
   loadWorkspaceConfig,
   saveWorkspaceConfig,
+  workspaceConfigPath,
   type WorkspaceConfig,
 } from "./workspace-config";
 import { createFileFilter, type FileFilter } from "./file-filter";
@@ -41,6 +42,22 @@ function getWsConfig(workspacePath: string): WorkspaceConfig {
     wsConfigMap.set(workspacePath, config);
   }
   return config;
+}
+
+function removeWorkspaceAlias(
+  appConfig: AppConfig,
+  workspacePath: string,
+): void {
+  const config = wsConfigMap.get(workspacePath);
+  if (config?.alias && existsSync(workspaceConfigPath(workspacePath))) {
+    config.alias = undefined;
+    saveWorkspaceConfig(workspacePath, config);
+  }
+
+  const aliases = appConfig.ui["workspace_aliases"];
+  if (aliases && typeof aliases === "object" && !Array.isArray(aliases)) {
+    delete (aliases as Record<string, unknown>)[workspacePath];
+  }
 }
 
 function ensureGitignoreEntry(workspacePath: string): void {
@@ -86,7 +103,8 @@ export function workspaceForFile(
 export function startAllWorkspaceServices(
   workspaces: string[],
   fileFilterSetter: (f: FileFilter) => void,
-  extraIgnorePatterns?: string[],
+  ignorePatterns?: string[],
+  filterOptions?: { ignorecase?: boolean },
 ): void {
   for (const ws of workspaces) {
     wsConfigMap.set(ws, loadWorkspaceConfig(ws));
@@ -94,7 +112,7 @@ export function startAllWorkspaceServices(
     watcher.watchWorkspace(ws);
     void wikilinkIndex.buildIndex(ws);
   }
-  fileFilterSetter(createFileFilter(extraIgnorePatterns));
+  fileFilterSetter(createFileFilter(ignorePatterns, filterOptions));
 }
 
 /**
@@ -103,12 +121,13 @@ export function startAllWorkspaceServices(
 export function startSingleWorkspaceServices(
   path: string,
   fileFilterSetter: (f: FileFilter) => void,
-  extraIgnorePatterns?: string[],
+  ignorePatterns?: string[],
+  filterOptions?: { ignorecase?: boolean },
 ): void {
   wsConfigMap.set(path, loadWorkspaceConfig(path));
   setThumbnailCacheDir(path);
   watcher.watchWorkspace(path);
-  fileFilterSetter(createFileFilter(extraIgnorePatterns));
+  fileFilterSetter(createFileFilter(ignorePatterns, filterOptions));
   void wikilinkIndex.buildIndex(path);
 }
 
@@ -344,6 +363,7 @@ export function registerWorkspaceHandlers(
 
     const removedPath = appConfig.workspaces[index]!;
     appConfig.workspaces.splice(index, 1);
+    removeWorkspaceAlias(appConfig, removedPath);
     saveConfig(appConfig);
     trackEvent("workspace_removed");
 
@@ -360,6 +380,7 @@ export function registerWorkspaceHandlers(
     }
 
     appConfig.workspaces.splice(index, 1);
+    removeWorkspaceAlias(appConfig, path);
     saveConfig(appConfig);
     trackEvent("workspace_removed");
 

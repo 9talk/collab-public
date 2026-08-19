@@ -129,7 +129,7 @@ export function uninstallSkill(id: AgentId): void {
 // -- plugin offered marker --
 
 function markerPath(): string {
-  return join(homedir(), ".collaborator", "canvas-plugin-offered");
+  return join(homedir(), ".collab", "canvas-plugin-offered");
 }
 
 export function hasOfferedPlugin(): boolean {
@@ -137,7 +137,7 @@ export function hasOfferedPlugin(): boolean {
 }
 
 export function markPluginOffered(): void {
-  const dir = join(homedir(), ".collaborator");
+  const dir = join(homedir(), ".collab");
   mkdirSync(dir, { recursive: true });
   writeFileSync(markerPath(), new Date().toISOString(), "utf-8");
 }
@@ -199,11 +199,7 @@ export function registerIntegrationsIpc(): void {
 
   // -- Claude sound settings IPC --
 
-  const SOUNDS_CONFIG_PATH = join(
-    homedir(),
-    ".collaborator",
-    "claude-sounds.json",
-  );
+  const SOUNDS_CONFIG_PATH = join(homedir(), ".collab", "claude-sounds.json");
 
   ipcMain.handle("integrations:get-claude-sounds", () => {
     try {
@@ -218,7 +214,7 @@ export function registerIntegrationsIpc(): void {
     "integrations:set-claude-sounds",
     (_event, sounds: Record<string, string>) => {
       try {
-        const dir = join(homedir(), ".collaborator");
+        const dir = join(homedir(), ".collab");
         mkdirSync(dir, { recursive: true });
         writeFileSync(
           SOUNDS_CONFIG_PATH,

@@ -36,6 +36,12 @@ electron/out/
 .superpowers/
 .crush/
 
+# Build artifacts
+/artifacts/
+/build/
+/index.js
+/src/bun/
+
 # Private — not published to the public repo
 # Back up these files separately when migrating machines
 .claude/

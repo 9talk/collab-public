@@ -4,7 +4,7 @@ Sound notifications are configured through the Collaborator settings UI.
 
 ## How it works
 
-- Sound settings are stored in `~/.collaborator/claude-sounds.json`
+- Sound settings are stored in `~/.collab/claude-sounds.json`
 - Each hook event maps to a sound file path
 - `claude-beep.sh` reads this config and plays the configured sound
 - If no sound file is configured for an event, nothing plays

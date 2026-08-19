@@ -13,7 +13,7 @@ try {
 }
 const VERSION = "0.1.0";
 const GRID = 20;
-const COLLAB_DIR = join(homedir(), ".collaborator");
+const COLLAB_DIR = join(homedir(), ".collab");
 const SOCKET_FILE = join(COLLAB_DIR, "socket-path");
 
 // --- helpers --------------------------------------------------------------

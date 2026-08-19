@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
-const BASE = join(homedir(), ".collaborator");
+const BASE = join(homedir(), ".collab");
 
 function normalizeWindowsPath(path: string): string {
   if (process.platform !== "win32") return path;
