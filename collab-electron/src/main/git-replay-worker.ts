@@ -4,7 +4,6 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import ignore from "ignore";
 import { CACHE_VERSION } from "@collab/shared/replay-types";
-import { getDefaultPatterns } from "./file-filter";
 import type {
   ReplayCacheData,
   ReplayCommit,
@@ -15,10 +14,14 @@ import type {
 
 const execFileAsync = promisify(execFile);
 
-let replayIgnore = ignore().add(getDefaultPatterns());
+let replayIgnore = ignore();
 
-async function loadWorkspaceIgnore(workspacePath: string): Promise<void> {
-  replayIgnore = ignore().add(getDefaultPatterns());
+async function loadWorkspaceIgnore(
+  workspacePath: string,
+  rules: string[],
+  ignorecase: boolean,
+): Promise<void> {
+  replayIgnore = ignore({ ignorecase }).add(rules);
   try {
     const gitignore = await readFile(
       join(workspacePath, ".gitignore"),
@@ -26,7 +29,7 @@ async function loadWorkspaceIgnore(workspacePath: string): Promise<void> {
     );
     replayIgnore.add(gitignore);
   } catch {
-    // No .gitignore — use defaults only
+    // No .gitignore — rely on the passed rules only
   }
 }
 
@@ -55,6 +58,8 @@ interface StartCommand {
   cmd: "start";
   workspacePath: string;
   cachePath: string;
+  ignoreRules: string[];
+  ignorecase: boolean;
 }
 
 interface StopCommand {
@@ -349,9 +354,11 @@ async function processCommit(
 async function computeReplay(
   workspacePath: string,
   cachePath: string,
+  ignoreRules: string[],
+  ignorecase: boolean,
 ): Promise<void> {
   aborted = false;
-  await loadWorkspaceIgnore(workspacePath);
+  await loadWorkspaceIgnore(workspacePath, ignoreRules, ignorecase);
 
   // Try loading cache
   const cached = await readCache(cachePath);
@@ -559,7 +566,12 @@ process.parentPort.on("message", ({ data }: { data: WorkerCommand }) => {
       if (prev) await prev;
       currentWorkspace = data.workspacePath;
       aborted = false;
-      await computeReplay(data.workspacePath, data.cachePath);
+      await computeReplay(
+        data.workspacePath,
+        data.cachePath,
+        data.ignoreRules,
+        data.ignorecase,
+      );
       currentWorkspace = null;
       runningReplay = null;
     })();

@@ -2,6 +2,8 @@ import { utilityProcess, type UtilityProcess } from "electron";
 import { accessSync } from "node:fs";
 import { join } from "node:path";
 import type { ReplayMessage } from "@collab/shared/replay-types";
+import { loadConfig } from "./config";
+import { resolveIgnoreCase, resolveIgnorePatterns } from "./file-filter";
 
 type NotifyFn = (msg: ReplayMessage) => void;
 
@@ -56,7 +58,15 @@ export function startReplay(workspacePath: string): boolean {
   restartCount = 0;
   if (!worker) startWorker();
   const cachePath = join(workspacePath, ".collaborator", "replay-cache.json");
-  worker?.postMessage({ cmd: "start", workspacePath, cachePath });
+  const ui = loadConfig().ui;
+  const ignoreRules = resolveIgnorePatterns(ui);
+  worker?.postMessage({
+    cmd: "start",
+    workspacePath,
+    cachePath,
+    ignoreRules,
+    ignorecase: resolveIgnoreCase(ui),
+  });
   return true;
 }
 

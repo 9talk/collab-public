@@ -1,5 +1,12 @@
 import { describe, test, expect } from "bun:test";
-import { hasTextBom, isBinarySample, getDefaultPatterns } from "./file-filter";
+import { DEFAULT_IGNORE_PATTERNS } from "@collab/shared/ignore-patterns";
+import {
+  createFileFilter,
+  hasTextBom,
+  isBinarySample,
+  resolveIgnoreCase,
+  resolveIgnorePatterns,
+} from "./file-filter";
 
 describe("hasTextBom", () => {
   test("detects UTF-8 BOM", () => {
@@ -61,19 +68,81 @@ describe("isBinarySample", () => {
   });
 });
 
-describe("getDefaultPatterns", () => {
-  test("returns a copy (not the original array)", () => {
-    const a = getDefaultPatterns();
-    const b = getDefaultPatterns();
-    expect(a).toEqual(b);
-    a.push("extra");
-    expect(getDefaultPatterns()).not.toContain("extra");
+describe("createFileFilter", () => {
+  test("ignores only the patterns passed in", () => {
+    const filter = createFileFilter(["node_modules"]);
+    expect(filter.isIgnored("node_modules/")).toBe(true);
+    expect(filter.isIgnored("src/node_modules/")).toBe(true);
+    expect(filter.isIgnored("src/logs/")).toBe(false);
+    expect(filter.isIgnored("docs/")).toBe(false);
   });
 
-  test("includes common ignore patterns", () => {
-    const patterns = getDefaultPatterns();
-    expect(patterns).toContain(".git");
-    expect(patterns).toContain("node_modules");
-    expect(patterns).toContain(".DS_Store");
+  test("empty pattern list ignores nothing", () => {
+    const filter = createFileFilter([]);
+    expect(filter.isIgnored("src/anything/")).toBe(false);
+    expect(filter.isIgnored("node_modules/")).toBe(false);
+  });
+
+  test("no patterns means nothing is ignored", () => {
+    const filter = createFileFilter();
+    expect(filter.isIgnored("logs/")).toBe(false);
+  });
+
+  test("case-insensitive matching follows ignore library defaults", () => {
+    const filter = createFileFilter(["Logs"]);
+    expect(filter.isIgnored("logs/")).toBe(true);
+    expect(filter.isIgnored("Logs/")).toBe(true);
+  });
+
+  test("honors ignorecase: false for exact matching", () => {
+    const filter = createFileFilter(["Logs"], { ignorecase: false });
+    expect(filter.isIgnored("Logs/")).toBe(true);
+    expect(filter.isIgnored("logs/")).toBe(false);
+  });
+
+  test("honors ignorecase: true explicitly", () => {
+    const filter = createFileFilter(["Logs"], { ignorecase: true });
+    expect(filter.isIgnored("logs/")).toBe(true);
+  });
+});
+
+describe("resolveIgnoreCase", () => {
+  test("defaults to true when config has no value", () => {
+    expect(resolveIgnoreCase({})).toBe(true);
+  });
+
+  test("returns false when explicitly disabled", () => {
+    expect(resolveIgnoreCase({ ignoreCase: false })).toBe(false);
+  });
+
+  test("returns true when enabled", () => {
+    expect(resolveIgnoreCase({ ignoreCase: true })).toBe(true);
+  });
+
+  test("treats non-boolean values as the default", () => {
+    expect(resolveIgnoreCase({ ignoreCase: "yes" })).toBe(true);
+  });
+});
+
+describe("resolveIgnorePatterns", () => {
+  test("falls back to shared defaults when config has no ignoredFiles", () => {
+    expect(resolveIgnorePatterns({})).toEqual(DEFAULT_IGNORE_PATTERNS);
+  });
+
+  test("uses configured patterns when present", () => {
+    const patterns = ["node_modules", "*.log"];
+    expect(resolveIgnorePatterns({ ignoredFiles: patterns })).toEqual(patterns);
+  });
+
+  test("returns a fresh copy, not the shared default array", () => {
+    const a = resolveIgnorePatterns({});
+    a.push("extra");
+    expect(resolveIgnorePatterns({})).not.toContain("extra");
+  });
+
+  test("falls back when ignoredFiles is not an array", () => {
+    expect(resolveIgnorePatterns({ ignoredFiles: "node_modules" })).toEqual(
+      DEFAULT_IGNORE_PATTERNS,
+    );
   });
 });

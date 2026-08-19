@@ -529,7 +529,10 @@ ipcMain.handle("pref:set", (_event, key: string, value: unknown) => {
     updateManager.setAutoCheckEnabled(value);
   }
   if (key === "ignoredFiles" && Array.isArray(value)) {
-    rebuildFileFilter(value as string[]);
+    rebuildFileFilter();
+  }
+  if (key === "ignoreCase") {
+    rebuildFileFilter();
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("pref:changed", key, value);
@@ -537,7 +540,8 @@ ipcMain.handle("pref:set", (_event, key: string, value: unknown) => {
       key === "externalEditorFileTypes" ||
       key === "useExternalEditor" ||
       key === "externalEditor" ||
-      key === "ignoredFiles"
+      key === "ignoredFiles" ||
+      key === "ignoreCase"
     ) {
       mainWindow.webContents.send(
         "shell:forward",

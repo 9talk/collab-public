@@ -6,7 +6,7 @@ import {
   initWorkspaceFiles,
   startSingleWorkspaceServices,
 } from "./ipc-workspace";
-import { createFileFilter } from "./file-filter";
+import { resolveIgnoreCase, resolveIgnorePatterns } from "./file-filter";
 import type { FileFilter } from "./file-filter";
 import { trackEvent } from "./analytics";
 
@@ -57,15 +57,14 @@ export function registerWorkspaceRpc(ctx: WorkspaceRpcContext): void {
       saveConfig(ctx.appConfig);
       trackEvent("workspace_added", { is_new: isNew });
 
-      const userIgnored = Array.isArray(ctx.appConfig.ui.ignoredFiles)
-        ? (ctx.appConfig.ui.ignoredFiles as string[])
-        : [];
+      const userIgnored = resolveIgnorePatterns(ctx.appConfig.ui);
       startSingleWorkspaceServices(
         chosen,
         (f) => {
           ctx.fileFilterRef.current = f;
         },
         userIgnored,
+        { ignorecase: resolveIgnoreCase(ctx.appConfig.ui) },
       );
       ctx.forwardToWebview("nav", "workspace-added", chosen);
 

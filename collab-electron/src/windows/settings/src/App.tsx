@@ -18,9 +18,12 @@ import { useTranslation } from "./translations";
 import type { SupportedLocale, TranslationKey } from "./translations";
 import {
   getDefaultFileTypeGroups,
-  DEFAULT_IGNORED_PATTERNS,
   type FileTypeGroup,
 } from "@collab/shared/external-app";
+import {
+  DEFAULT_IGNORE_PATTERNS,
+  filterIgnorePatterns,
+} from "@collab/shared/ignore-patterns";
 
 type ThemeMode = "light" | "dark" | "system";
 
@@ -1277,6 +1280,8 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
   );
   const [ignoredPatterns, setIgnoredPatterns] = useState<string[]>([]);
   const [newIgnore, setNewIgnore] = useState("");
+  const [ignoreFilter, setIgnoreFilter] = useState("");
+  const [ignoreCase, setIgnoreCase] = useState(true);
   const [expandedName, setExpandedName] = useState<string | null>(null);
   const [newPattern, setNewPattern] = useState("");
   const [newTypeName, setNewTypeName] = useState("");
@@ -1333,9 +1338,15 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
         if (Array.isArray(v) && (v as Array<unknown>).length > 0) {
           setIgnoredPatterns(v as string[]);
         } else {
-          setIgnoredPatterns(DEFAULT_IGNORED_PATTERNS);
-          api.setPref("ignoredFiles", DEFAULT_IGNORED_PATTERNS);
+          setIgnoredPatterns(DEFAULT_IGNORE_PATTERNS);
+          api.setPref("ignoredFiles", DEFAULT_IGNORE_PATTERNS);
         }
+      })
+      .catch(() => {});
+    api
+      .getPref("ignoreCase")
+      .then((v) => {
+        if (typeof v === "boolean") setIgnoreCase(v);
       })
       .catch(() => {});
     api
@@ -1363,6 +1374,11 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
   async function saveIgnoredPatterns(patterns: string[]) {
     setIgnoredPatterns(patterns);
     await api.setPref("ignoredFiles", patterns);
+  }
+
+  async function saveIgnoreCase(value: boolean) {
+    setIgnoreCase(value);
+    await api.setPref("ignoreCase", value);
   }
 
   function updateGroupEditor(name: string, editorId: string) {
@@ -1413,8 +1429,8 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
     saveIgnoredPatterns([...ignoredPatterns, pattern]);
   }
 
-  function deleteIgnoredPattern(idx: number) {
-    saveIgnoredPatterns(ignoredPatterns.filter((_, i) => i !== idx));
+  function deleteIgnoredPattern(pattern: string) {
+    saveIgnoredPatterns(ignoredPatterns.filter((p) => p !== pattern));
   }
 
   return (
@@ -1438,13 +1454,27 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
           <button
             type="button"
             onClick={() => {
-              saveIgnoredPatterns([...DEFAULT_IGNORED_PATTERNS]);
+              saveIgnoredPatterns([...DEFAULT_IGNORE_PATTERNS]);
             }}
             className="rounded-md border border-border px-3 py-1 text-sm cursor-pointer flex-shrink-0"
             style={{ color: "var(--foreground)" }}
           >
             {t("files.reset")}
           </button>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium">{t("files.ignoreCase")}</p>
+            <p className="text-xs text-muted-foreground">
+              {t("files.ignoreCaseDesc")}
+            </p>
+          </div>
+          <ToggleSwitch
+            checked={ignoreCase}
+            onChange={(v) => {
+              void saveIgnoreCase(v);
+            }}
+          />
         </div>
         <div className="flex gap-2">
           <input
@@ -1468,37 +1498,65 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
           </button>
         </div>
         {ignoredPatterns.length > 0 && (
-          <div
-            className="flex flex-wrap gap-1 overflow-auto"
-            style={{ maxHeight: "4.5rem" }}
-          >
-            {ignoredPatterns.map((pat, i) => (
-              <span
-                key={i}
-                className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs"
-                style={{
-                  backgroundColor:
-                    "color-mix(in srgb, var(--foreground) 6%, transparent)",
-                  color: "var(--foreground)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                <span className="font-mono">{pat}</span>
-                <button
-                  type="button"
-                  className="cursor-pointer"
-                  style={{
-                    color: "var(--muted-foreground)",
-                    fontSize: "12px",
-                    lineHeight: 1,
-                  }}
-                  onClick={() => deleteIgnoredPattern(i)}
+          <>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={ignoreFilter}
+                placeholder={t("files.searchIgnoredFiles")}
+                onChange={(e) => setIgnoreFilter(e.target.value)}
+                className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                style={{ color: "var(--foreground)" }}
+              />
+              {ignoreFilter.trim() !== "" && (
+                <span
+                  className="text-xs shrink-0 tabular-nums"
+                  style={{ color: "var(--muted-foreground)" }}
                 >
-                  &times;
-                </button>
-              </span>
-            ))}
-          </div>
+                  {filterIgnorePatterns(ignoredPatterns, ignoreFilter).length}/
+                  {ignoredPatterns.length}
+                </span>
+              )}
+            </div>
+            {filterIgnorePatterns(ignoredPatterns, ignoreFilter).map(
+              (pat, i) => (
+                <span
+                  key={`${pat}-${i}`}
+                  className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs"
+                  style={{
+                    backgroundColor:
+                      "color-mix(in srgb, var(--foreground) 6%, transparent)",
+                    color: "var(--foreground)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <span className="font-mono">{pat}</span>
+                  <button
+                    type="button"
+                    className="cursor-pointer"
+                    style={{
+                      color: "var(--muted-foreground)",
+                      fontSize: "12px",
+                      lineHeight: 1,
+                    }}
+                    onClick={() => deleteIgnoredPattern(pat)}
+                  >
+                    &times;
+                  </button>
+                </span>
+              ),
+            )}
+            {ignoreFilter.trim() !== "" &&
+              filterIgnorePatterns(ignoredPatterns, ignoreFilter).length ===
+                0 && (
+                <p
+                  className="text-xs"
+                  style={{ color: "var(--muted-foreground)" }}
+                >
+                  {t("files.noIgnoredMatch")}
+                </p>
+              )}
+          </>
         )}
       </div>
 

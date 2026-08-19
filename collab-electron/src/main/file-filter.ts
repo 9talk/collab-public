@@ -1,106 +1,20 @@
 import ignore, { type Ignore } from "ignore";
 import { open } from "node:fs/promises";
+import { DEFAULT_IGNORE_PATTERNS } from "@collab/shared/ignore-patterns";
 
 export { IMAGE_EXTENSIONS, isImageFile } from "@collab/shared/image";
 export { isPdfFile } from "@collab/shared/pdf";
 
-const DEFAULT_PATTERNS: string[] = [
-  ".git",
-  "node_modules",
-  "bower_components",
-  "dist",
-  "build",
-  "out",
-  ".next",
-  ".cache",
-  ".venv",
-  "venv",
-  "site-packages",
-  "__pycache__",
-  ".DS_Store",
-  "Thumbs.db",
-  "~*",
-  "*.min.js",
-  "*.min.css",
-  "*.map",
-  "*.lock",
-  "package-lock.json",
-  "bun.lockb",
-  "yarn.lock",
-  "pnpm-lock.yaml",
-  // Binary / compiled files
-  "*.dylib",
-  "*.so",
-  "*.dll",
-  "*.exe",
-  "*.o",
-  "*.a",
-  "*.lib",
-  "*.class",
-  "*.pyc",
-  "*.pyo",
-  "*.node",
-  "*.wasm",
-  // Images (only non-workspace icon formats)
-  "*.svg",
-  "*.ico",
-  "*.icns",
-  // Audio / video
-  "*.mp3",
-  "*.mp4",
-  "*.wav",
-  "*.mov",
-  "*.webm",
-  // Unity / C#
-  "*.meta",
-  "*.unity",
-  "*.prefab",
-  "*.mat",
-  "*.asset",
-  "*.shader",
-  "*.cginc",
-  "*.asmdef",
-  "*.asmref",
-  "*.physicMaterial",
-  "*.physicsMaterial2D",
-  "*.controller",
-  "*.overrideController",
-  "*.mask",
-  "*.lighting",
-  "*.terrainlayer",
-  "Library",
-  "Temp",
-  "Obj",
-  "Logs",
-  "UserSettings",
-  "*.pdb",
-  // Fonts
-  "*.ttf",
-  "*.otf",
-  "*.woff",
-  "*.woff2",
-  // Design files
-  "*.psd",
-  "*.psb",
-  // 3D models
-  "*.fbx",
-  "*.obj",
-  "*.blend",
-  // Locale / resource packs
-  "*.pak",
-  // Bundled frameworks (e.g. Vuplex Chromium)
-  "*.bundle",
-  "*.framework",
-  // Archives
-  "*.zip",
-  "*.tar",
-  "*.gz",
-  "*.rar",
-  "*.7z",
-  // Java / Android
-  "*.jar",
-  "*.aar",
-];
+export function resolveIgnorePatterns(ui: Record<string, unknown>): string[] {
+  if (Array.isArray(ui.ignoredFiles)) {
+    return ui.ignoredFiles as string[];
+  }
+  return [...DEFAULT_IGNORE_PATTERNS];
+}
+
+export function resolveIgnoreCase(ui: Record<string, unknown>): boolean {
+  return ui.ignoreCase !== false;
+}
 
 const BINARY_SAMPLE_SIZE = 8000;
 
@@ -174,14 +88,13 @@ async function detectBinaryFile(fullPath: string): Promise<boolean> {
   }
 }
 
-export function getDefaultPatterns(): string[] {
-  return [...DEFAULT_PATTERNS];
-}
-
-export function createFileFilter(extraPatterns?: string[]): FileFilter {
-  const ig = ignore().add(DEFAULT_PATTERNS);
-  if (extraPatterns && extraPatterns.length > 0) {
-    ig.add(extraPatterns);
+export function createFileFilter(
+  patterns?: string[],
+  options?: { ignorecase?: boolean },
+): FileFilter {
+  const ig = ignore(options);
+  if (patterns && patterns.length > 0) {
+    ig.add(patterns);
   }
   const binaryCache = new Map<string, Promise<boolean>>();
 
@@ -207,4 +120,12 @@ export function createFileFilter(extraPatterns?: string[]): FileFilter {
     },
     ignoreInstance: ig,
   };
+}
+
+export function createConfiguredFileFilter(
+  ui: Record<string, unknown>,
+): FileFilter {
+  return createFileFilter(resolveIgnorePatterns(ui), {
+    ignorecase: resolveIgnoreCase(ui),
+  });
 }

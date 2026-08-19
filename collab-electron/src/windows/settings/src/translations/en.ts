@@ -155,7 +155,12 @@ export const en = {
   "files.reset": "Reset",
   "files.ignoredFiles": "Ignored Files and Folders",
   "files.ignoredFilesDesc":
-    "Patterns matching files and folders to hide from the Files view.",
+    "Patterns matching files and folders to hide in the Files view, search, and analysis.",
+  "files.searchIgnoredFiles": "Search patterns...",
+  "files.noIgnoredMatch": "No matching patterns",
+  "files.ignoreCase": "Ignore case",
+  "files.ignoreCaseDesc":
+    'When enabled, patterns match regardless of case (e.g. "Logs" hides "logs").',
 
   // Misc
   esc: "esc",

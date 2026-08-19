@@ -152,7 +152,13 @@ export const zh: Record<TranslationKey, string> = {
   "files.delete": "删除",
   "files.reset": "重置",
   "files.ignoredFiles": "忽略的文件和文件夹",
-  "files.ignoredFilesDesc": "在 Files 视图中隐藏与此模式匹配的文件和文件夹。",
+  "files.ignoredFilesDesc":
+    "在 Files 视图、搜索和分析中隐藏匹配的文件和文件夹。",
+  "files.searchIgnoredFiles": "搜索忽略规则...",
+  "files.noIgnoredMatch": "没有匹配的规则",
+  "files.ignoreCase": "忽略大小写",
+  "files.ignoreCaseDesc":
+    '启用时规则不限大小写匹配（如 "Logs" 会隐藏 "logs"）。',
 
   // Misc
   esc: "esc",

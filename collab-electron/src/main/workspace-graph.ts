@@ -14,7 +14,8 @@ import {
   type IResolveOptions,
 } from "dependency-cruiser";
 import extractTSConfig from "dependency-cruiser/config-utl/extract-ts-config";
-import { createFileFilter, type FileFilter } from "./file-filter";
+import { createConfiguredFileFilter, type FileFilter } from "./file-filter";
+import { loadConfig } from "./config";
 import { shouldIncludeEntryWithContent } from "./files";
 import {
   buildPythonImportLinks,
@@ -95,7 +96,7 @@ export async function buildWorkspaceGraph(
   workspacePath: string,
   filter: FileFilter | null = null,
 ): Promise<WorkspaceGraphData> {
-  const activeFilter = filter ?? createFileFilter();
+  const activeFilter = filter ?? createConfiguredFileFilter(loadConfig().ui);
   const files = await collectFiles(workspacePath, workspacePath, activeFilter);
 
   const mdFiles = files.filter(

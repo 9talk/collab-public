@@ -76,22 +76,6 @@ export interface FileTypeGroup {
   patterns: string[];
 }
 
-export const DEFAULT_IGNORED_PATTERNS = [
-  "node_modules",
-  ".git",
-  "dist",
-  "*.log",
-  ".DS_Store",
-  "__pycache__",
-  ".next",
-  "build",
-  "out",
-  ".cache",
-  ".idea",
-  ".vscode",
-  ".collaborator",
-];
-
 const SYSTEM_APP_PATTERNS = EXTERNAL_APP_EXTENSIONS_LIST.map(
   (ext) => `*${ext}`,
 );

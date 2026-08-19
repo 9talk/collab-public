@@ -1,6 +1,10 @@
 import { type BrowserWindow } from "electron";
 import type { FileFilter } from "./file-filter";
-import { createFileFilter } from "./file-filter";
+import {
+  createConfiguredFileFilter,
+  resolveIgnoreCase,
+  resolveIgnorePatterns,
+} from "./file-filter";
 import type { AppConfig } from "./config";
 import { invalidateImageCache } from "./image-service";
 import * as watcher from "./watcher";
@@ -44,15 +48,14 @@ export function registerIpcHandlers(config: AppConfig): void {
   appConfig = config;
 
   if (appConfig.workspaces.length > 0) {
-    const userIgnored = Array.isArray(appConfig.ui.ignoredFiles)
-      ? (appConfig.ui.ignoredFiles as string[])
-      : [];
+    const userIgnored = resolveIgnorePatterns(appConfig.ui);
     startAllWorkspaceServices(
       appConfig.workspaces,
       (f) => {
         fileFilterRef.current = f;
       },
       userIgnored,
+      { ignorecase: resolveIgnoreCase(appConfig.ui) },
     );
   }
 
@@ -135,6 +138,6 @@ export function registerIpcHandlers(config: AppConfig): void {
   registerWorkspaceRpc({ appConfig, forwardToWebview, fileFilterRef });
 }
 
-export function rebuildFileFilter(userPatterns: string[]): void {
-  fileFilterRef.current = createFileFilter(userPatterns);
+export function rebuildFileFilter(): void {
+  fileFilterRef.current = createConfiguredFileFilter(appConfig.ui);
 }
