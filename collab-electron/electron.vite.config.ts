@@ -78,6 +78,10 @@ export default defineConfig({
             "src/windows/terminal-tile/index.html",
           ),
           "tile-list": resolve(__dirname, "src/windows/tile-list/index.html"),
+          "permission-check": resolve(
+            __dirname,
+            "src/windows/permission-check/index.html",
+          ),
           todos: resolve(__dirname, "src/windows/todos/index.html"),
         },
       },

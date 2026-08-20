@@ -62,6 +62,11 @@ import {
 import { workspaceForFile } from "./ipc-workspace";
 import { readSessionMeta } from "./session-meta";
 import * as canvasPersistence from "./canvas-persistence";
+import {
+  checkPermissions,
+  openPermissionSettings,
+  type PermissionKind,
+} from "./mac-permissions";
 
 // macOS apps launched from Finder don't inherit the user's shell
 // LANG, so child processes default to ASCII.
@@ -497,6 +502,61 @@ function createWindow(): void {
   registerCanvasRpc(mainWindow);
 }
 
+// -- macOS permission check window ------------------------------------
+
+let permissionWindow: BrowserWindow | null = null;
+
+function showPermissionWindow(): void {
+  if (permissionWindow && !permissionWindow.isDestroyed()) {
+    permissionWindow.focus();
+    return;
+  }
+
+  permissionWindow = new BrowserWindow({
+    width: 420,
+    height: 460,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    title: "Permissions",
+    webPreferences: {
+      preload: getPreloadPath("universal"),
+      contextIsolation: true,
+      sandbox: true,
+    },
+  });
+
+  if (process.platform === "darwin") {
+    permissionWindow.setWindowButtonVisibility?.(false);
+  }
+  permissionWindow.setMenuBarVisibility(false);
+  permissionWindow.loadURL(getRendererURL("permission-check"));
+  permissionWindow.on("closed", () => {
+    permissionWindow = null;
+  });
+}
+
+function closePermissionWindow(): void {
+  if (permissionWindow && !permissionWindow.isDestroyed()) {
+    permissionWindow.close();
+  }
+}
+
+function maybeCheckPermissionsOnLaunch(): void {
+  if (process.platform !== "darwin" || !app.isPackaged) {
+    console.log("[permissions] skipped:", process.platform, app.isPackaged);
+    return;
+  }
+  const statuses = checkPermissions();
+  console.log("[permissions] statuses:", JSON.stringify(statuses));
+  const anyDenied = Object.values(statuses).some((s) => s === "denied");
+  if (!anyDenied) return;
+  console.log("[permissions] showing window");
+  showPermissionWindow();
+}
+
 ipcMain.handle("analytics:get-device-id", () => getDeviceId());
 
 ipcMain.on("analytics:track-event", (_event, name, properties) => {
@@ -836,6 +896,11 @@ app.whenReady().then(async () => {
   registerClaudeIpc();
   registerClaudeEditsRpc();
   setupUpdateIPC();
+  ipcMain.handle("permissions:check", () => checkPermissions());
+  ipcMain.handle("permissions:open-settings", (_event, kind: string) => {
+    openPermissionSettings(kind as PermissionKind);
+  });
+  ipcMain.on("permissions:close", closePermissionWindow);
   const autoCheckUpdates = getPref(config, "autoCheckUpdates") as
     | boolean
     | null;
@@ -853,6 +918,7 @@ app.whenReady().then(async () => {
   buildAppMenu();
   createWindow();
   registerToggleShortcuts(mainWindow!);
+  setTimeout(maybeCheckPermissionsOnLaunch, 1500);
 
   // Register F1 as a global shortcut: bring app to front when in background,
   // dismiss the first notification when already focused.

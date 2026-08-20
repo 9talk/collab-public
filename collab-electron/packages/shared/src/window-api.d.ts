@@ -303,6 +303,11 @@ export interface CollabApi {
   updateInstall: () => void;
   onUpdateStatus: (cb: (state: UpdateState) => void) => Unsubscribe;
 
+  // macOS permissions
+  checkPermissions: () => Promise<Record<string, string>>;
+  openPermissionSettings: (kind: string) => Promise<void>;
+  closePermissionCheck: () => void;
+
   // Agent activity
   onAgentEvent: (cb: (event: AgentEvent) => void) => Unsubscribe;
   focusAgentSession: (sessionId: string) => Promise<void>;

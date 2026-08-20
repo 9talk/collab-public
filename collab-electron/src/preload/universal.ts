@@ -445,6 +445,12 @@ contextBridge.exposeInMainWorld("api", {
     return () => ipcRenderer.removeListener("update:status", handler);
   },
 
+  // macOS permissions
+  checkPermissions: () => ipcRenderer.invoke("permissions:check"),
+  openPermissionSettings: (kind: string) =>
+    ipcRenderer.invoke("permissions:open-settings", kind),
+  closePermissionCheck: () => ipcRenderer.send("permissions:close"),
+
   // Agent activity
   onAgentEvent: (cb: AgentEventCb) => {
     agentEventListeners.add(cb);
