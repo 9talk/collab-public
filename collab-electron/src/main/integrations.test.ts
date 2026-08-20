@@ -203,7 +203,7 @@ describe("getAgentStatuses", () => {
 });
 
 describe("applyClaudeDeepIntegration", () => {
-  const settingsPath = () => join(FAKE_HOME, ".claude", "settings.local.json");
+  const settingsPath = () => join(FAKE_HOME, ".claude", "settings.json");
 
   test("enable writes extraKnownMarketplaces and enabledPlugins", () => {
     const result = applyClaudeDeepIntegration(true);

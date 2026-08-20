@@ -21,6 +21,9 @@ export const zh: Record<TranslationKey, string> = {
   "claude.enable": "开启深度集成",
   "claude.timeout": "会话超时（天）",
   "claude.command": "Claude CLI 命令",
+  "claude.marketplaceDesc":
+    "若使用 cc-switch 等会接管 settings.json 的工具，自动写入可能被覆盖：",
+  "claude.pluginGuide": "参阅手动安装指引 →",
   "claude.copy": "复制",
   "claude.soundEnable": "声音设置",
   "claude.soundEvent.UserPromptSubmit": "用户提交提示",

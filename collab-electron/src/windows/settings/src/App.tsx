@@ -1984,6 +1984,27 @@ function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
         />
       </div>
 
+      {enabled && (
+        <div className="space-y-2">
+          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+            {t("claude.marketplaceDesc")}
+          </p>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              api.openExternal(
+                "https://github.com/9talk/collab-public/blob/main/CLAUDE-CODE-PLUGIN.md",
+              );
+            }}
+            className="text-xs underline cursor-pointer"
+            style={{ color: "var(--foreground)" }}
+          >
+            {t("claude.pluginGuide")}
+          </a>
+        </div>
+      )}
+
       {/* Sound settings */}
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">{t("claude.soundEnable")}</p>

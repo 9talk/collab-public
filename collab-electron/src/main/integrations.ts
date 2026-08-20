@@ -70,9 +70,9 @@ export function skillSourceDir(): string {
 // -- plugin source --
 // Plugin is loaded via `claude --plugin-dir <path>`, no install/copy needed.
 
-// -- deep integration: Claude Code settings.local.json --
+// -- deep integration: Claude Code settings.json --
 
-const CLAUDE_SETTINGS_LOCAL = join(homedir(), ".claude", "settings.local.json");
+const CLAUDE_SETTINGS_FILE = join(homedir(), ".claude", "settings.json");
 
 export interface DeepIntegrationResult {
   ok: boolean;
@@ -89,7 +89,7 @@ function claudePluginPath(): string {
 }
 
 /**
- * 开启/关闭深度集成时，向 ~/.claude/settings.local.json 注册或移除
+ * 开启/关闭深度集成时，向 ~/.claude/settings.json 注册或移除
  * Collaborator 本地插件（extraKnownMarketplaces + enabledPlugins）。
  * 只增删 collaborator 相关段，保留文件里其它配置；文件变空则删除。
  */
@@ -99,7 +99,7 @@ export function applyClaudeDeepIntegration(
   try {
     let data: Record<string, unknown> = {};
     try {
-      const raw = readFileSync(CLAUDE_SETTINGS_LOCAL, "utf-8");
+      const raw = readFileSync(CLAUDE_SETTINGS_FILE, "utf-8");
       const parsed = JSON.parse(raw) as unknown;
       if (
         typeof parsed === "object" &&
@@ -162,24 +162,21 @@ export function applyClaudeDeepIntegration(
     }
 
     if (Object.keys(data).length === 0) {
-      if (existsSync(CLAUDE_SETTINGS_LOCAL)) {
-        rmSync(CLAUDE_SETTINGS_LOCAL);
+      if (existsSync(CLAUDE_SETTINGS_FILE)) {
+        rmSync(CLAUDE_SETTINGS_FILE);
       }
       return { ok: true };
     }
 
-    mkdirSync(dirname(CLAUDE_SETTINGS_LOCAL), { recursive: true });
+    mkdirSync(dirname(CLAUDE_SETTINGS_FILE), { recursive: true });
     atomicWriteFileSync(
-      CLAUDE_SETTINGS_LOCAL,
+      CLAUDE_SETTINGS_FILE,
       JSON.stringify(data, null, 2) + "\n",
     );
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(
-      "[integrations] Failed to update Claude settings.local.json:",
-      msg,
-    );
+    console.error("[integrations] Failed to update Claude settings.json:", msg);
     return { ok: false, error: msg };
   }
 }

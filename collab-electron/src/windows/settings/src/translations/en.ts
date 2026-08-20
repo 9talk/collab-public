@@ -19,6 +19,9 @@ export const en = {
   "claude.enable": "Enable deep integration",
   "claude.timeout": "Session timeout (days)",
   "claude.command": "Claude CLI command",
+  "claude.marketplaceDesc":
+    "If you use a tool like cc-switch that manages settings.json, automatic writes may be overwritten:",
+  "claude.pluginGuide": "See manual installation guide →",
   "claude.copy": "Copy",
   "claude.soundEnable": "Sound settings",
   "claude.soundEvent.UserPromptSubmit": "User prompt submit",
