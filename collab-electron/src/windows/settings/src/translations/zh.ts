@@ -77,7 +77,8 @@ export const zh: Record<TranslationKey, string> = {
   "terminal.tileWidth": "宽度",
   "terminal.tileHeight": "高度",
   "terminal.scrollback": "回滚行数",
-  "terminal.scrollbackDesc": "终端滚动缓冲区保留的最大行数，实时生效。",
+  "terminal.scrollbackDesc":
+    "终端滚动缓冲区保留的最大行数（1000-200000），失焦或回车后生效，非法输入会自动还原。",
   "terminal.presets": "预设尺寸",
   "terminal.presets.width": "宽度",
   "terminal.presets.height": "高度",

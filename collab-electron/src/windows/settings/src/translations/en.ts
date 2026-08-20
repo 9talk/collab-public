@@ -78,7 +78,7 @@ export const en = {
   "terminal.tileHeight": "Height",
   "terminal.scrollback": "Scrollback lines",
   "terminal.scrollbackDesc":
-    "Max rows retained in the terminal scrollback buffer. Applies immediately.",
+    "Max rows retained in the terminal scrollback buffer (1000-200000). Applies on blur or Enter; invalid input is reverted.",
   "terminal.presets": "Preset sizes",
   "terminal.presets.width": "Width",
   "terminal.presets.height": "Height",

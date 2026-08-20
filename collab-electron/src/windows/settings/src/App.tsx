@@ -534,6 +534,8 @@ function MacTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
   const [tileWidth, setTileWidth] = useState(1196);
   const [tileHeight, setTileHeight] = useState(739);
   const [scrollback, setScrollback] = useState(200000);
+  // 输入框文本态:保存前不直接写入配置,避免中间态(清空/不完整数字)污染
+  const [scrollbackText, setScrollbackText] = useState("200000");
 
   useEffect(() => {
     api
@@ -549,7 +551,10 @@ function MacTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
     api
       .getPref("terminalScrollback")
       .then((v) => {
-        if (typeof v === "number") setScrollback(v);
+        if (typeof v === "number") {
+          setScrollback(v);
+          setScrollbackText(String(v));
+        }
       })
       .catch(() => {});
   }, []);
@@ -561,9 +566,27 @@ function MacTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
   }
 
   async function saveScrollback(value: number) {
+    if (!Number.isInteger(value) || value < 1000 || value > 200000) {
+      return;
+    }
     setScrollback(value);
+    setScrollbackText(String(value));
     await api.setPref("terminalScrollback", value);
   }
+
+  // 失焦/回车时提交:非法输入(非数字、越界)还原为已保存值
+  const commitScrollback = () => {
+    const v = parseInt(scrollbackText, 10);
+    if (!Number.isInteger(v) || v < 1000 || v > 200000) {
+      setScrollbackText(String(scrollback));
+      return;
+    }
+    void saveScrollback(v);
+  };
+
+  const handleScrollbackChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setScrollbackText(e.target.value.replace(/\D/g, "").slice(0, 8));
+  };
 
   return (
     <div className="space-y-6 p-6">
@@ -696,15 +719,18 @@ function MacTerminalPane({ t }: { t: (key: TranslationKey) => string }) {
         </div>
         <div className="flex items-center gap-2">
           <input
-            type="number"
-            min={1000}
-            max={1000000}
-            step={10000}
-            value={scrollback}
-            onChange={(e) => {
-              const v = parseInt(e.target.value, 10) || 200000;
-              void saveScrollback(v);
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={scrollbackText}
+            onChange={handleScrollbackChange}
+            onBlur={commitScrollback}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                (e.target as HTMLInputElement).blur();
+              }
             }}
+            placeholder="1000-200000"
             className="w-28 rounded-md border border-border bg-background px-2 py-1 text-sm text-right"
             style={{ color: "var(--foreground)" }}
           />
