@@ -58,6 +58,10 @@
           {
             "command": "bash -c 'collab-canvas terminal clear \"$COLLAB_TILE_ID\"' 2>/dev/null || true",
             "type": "command"
+          },
+          {
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/claude-beep.sh\" \"SessionEnd\"'",
+            "type": "command"
           }
         ],
         "matcher": "clear"
@@ -67,18 +71,51 @@
       {
         "hooks": [
           {
-            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/update-mcp-project-path.sh\" \"$(pwd)\"'",
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/claude-beep.sh\" \"SessionStart\"'",
             "type": "command"
           }
         ],
         "matcher": ""
       }
     ],
-    "Setup": [
+    "PreToolUse": [
       {
         "hooks": [
           {
-            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/claude-beep.sh\" \"Setup\"'",
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/claude-beep.sh\" \"PreToolUse\"'",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/claude-beep.sh\" \"PostToolUseFailure\"'",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/claude-beep.sh\" \"SubagentStart\"'",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/claude-beep.sh\" \"SubagentStop\"'",
             "type": "command"
           }
         ],

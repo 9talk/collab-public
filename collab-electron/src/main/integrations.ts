@@ -1,4 +1,4 @@
-import { app, ipcMain, dialog } from "electron";
+import { app, ipcMain } from "electron";
 import {
   existsSync,
   mkdirSync,
@@ -7,8 +7,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { execSync } from "node:child_process";
+import { atomicWriteFileSync } from "./files";
+import { DEFAULT_CLAUDE_SOUNDS } from "@collab/shared/claude-sounds";
 
 export type AgentId = "claude" | "codex" | "gemini";
 
@@ -67,6 +69,120 @@ export function skillSourceDir(): string {
 
 // -- plugin source --
 // Plugin is loaded via `claude --plugin-dir <path>`, no install/copy needed.
+
+// -- deep integration: Claude Code settings.local.json --
+
+const CLAUDE_SETTINGS_LOCAL = join(homedir(), ".claude", "settings.local.json");
+
+export interface DeepIntegrationResult {
+  ok: boolean;
+  error?: string;
+}
+
+function claudePluginPath(): string {
+  // Packaged app: plugin ships under Resources/collab-claude-plugin
+  if (app.isPackaged && process.resourcesPath) {
+    return join(process.resourcesPath, "collab-claude-plugin");
+  }
+  // Development: resolve from app root
+  return join(app.getAppPath(), "packages", "collab-claude-plugin");
+}
+
+/**
+ * 开启/关闭深度集成时，向 ~/.claude/settings.local.json 注册或移除
+ * Collaborator 本地插件（extraKnownMarketplaces + enabledPlugins）。
+ * 只增删 collaborator 相关段，保留文件里其它配置；文件变空则删除。
+ */
+export function applyClaudeDeepIntegration(
+  enabled: boolean,
+): DeepIntegrationResult {
+  try {
+    let data: Record<string, unknown> = {};
+    try {
+      const raw = readFileSync(CLAUDE_SETTINGS_LOCAL, "utf-8");
+      const parsed = JSON.parse(raw) as unknown;
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        !Array.isArray(parsed)
+      ) {
+        data = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // 文件不存在或内容损坏时从空配置开始
+    }
+
+    if (enabled) {
+      const markets = (
+        typeof data.extraKnownMarketplaces === "object" &&
+        data.extraKnownMarketplaces !== null &&
+        !Array.isArray(data.extraKnownMarketplaces)
+          ? data.extraKnownMarketplaces
+          : {}
+      ) as Record<string, unknown>;
+      markets.collaborator = {
+        source: {
+          autoUpdate: true,
+          source: "directory",
+          path: claudePluginPath(),
+        },
+      };
+      data.extraKnownMarketplaces = markets;
+
+      const plugins = (
+        typeof data.enabledPlugins === "object" &&
+        data.enabledPlugins !== null &&
+        !Array.isArray(data.enabledPlugins)
+          ? data.enabledPlugins
+          : {}
+      ) as Record<string, unknown>;
+      plugins["collaborator@collaborator"] = true;
+      data.enabledPlugins = plugins;
+    } else {
+      if (
+        typeof data.extraKnownMarketplaces === "object" &&
+        data.extraKnownMarketplaces !== null
+      ) {
+        const markets = data.extraKnownMarketplaces as Record<string, unknown>;
+        delete markets.collaborator;
+        if (Object.keys(markets).length === 0) {
+          delete data.extraKnownMarketplaces;
+        }
+      }
+      if (
+        typeof data.enabledPlugins === "object" &&
+        data.enabledPlugins !== null
+      ) {
+        const plugins = data.enabledPlugins as Record<string, unknown>;
+        delete plugins["collaborator@collaborator"];
+        if (Object.keys(plugins).length === 0) {
+          delete data.enabledPlugins;
+        }
+      }
+    }
+
+    if (Object.keys(data).length === 0) {
+      if (existsSync(CLAUDE_SETTINGS_LOCAL)) {
+        rmSync(CLAUDE_SETTINGS_LOCAL);
+      }
+      return { ok: true };
+    }
+
+    mkdirSync(dirname(CLAUDE_SETTINGS_LOCAL), { recursive: true });
+    atomicWriteFileSync(
+      CLAUDE_SETTINGS_LOCAL,
+      JSON.stringify(data, null, 2) + "\n",
+    );
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(
+      "[integrations] Failed to update Claude settings.local.json:",
+      msg,
+    );
+    return { ok: false, error: msg };
+  }
+}
 
 // -- install paths --
 
@@ -142,6 +258,57 @@ export function markPluginOffered(): void {
   writeFileSync(markerPath(), new Date().toISOString(), "utf-8");
 }
 
+// -- Claude sound settings --
+
+function claudeSoundsPath(): string {
+  return join(homedir(), ".collab", "claude-sounds.json");
+}
+
+// 旧格式的配置里事件值是声音文件路径字符串，归一化为勾选布尔值
+function normalizeClaudeSounds(
+  data: Record<string, unknown>,
+): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (key === "enabled") {
+      out.enabled = value !== false;
+    } else if (typeof value === "string") {
+      out[key] = true;
+    } else if (typeof value === "boolean") {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+export function readClaudeSounds(): Record<string, boolean> {
+  try {
+    const raw = readFileSync(claudeSoundsPath(), "utf-8");
+    const parsed = JSON.parse(raw) as unknown;
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      !Array.isArray(parsed)
+    ) {
+      const data = parsed as Record<string, unknown>;
+      return {
+        enabled: data.enabled !== false,
+        ...DEFAULT_CLAUDE_SOUNDS,
+        ...normalizeClaudeSounds(data),
+      };
+    }
+  } catch {
+    // 文件缺失或损坏时使用默认配置
+  }
+  return { enabled: true, ...DEFAULT_CLAUDE_SOUNDS };
+}
+
+export function writeClaudeSounds(sounds: Record<string, unknown>): void {
+  const dir = join(homedir(), ".collab");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(claudeSoundsPath(), JSON.stringify(sounds, null, 2), "utf-8");
+}
+
 // -- IPC --
 
 export function getAgentStatuses(): AgentStatus[] {
@@ -192,6 +359,10 @@ export function registerIntegrationsIpc(): void {
 
   ipcMain.handle("integrations:has-offered-plugin", () => hasOfferedPlugin());
 
+  ipcMain.handle("integrations:set-deep-integration", (_event, enabled) => {
+    return applyClaudeDeepIntegration(Boolean(enabled));
+  });
+
   ipcMain.handle("integrations:mark-plugin-offered", () => {
     markPluginOffered();
     return { ok: true };
@@ -199,48 +370,17 @@ export function registerIntegrationsIpc(): void {
 
   // -- Claude sound settings IPC --
 
-  const SOUNDS_CONFIG_PATH = join(homedir(), ".collab", "claude-sounds.json");
-
   ipcMain.handle("integrations:get-claude-sounds", () => {
-    try {
-      const raw = readFileSync(SOUNDS_CONFIG_PATH, "utf-8");
-      return JSON.parse(raw);
-    } catch {
-      return {};
-    }
+    return readClaudeSounds();
   });
 
-  ipcMain.handle(
-    "integrations:set-claude-sounds",
-    (_event, sounds: Record<string, string>) => {
-      try {
-        const dir = join(homedir(), ".collab");
-        mkdirSync(dir, { recursive: true });
-        writeFileSync(
-          SOUNDS_CONFIG_PATH,
-          JSON.stringify(sounds, null, 2),
-          "utf-8",
-        );
-        return { ok: true };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return { ok: false, error: msg };
-      }
-    },
-  );
-
-  ipcMain.handle("integrations:select-sound-file", async () => {
+  ipcMain.handle("integrations:set-claude-sounds", (_event, sounds) => {
     try {
-      const result = await dialog.showOpenDialog({
-        title: "Select Sound File",
-        properties: ["openFile"],
-      });
-      if (result.canceled || result.filePaths.length === 0) {
-        return null;
-      }
-      return result.filePaths[0];
-    } catch {
-      return null;
+      writeClaudeSounds(sounds as Record<string, unknown>);
+      return { ok: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: msg };
     }
   });
 }

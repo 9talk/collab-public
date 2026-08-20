@@ -24,6 +24,7 @@ import {
   DEFAULT_IGNORE_PATTERNS,
   filterIgnorePatterns,
 } from "@collab/shared/ignore-patterns";
+import { CLAUDE_SOUND_EVENTS } from "@collab/shared/claude-sounds";
 
 type ThemeMode = "light" | "dark" | "system";
 
@@ -46,7 +47,9 @@ interface SettingsApi {
   setClaudeSounds: (
     sounds: Record<string, unknown>,
   ) => Promise<{ ok: boolean; error?: string }>;
-  selectSoundFile: () => Promise<string | null>;
+  setDeepIntegration: (
+    enabled: boolean,
+  ) => Promise<{ ok: boolean; error?: string }>;
   listExternalEditors: () => Promise<
     Array<{ id: string; name: string; appPath: string }>
   >;
@@ -66,7 +69,6 @@ interface SettingsApi {
     processCount: number;
   }>;
   close: () => void;
-  openExternal: (url: string) => void;
 }
 
 const api = (window as unknown as { api: SettingsApi }).api;
@@ -1861,6 +1863,7 @@ function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
   async function handleEnabledChange(checked: boolean) {
     setEnabled(checked);
     await api.setPref("claudeIntegration", checked);
+    await api.setDeepIntegration(checked);
   }
 
   async function handleTimeoutChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1877,18 +1880,10 @@ function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
 
   // -- Sound settings --
 
-  const SOUND_EVENTS = [
-    "UserPromptSubmit",
-    "Stop",
-    "PermissionRequest",
-    "PreCompact",
-    "Setup",
-    "Notification",
-  ] as const;
+  const SOUND_EVENTS = CLAUDE_SOUND_EVENTS;
 
   const [soundEnabled, setSoundEnabled] = useState(false);
-  const [soundPaths, setSoundPaths] = useState<Record<string, string>>({});
-  const [soundBusy, setSoundBusy] = useState(false);
+  const [soundEvents, setSoundEvents] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     api
@@ -1896,49 +1891,35 @@ function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
       .then((sounds) => {
         if (typeof sounds.enabled === "boolean")
           setSoundEnabled(sounds.enabled);
-        const paths: Record<string, string> = {};
-        for (const [key, val] of Object.entries(sounds)) {
-          if (key !== "enabled" && typeof val === "string" && val) {
-            paths[key] = val;
-          }
+        const events: Record<string, boolean> = {};
+        for (const key of CLAUDE_SOUND_EVENTS) {
+          events[key] = sounds[key] === true;
         }
-        setSoundPaths(paths);
+        setSoundEvents(events);
       })
       .catch(() => {});
   }, []);
 
   async function saveSoundState(
     enabled: boolean,
-    paths: Record<string, string>,
+    events: Record<string, boolean>,
   ) {
     const data: Record<string, unknown> = { enabled };
-    for (const [ev, p] of Object.entries(paths)) {
-      if (p) data[ev] = p;
+    for (const key of CLAUDE_SOUND_EVENTS) {
+      data[key] = events[key] === true;
     }
     await api.setClaudeSounds(data);
   }
 
   async function handleSoundToggle(checked: boolean) {
     setSoundEnabled(checked);
-    await saveSoundState(checked, soundPaths);
+    await saveSoundState(checked, soundEvents);
   }
 
-  async function handleSoundPathChange(event: string, path: string) {
-    const next = { ...soundPaths, [event]: path };
-    setSoundPaths(next);
+  async function handleSoundEventChange(event: string, checked: boolean) {
+    const next = { ...soundEvents, [event]: checked };
+    setSoundEvents(next);
     await saveSoundState(soundEnabled, next);
-  }
-
-  async function handleSoundBrowse(event: string) {
-    setSoundBusy(true);
-    try {
-      const filePath = await api.selectSoundFile();
-      if (filePath) {
-        await handleSoundPathChange(event, filePath);
-      }
-    } finally {
-      setSoundBusy(false);
-    }
   }
 
   return (
@@ -1959,27 +1940,6 @@ function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
           }}
         />
       </div>
-
-      {enabled && (
-        <div className="space-y-2">
-          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-            {t("claude.marketplaceDesc")}
-          </p>
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              api.openExternal(
-                "https://github.com/9talk/collab-public/blob/main/CLAUDE-CODE-PLUGIN.md",
-              );
-            }}
-            className="text-xs underline cursor-pointer"
-            style={{ color: "var(--foreground)" }}
-          >
-            {t("claude.pluginGuide")}
-          </a>
-        </div>
-      )}
 
       <div className="space-y-2">
         <label className="text-sm font-medium block">
@@ -2046,48 +2006,26 @@ function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
           }}
         >
           {SOUND_EVENTS.map((event) => (
-            <div key={event} className="flex items-center gap-2">
-              <label
-                className="text-xs shrink-0"
-                style={{
-                  minWidth: 130,
-                  color: "var(--muted-foreground)",
-                }}
+            <label
+              key={event}
+              className="flex items-center justify-between gap-2 cursor-pointer"
+            >
+              <span
+                className="text-xs"
+                style={{ color: "var(--muted-foreground)" }}
               >
                 {t(`claude.soundEvent.${event}` as any)}
-              </label>
+              </span>
               <input
-                type="text"
-                value={soundPaths[event] || ""}
+                type="checkbox"
+                checked={soundEvents[event] === true}
                 onChange={(e) => {
-                  void handleSoundPathChange(event, e.target.value);
+                  void handleSoundEventChange(event, e.target.checked);
                 }}
-                placeholder={t("claude.soundPathPlaceholder")}
-                className="flex-1 rounded border px-2 py-1 text-xs"
-                style={{
-                  backgroundColor:
-                    "color-mix(in srgb, var(--foreground) 6%, transparent)",
-                  borderColor:
-                    "color-mix(in srgb, var(--foreground) 15%, transparent)",
-                  color: "var(--foreground)",
-                }}
+                className="h-4 w-4 shrink-0 cursor-pointer"
+                style={{ accentColor: "#22c55e" }}
               />
-              <button
-                type="button"
-                disabled={soundBusy}
-                onClick={() => {
-                  void handleSoundBrowse(event);
-                }}
-                className="rounded px-2 py-1 text-xs font-medium cursor-pointer disabled:opacity-50 shrink-0"
-                style={{
-                  backgroundColor:
-                    "color-mix(in srgb, var(--foreground) 8%, transparent)",
-                  color: "var(--foreground)",
-                }}
-              >
-                {t("claude.soundBrowse")}
-              </button>
-            </div>
+            </label>
           ))}
         </div>
       )}

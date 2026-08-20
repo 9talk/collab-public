@@ -345,12 +345,13 @@ contextBridge.exposeInMainWorld("api", {
   hasOfferedPlugin: () => ipcRenderer.invoke("integrations:has-offered-plugin"),
   markPluginOffered: () =>
     ipcRenderer.invoke("integrations:mark-plugin-offered"),
+  setDeepIntegration: (enabled: boolean) =>
+    ipcRenderer.invoke("integrations:set-deep-integration", enabled),
 
   // Claude sound settings
   getClaudeSounds: () => ipcRenderer.invoke("integrations:get-claude-sounds"),
-  setClaudeSounds: (sounds: Record<string, string>) =>
+  setClaudeSounds: (sounds: Record<string, unknown>) =>
     ipcRenderer.invoke("integrations:set-claude-sounds", sounds),
-  selectSoundFile: () => ipcRenderer.invoke("integrations:select-sound-file"),
 
   // IPC event listeners (nav, viewer, terminal)
   onFocusSearch: (cb: () => void) => {

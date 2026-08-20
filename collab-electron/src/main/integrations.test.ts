@@ -1,5 +1,11 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
-import { mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import {
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  existsSync,
+  readFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -37,6 +43,9 @@ mock.module("electron", () => ({
   ipcMain: {
     handle: () => {},
   },
+  dialog: {
+    showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
+  },
 }));
 
 // Mock homedir to isolate from real user config
@@ -51,7 +60,11 @@ const {
   uninstallSkill,
   VALID_AGENT_IDS,
   getAgentStatuses,
+  applyClaudeDeepIntegration,
+  readClaudeSounds,
+  writeClaudeSounds,
 } = await import("./integrations");
+import { DEFAULT_CLAUDE_SOUNDS } from "@collab/shared/claude-sounds";
 
 // -- Setup / Teardown --
 
@@ -186,5 +199,164 @@ describe("getAgentStatuses", () => {
     const statuses = getAgentStatuses();
     const claude = statuses.find((s: { id: string }) => s.id === "claude");
     expect(claude?.installed).toBe(true);
+  });
+});
+
+describe("applyClaudeDeepIntegration", () => {
+  const settingsPath = () => join(FAKE_HOME, ".claude", "settings.local.json");
+
+  test("enable writes extraKnownMarketplaces and enabledPlugins", () => {
+    const result = applyClaudeDeepIntegration(true);
+    expect(result.ok).toBe(true);
+
+    const data = JSON.parse(readFileSync(settingsPath(), "utf-8")) as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const market = data.extraKnownMarketplaces as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const source = market.collaborator?.source as Record<string, unknown>;
+    expect(source.autoUpdate).toBe(true);
+    expect(source.source).toBe("directory");
+    expect(source.path).toBe(
+      join(FAKE_APP_PATH, "packages", "collab-claude-plugin"),
+    );
+    const plugins = data.enabledPlugins as Record<string, unknown>;
+    expect(plugins["collaborator@collaborator"]).toBe(true);
+  });
+
+  test("enable preserves existing unrelated config keys", () => {
+    mkdirSync(join(FAKE_HOME, ".claude"), { recursive: true });
+    writeFileSync(
+      settingsPath(),
+      JSON.stringify({
+        customKey: "keep",
+        enabledPlugins: { "other@x": true },
+      }),
+      "utf-8",
+    );
+
+    applyClaudeDeepIntegration(true);
+    const data = JSON.parse(readFileSync(settingsPath(), "utf-8")) as Record<
+      string,
+      unknown
+    >;
+    expect(data.customKey).toBe("keep");
+    const plugins = data.enabledPlugins as Record<string, unknown>;
+    expect(plugins["other@x"]).toBe(true);
+    expect(plugins["collaborator@collaborator"]).toBe(true);
+  });
+
+  test("disable removes collaborator entries but keeps other config", () => {
+    applyClaudeDeepIntegration(true);
+    const existing = JSON.parse(
+      readFileSync(settingsPath(), "utf-8"),
+    ) as Record<string, unknown>;
+    existing.customKey = "keep";
+    existing.enabledPlugins = {
+      "other@x": true,
+      "collaborator@collaborator": true,
+    };
+    writeFileSync(settingsPath(), JSON.stringify(existing), "utf-8");
+
+    const result = applyClaudeDeepIntegration(false);
+    expect(result.ok).toBe(true);
+
+    const data = JSON.parse(readFileSync(settingsPath(), "utf-8")) as Record<
+      string,
+      unknown
+    >;
+    expect(data.customKey).toBe("keep");
+    expect(data.enabledPlugins).toEqual({ "other@x": true });
+    expect(data.extraKnownMarketplaces).toBeUndefined();
+  });
+
+  test("disable deletes the file when it becomes empty", () => {
+    applyClaudeDeepIntegration(true);
+    expect(existsSync(settingsPath())).toBe(true);
+
+    applyClaudeDeepIntegration(false);
+    expect(existsSync(settingsPath())).toBe(false);
+  });
+
+  test("enable recovers from corrupt json", () => {
+    mkdirSync(join(FAKE_HOME, ".claude"), { recursive: true });
+    writeFileSync(settingsPath(), "{ not valid json", "utf-8");
+
+    const result = applyClaudeDeepIntegration(true);
+    expect(result.ok).toBe(true);
+    const data = JSON.parse(readFileSync(settingsPath(), "utf-8")) as Record<
+      string,
+      unknown
+    >;
+    const plugins = data.enabledPlugins as Record<string, unknown>;
+    expect(plugins["collaborator@collaborator"]).toBe(true);
+  });
+});
+
+describe("Claude sounds config", () => {
+  const soundsPath = () => join(FAKE_HOME, ".collab", "claude-sounds.json");
+
+  test("DEFAULT_CLAUDE_SOUNDS enables the 5 legacy events", () => {
+    expect(DEFAULT_CLAUDE_SOUNDS.UserPromptSubmit).toBe(true);
+    expect(DEFAULT_CLAUDE_SOUNDS.Stop).toBe(true);
+    expect(DEFAULT_CLAUDE_SOUNDS.Notification).toBe(true);
+    expect(DEFAULT_CLAUDE_SOUNDS.PermissionRequest).toBe(true);
+    expect(DEFAULT_CLAUDE_SOUNDS.PreCompact).toBe(true);
+    expect(DEFAULT_CLAUDE_SOUNDS.SessionStart).toBe(false);
+  });
+
+  test("readClaudeSounds returns defaults when file is missing", () => {
+    const s = readClaudeSounds();
+    expect(s.enabled).toBe(true);
+    expect(s.UserPromptSubmit).toBe(true);
+    expect(s.Stop).toBe(true);
+    expect(s.SessionStart).toBe(false);
+  });
+
+  test("readClaudeSounds normalizes legacy path values to true", () => {
+    mkdirSync(join(FAKE_HOME, ".collab"), { recursive: true });
+    writeFileSync(
+      soundsPath(),
+      JSON.stringify({
+        enabled: true,
+        Stop: "/some/path/Stop.mp3",
+        SessionStart: false,
+      }),
+      "utf-8",
+    );
+
+    const s = readClaudeSounds() as Record<string, boolean>;
+    expect(s.enabled).toBe(true);
+    expect(s.Stop).toBe(true); // 旧 path → 开启
+    expect(s.SessionStart).toBe(false); // 显式关闭保留
+    expect(s.UserPromptSubmit).toBe(true); // 未配置事件用默认
+  });
+
+  test("readClaudeSounds merges defaults with user overrides", () => {
+    mkdirSync(join(FAKE_HOME, ".collab"), { recursive: true });
+    writeFileSync(
+      soundsPath(),
+      JSON.stringify({
+        enabled: true,
+        Notification: false,
+      }),
+      "utf-8",
+    );
+
+    const s = readClaudeSounds() as Record<string, boolean>;
+    expect(s.Notification).toBe(false); // 用户关闭覆盖默认
+    expect(s.Stop).toBe(true); // 其它默认保持
+  });
+
+  test("writeClaudeSounds persists boolean config", () => {
+    writeClaudeSounds({ enabled: true, Stop: true, SessionStart: false });
+    const data = JSON.parse(readFileSync(soundsPath(), "utf-8")) as Record<
+      string,
+      unknown
+    >;
+    expect(data).toEqual({ enabled: true, Stop: true, SessionStart: false });
   });
 });

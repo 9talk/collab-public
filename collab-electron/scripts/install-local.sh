@@ -98,13 +98,19 @@ if [ -n "$DIFF_OUTPUT" ]; then
 fi
 echo "  Installation verified — installed app matches built version."
 
-# Step 4: Clean up build artifacts (unless --keep)
+# Step 4: 清理 Claude Code 插件缓存，确保 hooks/脚本加载新版本
+# Claude Code 会把插件复制到 ~/.claude/plugins/cache/ 并从缓存读取配置，
+# 本地重装后缓存不刷新会导致 hooks 等仍用旧版，故此处删除让其重新缓存。
+echo "Clearing Claude Code plugin cache..."
+rm -rf "$HOME/.claude/plugins/cache/collaborator"
+
+# Step 5: Clean up build artifacts (unless --keep)
 if [ "$KEEP" = false ]; then
   echo "Cleaning up dist/..."
   rm -rf "$PROJECT_DIR/dist"
 fi
 
-# Step 5: Notify completion
+# Step 6: Notify completion
 echo "Done. App installed at /Applications/Collaborator.app"
 
 END_TIME=$(date +%s)
