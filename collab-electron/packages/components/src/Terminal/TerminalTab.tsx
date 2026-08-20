@@ -64,6 +64,10 @@ function TerminalTab({
   const refreshingRef = useRef(false);
   const pendingDuringRefreshRef = useRef<Uint8Array[]>([]);
   const isComposingRef = useRef(false);
+  // OSC 9;4 上报的终端运行状态。运行中禁止搜索:
+  // SearchAddon 会在每次 PTY 输出后自动全量重扫滚动区,
+  // 高频输出时会让渲染进程持续高负载,放大内存问题。
+  const runningRef = useRef(false);
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -364,6 +368,9 @@ function TerminalTab({
       if (e.type === "keydown" && primaryModifier) {
         const key = e.key.toLowerCase();
         if (key === "f") {
+          // 运行中禁止打开搜索框:避免 SearchAddon 每 200ms 自动重搜
+          // 整个滚动区导致渲染进程长时间高负载(内存问题的放大器)
+          if (runningRef.current) return false;
           setSearchOpen(true);
           return false;
         }
@@ -421,8 +428,13 @@ function TerminalTab({
         const semi2 = rest.indexOf(";");
         const state = semi2 >= 0 ? rest.slice(0, semi2) : rest;
         if (state === "1" || state === "2" || state === "3") {
+          runningRef.current = true;
           window.api.notifyTerminalStatus(sessionId, "running");
+          // 开始运行:立即结束搜索(关框、清 query、清理 addon 的
+          // decoration 与缓存搜索词),停掉每 200ms 的自动全量重搜
+          closeSearch();
         } else {
+          runningRef.current = false;
           window.api.notifyTerminalStatus(sessionId, "idle");
         }
       }
