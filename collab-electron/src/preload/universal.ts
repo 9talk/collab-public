@@ -161,6 +161,7 @@ contextBridge.exposeInMainWorld("api", {
   getAppVersion: () => ipcRenderer.invoke("app:version"),
   getDeviceId: () => ipcRenderer.invoke("analytics:get-device-id"),
   getPref: (key: string) => ipcRenderer.invoke("pref:get", key),
+  getPrefSync: (key: string) => ipcRenderer.sendSync("pref:get-sync", key),
   setPref: (key: string, value: unknown) =>
     ipcRenderer.invoke("pref:set", key, value),
   getMemoryStats: () => ipcRenderer.invoke("memory:stats"),

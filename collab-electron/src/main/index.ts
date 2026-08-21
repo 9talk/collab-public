@@ -598,6 +598,10 @@ ipcMain.handle("shell:get-view-config", () => {
 
 ipcMain.handle("pref:get", (_event, key: string) => getPref(config, key));
 
+ipcMain.on("pref:get-sync", (event, key: string) => {
+  event.returnValue = getPref(config, key);
+});
+
 ipcMain.handle("pref:set", (_event, key: string, value: unknown) => {
   setPref(config, key, value);
   if (key === "autoCheckUpdates" && typeof value === "boolean") {

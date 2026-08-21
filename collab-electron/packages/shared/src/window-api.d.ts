@@ -110,6 +110,7 @@ export interface CollabApi {
   getConfig: () => Promise<AppConfig>;
   getDeviceId: () => Promise<string>;
   getPref: (key: string) => Promise<unknown>;
+  getPrefSync: (key: string) => unknown;
   setPref: (key: string, value: unknown) => Promise<void>;
   listTerminalTargets: () => Promise<TerminalTargetOption[]>;
   getWorkspacePref: (key: string, workspacePath: string) => Promise<unknown>;

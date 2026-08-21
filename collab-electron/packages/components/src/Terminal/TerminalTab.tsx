@@ -82,6 +82,14 @@ function TerminalTab({
     if (!container) return;
     console.log("[TerminalTab] useEffect mounted, sessionId:", sessionId);
 
+    // 创建时即使用用户配置的回滚行数（设置面板），无配置时默认 200000
+    let scrollback = 200000;
+    try {
+      const v = window.api.getPrefSync("terminalScrollback");
+      if (typeof v === "number" && v > 0) scrollback = v;
+    } catch {
+      /* 同步读取失败时使用默认 */
+    }
     const term = new Terminal({
       theme: getTheme(),
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
@@ -89,23 +97,12 @@ function TerminalTab({
       fontWeight: "400",
       fontWeightBold: "500",
       cursorBlink: true,
-      scrollback: 200000,
+      scrollback,
       allowProposedApi: true,
       macOptionIsMeta: true,
     });
     termRef.current = term;
 
-    // Apply user-configured scrollback (default 200000). Setting
-    // term.options.scrollback at runtime is supported by xterm: the
-    // buffer is trimmed to the new limit if it exceeds it.
-    window.api
-      .getPref("terminalScrollback")
-      .then((v) => {
-        if (typeof v === "number" && v > 0) {
-          term.options.scrollback = v;
-        }
-      })
-      .catch(() => {});
     const offPrefChanged = window.api.onPrefChanged((key, value) => {
       if (
         key === "terminalScrollback" &&
