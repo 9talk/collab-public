@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 import { execSync } from "node:child_process";
 import { atomicWriteFileSync } from "./files";
 import { DEFAULT_CLAUDE_SOUNDS } from "@collab/shared/claude-sounds";
+import { removeClaudeMdBlock } from "./claude-md";
 
 export type AgentId = "claude" | "codex" | "gemini";
 
@@ -79,7 +80,7 @@ export interface DeepIntegrationResult {
   error?: string;
 }
 
-function claudePluginPath(): string {
+export function claudePluginPath(): string {
   // Packaged app: plugin ships under Resources/collab-claude-plugin
   if (app.isPackaged && process.resourcesPath) {
     return join(process.resourcesPath, "collab-claude-plugin");
@@ -159,6 +160,12 @@ export function applyClaudeDeepIntegration(
           delete data.enabledPlugins;
         }
       }
+      // 深度集成关闭时同步移除 ~/.claude/CLAUDE.md 中的 COLLAB 段落
+      try {
+        removeClaudeMdBlock();
+      } catch (err) {
+        console.error("[integrations] Failed to remove CLAUDE.md block:", err);
+      }
     }
 
     if (Object.keys(data).length === 0) {
@@ -178,6 +185,31 @@ export function applyClaudeDeepIntegration(
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[integrations] Failed to update Claude settings.json:", msg);
     return { ok: false, error: msg };
+  }
+}
+
+/**
+ * 深度集成是否开启：以 ~/.claude/settings.json 中的事实状态为准
+ * （collaborator marketplace 与 enabledPlugins 同时存在）。
+ */
+export function isClaudeDeepIntegrationEnabled(): boolean {
+  try {
+    const raw = readFileSync(CLAUDE_SETTINGS_FILE, "utf-8");
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const markets = parsed.extraKnownMarketplaces;
+    const plugins = parsed.enabledPlugins;
+    const hasMarket =
+      typeof markets === "object" &&
+      markets !== null &&
+      (markets as Record<string, unknown>).collaborator;
+    const hasPlugin =
+      typeof plugins === "object" &&
+      plugins !== null &&
+      (plugins as Record<string, unknown>)["collaborator@collaborator"] ===
+        true;
+    return Boolean(hasMarket && hasPlugin);
+  } catch {
+    return false;
   }
 }
 
