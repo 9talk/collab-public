@@ -55,7 +55,8 @@ export function registerServiceRpc(): void {
   );
 
   registerMethod("devtool_list", () => services.listServices(), {
-    description: "列出所有由 Collaborator 管理的服务及其存活状态。",
+    description:
+      "列出当前存活的（running）服务；每次调用会先清理超过 1 天的已退出记录。",
     params: {},
   });
 

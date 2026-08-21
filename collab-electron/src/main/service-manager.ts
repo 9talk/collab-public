@@ -283,10 +283,39 @@ export function checkService(projectPath: string): ManagedService {
   return snapshot(record);
 }
 
+const STALE_CLEANUP_MS = 24 * 60 * 60 * 1000;
+
+/** 清理超过 1 天且未在运行的服务记录；已停止的（无 startedAt）保留，供 checkService 查询历史状态 */
+function cleanupStaleServices(): void {
+  const cutoff = Date.now() - STALE_CLEANUP_MS;
+  let changed = false;
+  for (const [projectPath, record] of services) {
+    if (effectiveStatus(projectPath) === "running") continue;
+    if (record.startedAt === null || record.startedAt >= cutoff) continue;
+    const fd = logFds.get(projectPath);
+    if (fd !== undefined) {
+      try {
+        closeSync(fd);
+      } catch {
+        // 已关闭
+      }
+      logFds.delete(projectPath);
+    }
+    services.delete(projectPath);
+    children.delete(projectPath);
+    changed = true;
+  }
+  if (changed) persist();
+}
+
 export function listServices(): ManagedService[] {
+  cleanupStaleServices();
   const result: ManagedService[] = [];
   for (const record of services.values()) {
-    result.push(snapshot(record));
+    const snap = snapshot(record);
+    if (snap.status === "running") {
+      result.push(snap);
+    }
   }
   return result;
 }

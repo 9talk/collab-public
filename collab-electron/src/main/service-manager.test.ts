@@ -32,6 +32,15 @@ function writeStartSh(dir: string, body: string): void {
   writeFileSync(join(dir, "start.sh"), body, "utf-8");
 }
 
+async function waitForNotRunning(dir: string, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (checkService(dir).status !== "running") return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error(`service ${dir} still running after ${timeoutMs}ms`);
+}
+
 afterAll(async () => {
   for (const s of listServices()) {
     if (s.pid) {
@@ -109,6 +118,44 @@ describe("service-manager", () => {
     const byPath = new Map(list.map((s) => [s.projectPath, s]));
     expect(byPath.get(dir1)?.status).toBe("running");
     expect(byPath.get(dir2)?.status).toBe("running");
+  });
+
+  test("listServices returns only running services", async () => {
+    const runningDir = makeProject();
+    const stoppedDir = makeProject();
+    const exitedDir = makeProject();
+    writeStartSh(runningDir, "#!/bin/bash\nsleep 30\n");
+    writeStartSh(stoppedDir, "#!/bin/bash\nsleep 30\n");
+    writeStartSh(exitedDir, "#!/bin/bash\nexit 0\n");
+    startService(runningDir);
+    startService(stoppedDir);
+    await stopService(stoppedDir);
+    startService(exitedDir);
+    await waitForNotRunning(exitedDir);
+
+    const paths = listServices().map((s) => s.projectPath);
+    expect(paths).toContain(runningDir);
+    expect(paths).not.toContain(stoppedDir);
+    expect(paths).not.toContain(exitedDir);
+  });
+
+  test("listServices cleans up stale non-running records older than a day", async () => {
+    const dir = makeProject();
+    writeStartSh(dir, "#!/bin/bash\nexit 0\n");
+    startService(dir);
+    await waitForNotRunning(dir);
+
+    const realNow = Date.now;
+    Date.now = () => realNow() + 2 * 24 * 60 * 60 * 1000;
+    try {
+      const list = listServices();
+      expect(list.some((s) => s.projectPath === dir)).toBe(false);
+    } finally {
+      Date.now = realNow;
+    }
+
+    const persisted = readFileSync(join(dataDir, "services.json"), "utf-8");
+    expect(persisted).not.toContain(dir);
   });
 
   test("logs are written to disk", async () => {
