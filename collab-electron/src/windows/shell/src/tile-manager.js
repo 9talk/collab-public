@@ -51,7 +51,7 @@ export function createTileManager({
   onTerminalTileResized,
   onTileFocused,
   onTileDblClick,
-  onTermScreenshot,
+  onTermContextMenu,
   onLocate,
   onRefreshCooldown,
   onReposition,
@@ -451,9 +451,9 @@ export function createTileManager({
           onTerminalSessionCreated(tile);
         }
       }
-      if (event.channel === "term:request-screenshot") {
-        if (onTermScreenshot) {
-          onTermScreenshot(tile.id);
+      if (event.channel === "term:context-menu") {
+        if (onTermContextMenu) {
+          onTermContextMenu(tile.id, event.args[0]);
         }
       }
       if (event.channel === "pty-cwd-changed") {

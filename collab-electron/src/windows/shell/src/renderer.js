@@ -526,8 +526,9 @@ async function init() {
       notifications.show(tileId, "请不要频繁刷新");
       setTimeout(() => notifications.dismissByTileId(tileId), 2500);
     },
-    onTermScreenshot(tileId) {
-      // Show context menu → screenshot via webContents.capturePage()
+    onTermContextMenu(tileId, counts = {}) {
+      // Show context menu → screenshot via webContents.capturePage(),
+      // or line stats from the xterm buffer.
       const tile = tileManager.getTile(tileId);
       if (!tile) return;
       if (tile.type !== "term") return;
@@ -542,11 +543,26 @@ async function init() {
         return;
       }
       window.shellApi
-        .showContextMenu([{ id: "screenshot", label: "Screenshot" }])
+        .showContextMenu([
+          { id: "screenshot", label: "Screenshot" },
+          { id: "line-count", label: "行数统计" },
+        ])
         .then((selected) => {
           if (selected === "screenshot") {
             const wcId = dom.webview.getWebContentsId();
             window.shellApi.termScreenshotClipboard(wcId);
+          } else if (selected === "line-count") {
+            const bufferLines = Number.isFinite(counts?.bufferLines)
+              ? counts.bufferLines
+              : "—";
+            const viewportRows = Number.isFinite(counts?.viewportRows)
+              ? counts.viewportRows
+              : "—";
+            window.shellApi.showConfirmDialog({
+              message: "终端行数统计",
+              detail: `缓冲区总行数：${bufferLines}\n视口行数：${viewportRows}`,
+              buttons: ["OK"],
+            });
           }
         });
     },

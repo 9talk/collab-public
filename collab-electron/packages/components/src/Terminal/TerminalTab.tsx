@@ -626,11 +626,14 @@ function TerminalTab({
     container.addEventListener("dragover", handleDragOver);
     container.addEventListener("drop", handleDrop);
 
-    // Right-click → request screenshot via shell
+    // Right-click → request context menu (screenshot / line stats) via shell
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      window.api.sendToHost("term:request-screenshot");
+      window.api.sendToHost("term:context-menu", {
+        bufferLines: term.buffer.active.length,
+        viewportRows: term.rows,
+      });
     };
     container.addEventListener("contextmenu", handleContextMenu);
 
