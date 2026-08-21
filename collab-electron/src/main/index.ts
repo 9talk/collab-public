@@ -113,6 +113,12 @@ let mainWindow: BrowserWindow | null = null;
 let pendingFilePath: string | null = null;
 let config = loadConfig();
 let shuttingDown = false;
+// Cmd+Q 退出确认：quitConfirmed 为 true 后不再弹确认框；
+// quitDialogOpen 为 true 时再次触发退出（连按 Cmd+Q）直接放行。
+// 确认用非模态小窗（原生模态对话框会拦截 Cmd+Q，导致连按无法生效）。
+let quitConfirmed = false;
+let quitDialogOpen = false;
+let quitConfirmWindow: BrowserWindow | null = null;
 
 // Apply saved theme preference (light/dark/system)
 const savedTheme = config.ui.theme;
@@ -1006,7 +1012,113 @@ app.whenReady().then(async () => {
   }
 });
 
+const QUIT_CONFIRM_HTML = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #f5f5f7;
+    color: #1d1d1f;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #2a2a2e; color: #f5f5f7; }
+    button { background: #3a3a3e; border-color: #4a4a4e; color: #f5f5f7; }
+    button.primary { background: #0a84ff; border-color: #0a84ff; color: #fff; }
+  }
+  .wrap { padding: 20px 22px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
+  p { margin: 0 0 18px; font-size: 13px; line-height: 1.5; }
+  .btns { margin-top: auto; display: flex; gap: 8px; justify-content: flex-end; }
+  button {
+    font-size: 13px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid #d0d0d5;
+    background: #fff;
+    color: #1d1d1f;
+    cursor: pointer;
+  }
+  button.primary { background: #007aff; border-color: #007aff; color: #fff; }
+  button:focus { outline: none; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <p>确认退出 Collaborator 吗？</p>
+    <div class="btns">
+      <button id="cancel">取消</button>
+      <button id="ok" class="primary" autofocus>确认退出</button>
+    </div>
+  </div>
+  <script>
+    const ok = document.getElementById("ok");
+    const cancel = document.getElementById("cancel");
+    ok.onclick = () => window.quitConfirm.respond(true);
+    cancel.onclick = () => window.quitConfirm.respond(false);
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") ok.click();
+      else if (e.key === "Escape") cancel.click();
+    });
+  </script>
+</body>
+</html>`;
+
+function showQuitConfirmWindow(): void {
+  if (quitDialogOpen) return;
+  quitDialogOpen = true;
+  const parent =
+    mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+  quitConfirmWindow = new BrowserWindow({
+    width: 380,
+    height: 190,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    title: "退出 Collaborator",
+    parent,
+    webPreferences: {
+      preload: join(__dirname, "../preload/quit-confirm.js"),
+      contextIsolation: true,
+      sandbox: true,
+    },
+  });
+  quitConfirmWindow.setMenuBarVisibility(false);
+  quitConfirmWindow.on("closed", () => {
+    quitConfirmWindow = null;
+    quitDialogOpen = false;
+  });
+  void quitConfirmWindow.loadURL(
+    "data:text/html;charset=utf-8," + encodeURIComponent(QUIT_CONFIRM_HTML),
+  );
+}
+
+ipcMain.on("quit-confirm:response", (_event, confirmed: boolean) => {
+  if (quitConfirmWindow && !quitConfirmWindow.isDestroyed()) {
+    quitConfirmWindow.close();
+  }
+  if (confirmed) {
+    quitConfirmed = true;
+    app.quit();
+  }
+});
+
 app.on("before-quit", async (event) => {
+  if (!quitConfirmed) {
+    event.preventDefault();
+
+    if (quitDialogOpen) {
+      // 确认框已弹出时再次触发退出（如连按 Cmd+Q）：直接退出
+      quitConfirmed = true;
+    } else {
+      showQuitConfirmWindow();
+    }
+  }
+
   if (!shuttingDown) {
     event.preventDefault();
 
