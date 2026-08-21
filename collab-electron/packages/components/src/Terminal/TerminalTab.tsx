@@ -627,8 +627,10 @@ function TerminalTab({
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      const b = term.buffer.active;
       window.api.sendToHost("term:context-menu", {
-        bufferLines: term.buffer.active.length,
+        bufferLines: b.length,
+        scrollbackLines: b.baseY,
         viewportRows: term.rows,
       });
     };

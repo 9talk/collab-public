@@ -555,12 +555,20 @@ async function init() {
             const bufferLines = Number.isFinite(counts?.bufferLines)
               ? counts.bufferLines
               : "—";
+            const scrollbackLines = Number.isFinite(counts?.scrollbackLines)
+              ? counts.scrollbackLines
+              : "—";
             const viewportRows = Number.isFinite(counts?.viewportRows)
               ? counts.viewportRows
               : "—";
+            const totalLines =
+              typeof scrollbackLines === "number" &&
+              typeof bufferLines === "number"
+                ? scrollbackLines + bufferLines
+                : "—";
             window.shellApi.showConfirmDialog({
               message: "终端行数统计",
-              detail: `缓冲区总行数：${bufferLines}\n视口行数：${viewportRows}`,
+              detail: `缓冲区总行数：${totalLines}（含滚动区 ${scrollbackLines} 行）\n视口行数：${viewportRows}`,
               buttons: ["OK"],
             });
           }
