@@ -4,7 +4,6 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { SearchAddon } from "@xterm/addon-search";
 import { getTheme } from "./theme";
 import {
   matchesPattern,
@@ -31,15 +30,6 @@ const IS_MAC = window.api.getPlatform() === "darwin";
 const URL_RE =
   /(https?|HTTPS?):[/]{2}[^\s"'!*(){}|\\\^<>`　-〿＀-￯]*[^\s"':,.!?{}|\\\^~\[\]`()<>　-〿＀-￯]/;
 
-// SearchAddon 的高亮颜色必须显式传入(不传则 decoration 无背景不可见),
-// matchOverviewRuler 为必填字段(本组件已隐藏 overview ruler)。
-const SEARCH_DECORATIONS = {
-  matchBackground: "#b3651a",
-  activeMatchBackground: "#f38518",
-  matchOverviewRuler: "#f38518",
-  activeMatchColorOverviewRuler: "#f38518",
-};
-
 interface TerminalTabProps {
   sessionId: string;
   visible: boolean;
@@ -64,18 +54,8 @@ function TerminalTab({
   const refreshingRef = useRef(false);
   const pendingDuringRefreshRef = useRef<Uint8Array[]>([]);
   const isComposingRef = useRef(false);
-  // OSC 9;4 上报的终端运行状态。运行中禁止搜索:
-  // SearchAddon 会在每次 PTY 输出后自动全量重扫滚动区,
-  // 高频输出时会让渲染进程持续高负载,放大内存问题。
+  // OSC 9;4 上报的终端运行状态(running/idle),供主进程更新 tile 状态。
   const runningRef = useRef(false);
-  const searchAddonRef = useRef<SearchAddon | null>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResult, setSearchResult] = useState<{
-    index: number;
-    count: number;
-  } | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -211,13 +191,6 @@ function TerminalTab({
     term.loadAddon(fit);
     term.open(container);
     fitRef.current = fit;
-
-    const searchAddon = new SearchAddon();
-    term.loadAddon(searchAddon);
-    searchAddonRef.current = searchAddon;
-    searchAddon.onDidChangeResults(({ resultIndex, resultCount }) => {
-      setSearchResult({ index: resultIndex, count: resultCount });
-    });
 
     // IME composition handling: suppress onData during composition
     // to prevent partial/composed text from being sent to PTY multiple
@@ -364,13 +337,6 @@ function TerminalTab({
       const primaryModifier = IS_MAC ? e.metaKey : e.ctrlKey;
       if (e.type === "keydown" && primaryModifier) {
         const key = e.key.toLowerCase();
-        if (key === "f") {
-          // 运行中禁止打开搜索框:避免 SearchAddon 每 200ms 自动重搜
-          // 整个滚动区导致渲染进程长时间高负载(内存问题的放大器)
-          if (runningRef.current) return false;
-          setSearchOpen(true);
-          return false;
-        }
         if (key === "c" && copySelectionToClipboard()) {
           return false;
         }
@@ -427,9 +393,6 @@ function TerminalTab({
         if (state === "1" || state === "2" || state === "3") {
           runningRef.current = true;
           window.api.notifyTerminalStatus(sessionId, "running");
-          // 开始运行:立即结束搜索(关框、清 query、清理 addon 的
-          // decoration 与缓存搜索词),停掉每 200ms 的自动全量重搜
-          closeSearch();
         } else {
           runningRef.current = false;
           window.api.notifyTerminalStatus(sessionId, "idle");
@@ -537,15 +500,6 @@ function TerminalTab({
 
     term.onResize(({ cols, rows }) => {
       window.api.ptyResize(sessionId, cols, rows);
-    });
-
-    // 滚动时清除 WebGL 纹理图集并触发全量刷新，防止向上滚动时渲染卡住。
-    // 此问题由 overviewRuler 配置与 WebGL 渲染器在向上滚动路径中的交互引起：
-    // 滚动条正确更新了内部状态，但 WebGL 渲染器未能同步渲染模型偏移量。
-    // clearTextureAtlas() 会先清除 GPU 纹理缓存再触发 _fullRefresh()，
-    // 而仅调用了 refresh() 可能因纹理图集中的陈旧状态导致渲染器未正确更新。
-    term.onScroll(() => {
-      term.clearTextureAtlas();
     });
 
     const handleCopy = (event: ClipboardEvent) => {
@@ -680,7 +634,6 @@ function TerminalTab({
       termRef.current = null;
       fitRef.current = null;
       createWebglRef.current = null;
-      searchAddonRef.current = null;
     };
   }, [sessionId]);
 
@@ -724,137 +677,12 @@ function TerminalTab({
     return unsub;
   }, [sessionId]);
 
-  // -- Terminal search (Cmd/Ctrl+F) --
-
-  const runSearch = (
-    query: string,
-    incremental: boolean,
-    backwards = false,
-  ) => {
-    const addon = searchAddonRef.current;
-    if (!addon) return;
-    if (!query) {
-      addon.clearDecorations();
-      setSearchResult(null);
-      return;
-    }
-    try {
-      const found = backwards
-        ? addon.findPrevious(query, {
-            incremental,
-            decorations: SEARCH_DECORATIONS,
-          })
-        : addon.findNext(query, {
-            incremental,
-            decorations: SEARCH_DECORATIONS,
-          });
-      if (!found) {
-        // findNext 未命中时 onDidChangeResults 不一定触发,主动置零
-        setSearchResult({ index: 0, count: 0 });
-      }
-    } catch {
-      // 搜索异常(如 addon 内部递归爆栈)时清理状态,
-      // 防止 SearchAddon 的自动重搜在下次 PTY 输出时再次触发。
-      addon.clearDecorations();
-      setSearchResult(null);
-    }
-  };
-
-  const closeSearch = () => {
-    setSearchOpen(false);
-    setSearchQuery("");
-    setSearchResult(null);
-    searchAddonRef.current?.clearDecorations();
-    termRef.current?.focus();
-  };
-
-  const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      runSearch(searchQuery, false, e.shiftKey);
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      closeSearch();
-    } else if (IS_MAC ? e.metaKey : e.ctrlKey) {
-      const key = e.key.toLowerCase();
-      if (key === "f") {
-        e.preventDefault();
-        e.currentTarget.select();
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (searchOpen) {
-      requestAnimationFrame(() => searchInputRef.current?.focus());
-    }
-  }, [searchOpen]);
-
-  // 兜底:SearchAddon 的自动重搜(每次 PTY 输出后全量重扫)在 addon
-  // 内部执行,runSearch 的 try/catch 拦不住它抛出的栈溢出。捕获到
-  // 后立即清理搜索状态,停止 onWriteParsed 的循环触发。
-  useEffect(() => {
-    const onError = (e: ErrorEvent) => {
-      if (!e.message?.includes("Maximum call stack size exceeded")) return;
-      searchAddonRef.current?.clearDecorations();
-      setSearchOpen(false);
-      setSearchQuery("");
-      setSearchResult(null);
-    };
-    window.addEventListener("error", onError);
-    return () => window.removeEventListener("error", onError);
-  }, []);
-
   return (
     <div
       ref={containerRef}
       className="terminal-tab"
       style={{ display: visible ? "block" : "none" }}
-    >
-      {searchOpen && (
-        <div className="terminal-search">
-          <input
-            ref={searchInputRef}
-            className="terminal-search-input"
-            value={searchQuery}
-            onChange={(e) => {
-              const q = e.target.value;
-              setSearchQuery(q);
-              runSearch(q, true);
-            }}
-            onKeyDown={handleSearchKeyDown}
-            placeholder="搜索终端内容"
-            spellCheck={false}
-          />
-          <button
-            className="terminal-search-btn"
-            title="上一个匹配 (Shift+Enter)"
-            onClick={() => runSearch(searchQuery, false, true)}
-          >
-            ↑
-          </button>
-          <button
-            className="terminal-search-btn"
-            title="下一个匹配 (Enter)"
-            onClick={() => runSearch(searchQuery, false)}
-          >
-            ↓
-          </button>
-          <span className="terminal-search-count">
-            {searchResult && searchResult.count > 0
-              ? `${searchResult.index + 1}/${searchResult.count}`
-              : "0/0"}
-          </span>
-          <button
-            className="terminal-search-btn"
-            title="关闭 (Esc)"
-            onClick={closeSearch}
-          >
-            ×
-          </button>
-        </div>
-      )}
-    </div>
+    ></div>
   );
 }
 
