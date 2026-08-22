@@ -56,6 +56,8 @@ function TerminalTab({
   const isComposingRef = useRef(false);
   // OSC 9;4 上报的终端运行状态(running/idle),供主进程更新 tile 状态。
   const runningRef = useRef(false);
+  // 记录上一次 alternate screen 状态,仅在翻转时打日志(避免 flushData 高频刷屏)。
+  const lastAltScreenRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -476,7 +478,17 @@ function TerminalTab({
       }
 
       term.write(merged);
-      term.clearTextureAtlas();
+      // Claude Code 全屏(alternate screen)时跳过全量重绘:其滚动由 Claude Code
+      // 的 DECSTBM 补丁驱动,走 WebGL 增量渲染即可;全量重绘在大视口下反而放大
+      // 滚动卡顿。normal 主屏仍清纹理以防高刷屏 ghosting。
+      const isAlt = term.buffer.active === term.buffer.alternate;
+      if (lastAltScreenRef.current !== isAlt) {
+        lastAltScreenRef.current = isAlt;
+        console.log(`[alt-debug] alternate screen=${isAlt ? "ON" : "OFF"}`);
+      }
+      if (!isAlt) {
+        term.clearTextureAtlas();
+      }
     };
     flushDataRef.current = flushData;
 
