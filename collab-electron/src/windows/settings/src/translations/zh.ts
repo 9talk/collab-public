@@ -25,6 +25,9 @@ export const zh: Record<TranslationKey, string> = {
     "若使用 cc-switch 等会接管 settings.json 的工具，自动写入可能被覆盖：",
   "claude.pluginGuide": "参阅手动安装指引 →",
   "claude.copy": "复制",
+  "claude.clearOnClear": "调用 /clear 后清屏",
+  "claude.clearOnClearDesc":
+    "在 Claude Code 中调用 /clear 结束会话后，清空终端 tile 屏幕。默认关闭。",
   "claude.soundEnable": "声音设置",
   "claude.soundEvent.UserPromptSubmit": "用户提交提示",
   "claude.soundEvent.Stop": "Claude 回复完成",

@@ -1845,17 +1845,20 @@ function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
   const [enabled, setEnabled] = useState(false);
   const [timeout, setTimeout_] = useState(7);
   const [command, setCommand] = useState("claude");
+  const [clearOnClear, setClearOnClear] = useState(false);
 
   useEffect(() => {
     Promise.all([
       api.getPref("claudeIntegration"),
       api.getPref("claudeTimeout"),
       api.getPref("claudeCommand"),
+      api.getPref("claudeClearOnClear"),
     ])
-      .then(([v1, v2, v3]) => {
+      .then(([v1, v2, v3, v4]) => {
         if (typeof v1 === "boolean") setEnabled(v1);
         if (typeof v2 === "number") setTimeout_(v2);
         if (typeof v3 === "string") setCommand(v3);
+        if (typeof v4 === "boolean") setClearOnClear(v4);
       })
       .catch(() => {});
   }, []);
@@ -1876,6 +1879,11 @@ function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
     const val = e.target.value;
     setCommand(val);
     await api.setPref("claudeCommand", val);
+  }
+
+  async function handleClearOnClearChange(checked: boolean) {
+    setClearOnClear(checked);
+    await api.setPref("claudeClearOnClear", checked);
   }
 
   // -- Sound settings --
@@ -1980,6 +1988,21 @@ function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
             borderColor:
               "color-mix(in srgb, var(--foreground) 15%, transparent)",
             color: "var(--foreground)",
+          }}
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">{t("claude.clearOnClear")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("claude.clearOnClearDesc")}
+          </p>
+        </div>
+        <ToggleSwitch
+          checked={clearOnClear}
+          onChange={(v) => {
+            void handleClearOnClearChange(v);
           }}
         />
       </div>

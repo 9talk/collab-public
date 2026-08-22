@@ -56,7 +56,7 @@
             "type": "command"
           },
           {
-            "command": "bash -c 'collab-canvas terminal clear \"$COLLAB_TILE_ID\"' 2>/dev/null || true",
+            "command": "bash -c '\"${CLAUDE_PLUGIN_ROOT}/scripts/collab-claude-clear-hook.sh\" \"$COLLAB_TILE_ID\"' 2>/dev/null || true",
             "type": "command"
           },
           {

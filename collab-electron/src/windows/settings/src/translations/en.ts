@@ -23,6 +23,9 @@ export const en = {
     "If you use a tool like cc-switch that manages settings.json, automatic writes may be overwritten:",
   "claude.pluginGuide": "See manual installation guide →",
   "claude.copy": "Copy",
+  "claude.clearOnClear": "Clear screen after /clear",
+  "claude.clearOnClearDesc":
+    "Clear the terminal tile screen when Claude Code's /clear ends a session. Off by default.",
   "claude.soundEnable": "Sound settings",
   "claude.soundEvent.UserPromptSubmit": "User prompt submit",
   "claude.soundEvent.Stop": "Claude response",
