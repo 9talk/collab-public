@@ -1,4 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { atomicWriteFileSync } from "./files";
@@ -55,6 +61,32 @@ function claudeMdPath(): string {
   return join(homedir(), ".claude", "CLAUDE.md");
 }
 
+/** 生成备份文件名，带时间戳，避免覆盖历史备份。 */
+function backupName(filePath: string): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  const ts = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  return `${filePath}.bak-${ts}`;
+}
+
+/** 写入或删除前，把现有内容备份（带时间戳），防止同步异常覆盖后无法找回。 */
+function backupClaudeMd(filePath: string): void {
+  const dst = backupName(filePath);
+  try {
+    if (existsSync(filePath)) {
+      copyFileSync(filePath, dst);
+    }
+  } catch (err) {
+    console.error(`[claude-md] backup failed: ${dst}`, err);
+  }
+}
+
+/** 先备份现有内容，再原子写入。 */
+function writeClaudeMd(filePath: string, content: string): void {
+  backupClaudeMd(filePath);
+  atomicWriteFileSync(filePath, content);
+}
+
 function readLines(filePath: string): string[] | null {
   if (!existsSync(filePath)) return null;
   try {
@@ -89,8 +121,14 @@ export function syncClaudeMdBlock(): SyncResult {
   const lines = readLines(filePath);
 
   if (lines === null) {
+    if (existsSync(filePath)) {
+      // 文件存在但读取失败：备份原内容后中止，绝不全量覆盖成仅段落
+      backupClaudeMd(filePath);
+      throw new Error(`Failed to read ${filePath}`);
+    }
+    // 文件确实不存在：新建完整段落
     mkdirSync(dirname(filePath), { recursive: true });
-    atomicWriteFileSync(filePath, getCollabBlock() + "\n");
+    writeClaudeMd(filePath, getCollabBlock() + "\n");
     return "inserted";
   }
 
@@ -103,7 +141,7 @@ export function syncClaudeMdBlock(): SyncResult {
       content += "\n";
     }
     content += getCollabBlock() + "\n";
-    atomicWriteFileSync(filePath, content);
+    writeClaudeMd(filePath, content);
     return "inserted";
   }
 
@@ -116,7 +154,7 @@ export function syncClaudeMdBlock(): SyncResult {
     ...getCollabBlock().split("\n"),
     ...lines.slice(block.endIdx + 1),
   ].join("\n");
-  atomicWriteFileSync(filePath, updated);
+  writeClaudeMd(filePath, updated);
   return "updated";
 }
 
@@ -127,7 +165,13 @@ export function syncClaudeMdBlock(): SyncResult {
 export function removeClaudeMdBlock(): "removed" | "unchanged" {
   const filePath = claudeMdPath();
   const lines = readLines(filePath);
-  if (lines === null) return "unchanged";
+  if (lines === null) {
+    if (existsSync(filePath)) {
+      backupClaudeMd(filePath);
+      throw new Error(`Failed to read ${filePath}`);
+    }
+    return "unchanged";
+  }
 
   const block = findBlock(lines);
   if (block === null) {
@@ -147,12 +191,13 @@ export function removeClaudeMdBlock(): "removed" | "unchanged" {
 function writeRemaining(filePath: string, remaining: string[]): void {
   const content = remaining.join("\n");
   if (content.trim() === "") {
+    backupClaudeMd(filePath);
     try {
       rmSync(filePath);
     } catch {
       // 文件已不存在
     }
   } else {
-    atomicWriteFileSync(filePath, content);
+    writeClaudeMd(filePath, content);
   }
 }

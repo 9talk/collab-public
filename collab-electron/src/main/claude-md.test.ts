@@ -2,6 +2,7 @@ import { describe, test, expect, afterAll, mock } from "bun:test";
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -29,6 +30,18 @@ const mdPath = join(FAKE_HOME, ".claude", "CLAUDE.md");
 
 function readMd(): string | null {
   return existsSync(mdPath) ? readFileSync(mdPath, "utf-8") : null;
+}
+
+/** 找到最新一份带时间戳的备份文件路径（无则返回 null）。 */
+function lastBackup(): string | null {
+  const dir = dirname(mdPath);
+  if (!existsSync(dir)) return null;
+  const backups = readdirSync(dir).filter((f) =>
+    f.startsWith("CLAUDE.md.bak-"),
+  );
+  if (backups.length === 0) return null;
+  backups.sort();
+  return join(dir, backups[backups.length - 1]);
 }
 
 afterAll(() => {
@@ -147,5 +160,47 @@ describe("removeClaudeMdBlock", () => {
     const r = removeClaudeMdBlock();
     expect(r).toBe("removed");
     expect(existsSync(mdPath)).toBe(false);
+  });
+});
+
+describe("backup before write", () => {
+  test("backs up original content before in-place update", () => {
+    rmSync(FAKE_HOME, { recursive: true, force: true });
+    mkdirSync(dirname(mdPath), { recursive: true });
+    const original =
+      "keep this\n<!-- COLLAB_START -->\nold body\n<!-- COLLAB_END -->\ntail\n";
+    writeFileSync(mdPath, original, "utf-8");
+    const r = syncClaudeMdBlock();
+    expect(r).toBe("updated");
+    const bakPath = lastBackup();
+    expect(bakPath).not.toBeNull();
+    expect(readFileSync(bakPath!, "utf-8")).toBe(original);
+    expect(readMd()).toBe("keep this\n" + getCollabBlock() + "\ntail\n");
+  });
+
+  test("backs up original content before removing block", () => {
+    rmSync(FAKE_HOME, { recursive: true, force: true });
+    mkdirSync(dirname(mdPath), { recursive: true });
+    const original = "keep\n" + getCollabBlock() + "\ntail\n";
+    writeFileSync(mdPath, original, "utf-8");
+    const r = removeClaudeMdBlock();
+    expect(r).toBe("removed");
+    const bakPath = lastBackup();
+    expect(bakPath).not.toBeNull();
+    expect(readFileSync(bakPath!, "utf-8")).toBe(original);
+    expect(readMd()).toBe("keep\ntail\n");
+  });
+
+  test("does not back up when nothing changes", () => {
+    rmSync(FAKE_HOME, { recursive: true, force: true });
+    mkdirSync(dirname(mdPath), { recursive: true });
+    writeFileSync(
+      mdPath,
+      "existing content\n" + getCollabBlock() + "\n",
+      "utf-8",
+    );
+    const r = syncClaudeMdBlock();
+    expect(r).toBe("unchanged");
+    expect(lastBackup()).toBeNull();
   });
 });
