@@ -20,6 +20,48 @@ const DATA_BUFFER_FLUSH_MS = 5;
 const MAX_WEBGL_RETRIES = 3;
 const IS_MAC = window.api.getPlatform() === "darwin";
 
+// cmd+c 复制键在"无 xterm 原生选中"时（如 Claude Code 等鼠标接管 TUI）
+// 需透传 ctrl+c(\x03) 让程序自身复制。但 \x03 无选中时会作为 SIGINT/关闭信号,
+// 因此宿主需在发送前确认"程序当前确实有一个非空选中"。这里解析 xterm 发往
+// pty 的 SGR 鼠标字节复刻 Claude Code 的选中状态机, 但采用**保守的 armed 窗口**:
+// 只在刚完成一次明确的选中(拖拽建立非空选中/双击选词/三击选行)后的短时间内 armed,
+// 任何可能取消选中的信号(单击按下、注入后、退出全屏)立即 disarm, 超时失效。
+// 宁可漏复制, 绝不误发关闭信号。
+type HostSelPoint = { col: number; row: number };
+type HostSelState = {
+  anchor: HostSelPoint | null;
+  focus: HostSelPoint | null;
+  isDragging: boolean;
+  clickCount: number;
+  lastClickTime: number;
+  lastClickCol: number;
+  lastClickRow: number;
+  /** 本轮(自上次单击按下以来)是否建立过非空选中。多击选词时 focus==anchor 仍为 true,
+   *  以区分"双击选词"与"单击未拖动"。 */
+  didSelect: boolean;
+  /** true = 允许 cmd+c 注入 \x03; 仅在明确选中后置位, 遇取消信号即清除。 */
+  armed: boolean;
+  /** armed 置位时刻, 超过 ARMED_WINDOW_MS 视为失效。 */
+  armedAt: number;
+};
+const createHostSelState = (): HostSelState => ({
+  anchor: null,
+  focus: null,
+  isDragging: false,
+  clickCount: 0,
+  lastClickTime: 0,
+  lastClickCol: 0,
+  lastClickRow: 0,
+  didSelect: false,
+  armed: false,
+  armedAt: 0,
+});
+// 选中建立后允许注入 \x03 的时间窗。太短易漏复制, 太长会把"已清选中的 stale"
+// 误判为可选中的风险加大。取 2s。
+const ARMED_WINDOW_MS = 2000;
+// SGR 鼠标事件: CSI < btn ; col ; row M(按下/移动) 或 m(松开)。col/row 1-indexed。
+const SGR_MOUSE_RE = /\x1b\[<(\d+);(\d+);(\d+)([Mm])/g;
+
 // URL regex based on xterm's default strictUrlRegex, with CJK punctuation
 // (U+3000-U+303F, U+FF00-U+FFEF) added to BOTH the middle and trailing
 // exclusion sets. The middle [^\s"'!*(){}|\\\^<>`]* clause is greedy and
@@ -58,6 +100,10 @@ function TerminalTab({
   const runningRef = useRef(false);
   // 记录上一次 alternate screen 状态,仅在翻转时打日志(避免 flushData 高频刷屏)。
   const lastAltScreenRef = useRef<boolean | null>(null);
+  // 宿主侧"程序是否有选中"检测(复刻 Claude Code selection.ts 的 anchor/focus 状态机)。
+  // 在 onData 拦截 xterm 发往 pty 的 SGR 鼠标字节来更新; mouseBufRef 缓存跨 chunk 的半截序列。
+  const hostSelRef = useRef(createHostSelState());
+  const mouseBufRef = useRef("");
 
   useEffect(() => {
     const container = containerRef.current;
@@ -329,7 +375,143 @@ function TerminalTab({
       }
     };
 
+    // --- 复刻 Claude Code selection.ts / handleMouseEvent 的 SGR 鼠标选中状态机 ---
+    // xterm 在程序开启 DEC mouse modes (1000/1002/1003/1006) 后, 把鼠标事件编码成
+    // "\x1b[<btn;col;row M|m" 发往 pty。据此维护 anchor/focus 与 armed 窗口。
+    //  - 拖拽建立"非空选中"(focus != anchor) 在松开时 arm
+    //  - 双击/三击(选词/选行) 在按下时 arm
+    //  - 单击按下 / 注入 \x03 后 / 退出全屏 → disarm
+    //  - 滚轮不参与选中, 也不 disarm(选中后滚动查看仍视为有选中)
+    const resetHostSel = () => {
+      hostSelRef.current = createHostSelState();
+    };
+    const markArmed = () => {
+      const sel = hostSelRef.current;
+      sel.armed = true;
+      sel.armedAt = Date.now();
+    };
+    const disarm = () => {
+      hostSelRef.current.armed = false;
+    };
+    const hostArmed = () => {
+      const sel = hostSelRef.current;
+      return sel.armed && Date.now() - sel.armedAt < ARMED_WINDOW_MS;
+    };
+    const onSgrMouse = (
+      button: number,
+      col: number,
+      row: number,
+      terminator: "M" | "m",
+    ) => {
+      const sel = hostSelRef.current;
+      // 滚轮(bit 0x40): 不参与选中, 只在 Claude Code 侧滚动; 忽略并保持 armed。
+      if ((button & 0x40) !== 0) return;
+      const c = col - 1; // 终端 1-indexed → 屏幕 0-indexed
+      const r = row - 1;
+      const baseButton = button & 0x03;
+      if (terminator === "M") {
+        // --- 按下 / 移动 ---
+        if ((button & 0x20) !== 0 && baseButton === 3) {
+          // 1003 无按键移动(hover)。丢失释放恢复: 若正拖着说明松开在窗口外,
+          // 结束当前拖动; 若本轮已建立选中则 arm。
+          if (sel.isDragging) {
+            sel.isDragging = false;
+            if (sel.didSelect) markArmed();
+          }
+          return;
+        }
+        if (baseButton !== 0) {
+          sel.clickCount = 0; // 非左键按下打断多击链
+          return;
+        }
+        if ((button & 0x20) !== 0) {
+          // 拖动移动: 更新 focus。首格与 anchor 同格(子像素抖动)不动, 否则
+          // 会把裸单击误当成 1 格选中。didSelect 实时反映 focus!=anchor。
+          if (
+            !sel.focus &&
+            sel.anchor &&
+            sel.anchor.col === c &&
+            sel.anchor.row === r
+          )
+            return;
+          sel.focus = { col: c, row: r };
+          sel.didSelect =
+            sel.anchor !== null &&
+            sel.focus !== null &&
+            (sel.focus.col !== sel.anchor.col ||
+              sel.focus.row !== sel.anchor.row);
+          return;
+        }
+        if (sel.isDragging) sel.isDragging = false; // 丢失释放回退
+        // 新左键按下: 多击检测 (500ms / 1 格, 与 Claude Code 相同)
+        const now = Date.now();
+        const nearLast =
+          now - sel.lastClickTime < 500 &&
+          Math.abs(c - sel.lastClickCol) <= 1 &&
+          Math.abs(r - sel.lastClickRow) <= 1;
+        sel.clickCount = nearLast ? sel.clickCount + 1 : 1;
+        sel.lastClickTime = now;
+        sel.lastClickCol = c;
+        sel.lastClickRow = r;
+        if (sel.clickCount >= 2) {
+          // 双击选词 / 三击选行: Claude Code 立即选中该词/行(宿主无需展开,
+          // 只需知道"有选中")。didSelect=true 使松开不误 disarm。
+          sel.anchor = { col: c, row: r };
+          sel.focus = { col: c, row: r };
+          sel.isDragging = true;
+          sel.didSelect = true;
+          markArmed();
+          return;
+        }
+        // 单击按下: 可能是放置光标/取消选中, 先清本轮, 拖动再重 arm。
+        disarm();
+        sel.anchor = { col: c, row: r };
+        sel.focus = null;
+        sel.isDragging = true;
+        sel.didSelect = false;
+        return;
+      }
+      // --- 松开 (m) ---
+      if (baseButton !== 0) {
+        if (!sel.isDragging) return;
+        sel.isDragging = false;
+        return;
+      }
+      sel.isDragging = false;
+      // 本轮建立了非空选中(拖动或多击选词) → arm; 单击未拖动 → 保持 disarm。
+      if (sel.didSelect) markArmed();
+      else disarm();
+    };
+    const processSgrMouse = (data: string) => {
+      let s = mouseBufRef.current + data;
+      mouseBufRef.current = "";
+      SGR_MOUSE_RE.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      let matched = false;
+      while ((m = SGR_MOUSE_RE.exec(s)) !== null) {
+        onSgrMouse(
+          parseInt(m[1]!, 10),
+          parseInt(m[2]!, 10),
+          parseInt(m[3]!, 10),
+          m[4] === "M" ? "M" : "m",
+        );
+        matched = true;
+      }
+      // 无完整序列但尾部像是半截 SGR 前缀(跨 chunk 拆分)时缓存, 下一段补齐。
+      if (!matched) {
+        const i = s.lastIndexOf("\x1b[<");
+        if (i >= 0 && !/[Mm]$/.test(s)) {
+          mouseBufRef.current = s.slice(i);
+        }
+      }
+    };
+
     term.attachCustomKeyEventHandler((e) => {
+      // Esc 在 Claude Code 里会 clear 其文本选中 → 宿主同步清除, 避免后续
+      // cmd+c 误判为"有选中"。不消费事件, 让 Esc 正常透传给终端。
+      if (e.type === "keydown" && e.key === "Escape") {
+        resetHostSel();
+      }
       if (e.key === "Enter" && e.shiftKey) {
         if (e.type === "keydown") {
           window.api.ptySendRawKeys(sessionId, "\x1b[13;2u");
@@ -339,21 +521,33 @@ function TerminalTab({
       const primaryModifier = IS_MAC ? e.metaKey : e.ctrlKey;
       if (e.type === "keydown" && primaryModifier) {
         const key = e.key.toLowerCase();
-        if (key === "c" && copySelectionToClipboard()) {
+        if (key === "c") {
+          // mac: cmd+c 是复制键; 非 mac 仅 ctrl+shift+c 是复制键
+          // (纯 ctrl+c = SIGINT 键, 需交还终端发送 \x03)
+          const isCopyKey = IS_MAC || e.shiftKey;
+          if (!isCopyKey) {
+            // 非 mac 纯 ctrl+c: 有原生选中才复制, 否则交还 xterm 发送 \x03 作为中断
+            if (copySelectionToClipboard()) return false;
+            return true;
+          }
+          // 复制键(mac cmd+c / 非 mac ctrl+shift+c):
+          // 有 xterm 原生选中 → 宿主直接复制; 无选中(如 Claude Code 等鼠标接管 TUI)
+          // → 仅当宿主处于 armed(刚完成一次明确的选中) 且未超时才透传 ctrl+c(\x03)
+          //   让 Claude Code 命中其 selection:copy 回退(ScrollKeybindingHandler:602)。
+          //   注入成功后 disarm, 避免连续 cmd+c 二次注入(Claude Code 复制后已清选中,
+          //   再注入无选中下会被当成 ctrl+c/关闭信号)。无选中时返回 false, 不发送任何字节。
+          if (copySelectionToClipboard()) return false;
+          if (hostArmed()) {
+            window.api.ptyWrite(sessionId, "\x03");
+            // 注入后 Claude Code 的 selection:copy 会清掉自身选中, 宿主同步清除,
+            // 避免连续 cmd+c 二次注入(无选中下被当成 ctrl+c/关闭信号)。
+            resetHostSel();
+          }
           return false;
         }
         if (key === "v") {
           pasteFromShortcut();
           return false;
-        }
-        if (!IS_MAC && e.shiftKey) {
-          if (key === "c" && copySelectionToClipboard()) {
-            return false;
-          }
-          if (key === "v") {
-            pasteFromShortcut();
-            return false;
-          }
         }
       }
       if (e.type === "keydown" && e.shiftKey && e.key === "Insert") {
@@ -409,7 +603,9 @@ function TerminalTab({
     });
 
     term.onData((data: string) => {
-      console.log("[terminal onData]", JSON.stringify(data));
+      // SGR 鼠标事件在转发给 pty 前先解析, 还原程序自身的选中状态(见上)。
+      // 不消费字节, 原样透传。
+      processSgrMouse(data);
 
       // Suppress sending data to PTY during IME composition; the
       // completed text is sent once via compositionend instead.
@@ -494,6 +690,16 @@ function TerminalTab({
 
     const handleData = (payload: { sessionId: string; data: Uint8Array }) => {
       if (payload.sessionId !== sessionId) return;
+      // 程序关闭鼠标追踪(如退出全屏 / 清选中)→ 宿主还原的选中状态一并复位,
+      // 避免 stale 状态下 cmd+c 误发 \x03。抓 DISABLE_MOUSE_TRACKING 里的 \x1b[?1000l。
+      try {
+        const chunk = new TextDecoder().decode(payload.data);
+        if (chunk.includes("\x1b[?1000l")) {
+          resetHostSel();
+        }
+      } catch {
+        /* 字节解码失败,忽略 */
+      }
       // During a WebGL refresh, buffer data separately to avoid
       // losing it if flushData races with dataBufferRef.current = [].
       if (refreshingRef.current) {
