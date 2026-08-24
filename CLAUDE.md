@@ -83,4 +83,10 @@ All run from `collab-electron/`:
 | `bun run test`               | Run test suite               |
 | `./scripts/install-local.sh` | Build, install, and launch   |
 
+## Claude Code 源码
+
+需要阅读 Claude Code 源码时，读取地址：
+
+<https://gitee.com/nice9/claude-code>
+
 ⠀
