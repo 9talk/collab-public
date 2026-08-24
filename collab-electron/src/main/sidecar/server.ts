@@ -85,6 +85,23 @@ export class SidecarServer {
       : Buffer.from(data);
   }
 
+  /**
+   * 重连/重建回放 ring buffer 时, 剥离 shell 早前发出的 DSR/DA 查询
+   * (\x1b[6n 光标询问, \x1b[...c 设备属性)。这些是历史查询, 回放给新 xterm
+   * 会触发它对过期查询重新应答, 应答涌入 shell 侧被回显成 "37;3R"/"1;2c"
+   * 泄漏。仅作用于回放快照, 实时数据不受影响。
+   */
+  private stripRebuildReportQueries(buf: Buffer): Buffer {
+    if (buf.length === 0) return buf;
+    const s = buf.toString("utf-8");
+    const cleaned = s
+      // 剥离历史 DSR/DA 查询, 防全新 xterm 对过期查询重复应答
+      .replace(/\x1b\[(?:[?>=]?[0-9;]*c|[?]?6n)/g, "")
+      // 剥离回放里已污染的无 \x1b 前缀应答载荷(上次泄漏残留), 防再次显示
+      .replace(/(?<![\d\x1b[?])(?:\d{1,4};\d{1,4}R|\d{1,3};2c)/g, "");
+    return cleaned === s ? buf : Buffer.from(cleaned, "utf-8");
+  }
+
   private windowsPathKey(env: Record<string, string>): string | null {
     return Object.keys(env).find((key) => key.toLowerCase() === "path") ?? null;
   }
@@ -439,7 +456,7 @@ export class SidecarServer {
       if (session.reconnectQueue) {
         const snapshot = ringBuffer.snapshot();
         if (snapshot.length > 0) {
-          client.write(snapshot);
+          client.write(this.stripRebuildReportQueries(snapshot));
         }
         for (const queued of session.reconnectQueue) {
           client.write(queued);
@@ -448,7 +465,7 @@ export class SidecarServer {
       } else if (!session.hasAttachedClient) {
         const snapshot = ringBuffer.snapshot();
         if (snapshot.length > 0) {
-          client.write(snapshot);
+          client.write(this.stripRebuildReportQueries(snapshot));
         }
       }
       session.hasAttachedClient = true;

@@ -693,7 +693,13 @@ function TerminalTab({
       // 程序关闭鼠标追踪(如退出全屏 / 清选中)→ 宿主还原的选中状态一并复位,
       // 避免 stale 状态下 cmd+c 误发 \x03。抓 DISABLE_MOUSE_TRACKING 里的 \x1b[?1000l。
       try {
-        const chunk = new TextDecoder().decode(payload.data);
+        // 主进程经 IPC 发来的是 string（pty.ts forwardPtyData 用 data: enriched），
+        // 但类型声明为 Uint8Array；TextDecoder.decode(string) 会抛 TypeError，
+        // 导致 \x1b[?1000l 复位检测从未生效。按实际类型分支处理。
+        const chunk =
+          typeof payload.data === "string"
+            ? payload.data
+            : new TextDecoder().decode(payload.data);
         if (chunk.includes("\x1b[?1000l")) {
           resetHostSel();
         }
