@@ -27,6 +27,10 @@ export interface ManagedService {
   startError?: string;
   /** 进程组 leader pid（= spawn 出的 start.sh 的 child.pid），用于进程组杀/探活 */
   pgid?: number | null;
+  /** 服务上报的 HTTP 端口（start.sh stdout 的 COLLAB_HTTP_PORT:<port> 行） */
+  httpPort?: number | null;
+  /** 服务上报的成功说明（start.sh stdout 的 COLLAB_MESSAGE:<文本> 行） */
+  message?: string;
 }
 
 interface PersistedService {
@@ -185,6 +189,8 @@ function snapshot(record: ManagedService): ManagedService {
   if (record.exitSignal !== undefined) out.exitSignal = record.exitSignal;
   if (record.startError !== undefined) out.startError = record.startError;
   if (record.pgid !== undefined) out.pgid = record.pgid;
+  if (record.httpPort !== undefined) out.httpPort = record.httpPort;
+  if (record.message !== undefined) out.message = record.message;
   return out;
 }
 
@@ -252,6 +258,8 @@ export async function startService(
   // 解析脚本通过 stdout 上报的 PID 与失败原因标记，同时 tee 到日志文件
   let reportedPid: number | null = null;
   let reportedError: string | null = null;
+  let reportedHttpPort: number | null = null;
+  let reportedMessage: string | null = null;
   let stdoutBuf = "";
   const teeLog = (chunk: Buffer) => {
     try {
@@ -269,6 +277,16 @@ export async function startService(
       if (line.startsWith("COLLAB_PID:")) {
         const pidMatch = line.match(/^COLLAB_PID:(\d+)/);
         if (pidMatch) reportedPid = Number(pidMatch[1]);
+        continue;
+      }
+      if (line.startsWith("COLLAB_HTTP_PORT:")) {
+        const portMatch = line.match(/^COLLAB_HTTP_PORT:(\d+)/);
+        if (portMatch) reportedHttpPort = Number(portMatch[1]);
+        continue;
+      }
+      if (line.startsWith("COLLAB_MESSAGE:")) {
+        const msgMatch = line.match(/^COLLAB_MESSAGE:(.+)/);
+        if (msgMatch) reportedMessage = msgMatch[1].trim();
         continue;
       }
       const errMatch = line.match(/^COLLAB_ERROR:(.+)/);
@@ -289,12 +307,13 @@ export async function startService(
   if (stdoutBuf.trim().length > 0) {
     const line = stdoutBuf.trim();
     const pidMatch = line.match(/^COLLAB_PID:(\d+)/);
-    if (pidMatch) {
-      reportedPid = Number(pidMatch[1]);
-    } else {
-      const errMatch = line.match(/^COLLAB_ERROR:(.+)/);
-      if (errMatch) reportedError = errMatch[1].trim();
-    }
+    if (pidMatch) reportedPid = Number(pidMatch[1]);
+    const portMatch = line.match(/^COLLAB_HTTP_PORT:(\d+)/);
+    if (portMatch) reportedHttpPort = Number(portMatch[1]);
+    const msgMatch = line.match(/^COLLAB_MESSAGE:(.+)/);
+    if (msgMatch) reportedMessage = msgMatch[1].trim();
+    const errMatch = line.match(/^COLLAB_ERROR:(.+)/);
+    if (errMatch) reportedError = errMatch[1].trim();
   }
 
   const record: ManagedService = {
@@ -304,6 +323,8 @@ export async function startService(
     status: "running",
     pgid,
   };
+  if (reportedHttpPort !== null) record.httpPort = reportedHttpPort;
+  if (reportedMessage !== null) record.message = reportedMessage;
 
   if (outcome.kind === "exit") {
     record.exitCode = outcome.code;
@@ -354,6 +375,8 @@ export async function startService(
   if (record.exitSignal !== undefined) result.exitSignal = record.exitSignal;
   if (record.startError !== undefined) result.startError = record.startError;
   if (record.pgid !== undefined) result.pgid = record.pgid;
+  if (record.httpPort !== undefined) result.httpPort = record.httpPort;
+  if (record.message !== undefined) result.message = record.message;
   return result;
 }
 

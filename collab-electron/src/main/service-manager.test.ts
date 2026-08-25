@@ -71,6 +71,34 @@ describe("service-manager", () => {
     expect(running.pid).toBe(s.pid);
   });
 
+  test("start success reports httpPort parsed from COLLAB_HTTP_PORT", async () => {
+    const dir = makeProject();
+    writeStartSh(
+      dir,
+      '#!/bin/bash\nnohup sleep 30 >/dev/null 2>&1 &\necho "COLLAB_PID:$!"\necho "COLLAB_HTTP_PORT:8080"\nexit 0\n',
+    );
+    const s = await startService(dir);
+    expect(s.status).toBe("running");
+    expect(s.httpPort).toBe(8080);
+
+    const running = checkService(dir);
+    expect(running.httpPort).toBe(8080);
+  });
+
+  test("start success reports message parsed from COLLAB_MESSAGE", async () => {
+    const dir = makeProject();
+    writeStartSh(
+      dir,
+      '#!/bin/bash\nnohup sleep 30 >/dev/null 2>&1 &\necho "COLLAB_PID:$!"\necho "COLLAB_MESSAGE:服务已启动，监听 :8080"\nexit 0\n',
+    );
+    const s = await startService(dir);
+    expect(s.status).toBe("running");
+    expect(s.message).toBe("服务已启动，监听 :8080");
+
+    const running = checkService(dir);
+    expect(running.message).toBe("服务已启动，监听 :8080");
+  });
+
   test("start is idempotent while running", async () => {
     const dir = makeProject();
     writeStartSh(dir, SUCCESS_SH);
