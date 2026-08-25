@@ -7,13 +7,14 @@ import {
   renameSync,
   statSync,
   writeFileSync,
+  writeSync,
 } from "node:fs";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { COLLAB_DIR } from "./paths";
 
-export type ServiceStatus = "running" | "stopped" | "exited";
+export type ServiceStatus = "running" | "stopped" | "exited" | "failed";
 
 export interface ManagedService {
   projectPath: string;
@@ -22,16 +23,22 @@ export interface ManagedService {
   status: ServiceStatus;
   exitCode?: number | null;
   exitSignal?: string | null;
+  /** 启动失败原因：超时 / spawn 错误 / 无 PID 上报 / COLLAB_ERROR 信息 */
+  startError?: string;
+  /** 进程组 leader pid（= spawn 出的 start.sh 的 child.pid），用于进程组杀/探活 */
+  pgid?: number | null;
 }
 
 interface PersistedService {
   pid: number | null;
+  pgid: number | null;
   startedAt: number | null;
 }
 
 const IS_WIN = process.platform === "win32";
 const DATA_FILE = join(COLLAB_DIR, "services.json");
 const LOGS_DIR = join(COLLAB_DIR, "services-logs");
+const START_TIMEOUT_MS = 120_000;
 
 // 本进程 spawn 的子进程对象（应用重启后恢复的记录没有 child，靠 PID 探活）
 const children = new Map<string, ChildProcess>();
@@ -52,6 +59,7 @@ function load(): void {
         services.set(projectPath, {
           projectPath,
           pid: typeof s.pid === "number" ? s.pid : null,
+          pgid: typeof s.pgid === "number" ? s.pgid : null,
           startedAt: typeof s.startedAt === "number" ? s.startedAt : null,
           status: "stopped", // 运行状态实时计算，磁盘只存 pid/startedAt
         });
@@ -67,8 +75,12 @@ function persist(): void {
     mkdirSync(COLLAB_DIR, { recursive: true });
     const list: Record<string, PersistedService> = {};
     for (const [projectPath, s] of services) {
-      if (s.pid) {
-        list[projectPath] = { pid: s.pid, startedAt: s.startedAt };
+      if (s.pid || s.pgid) {
+        list[projectPath] = {
+          pid: s.pid,
+          pgid: s.pgid,
+          startedAt: s.startedAt,
+        };
       }
     }
     const tmp = `${DATA_FILE}.${Date.now()}.tmp`;
@@ -89,6 +101,17 @@ function isAlive(pid: number): boolean {
   }
 }
 
+/** 进程组存活探测：detached 后 pgid === child.pid，负 pid 探活整个进程组 */
+function isProcessGroupAlive(pgid: number): boolean {
+  if (!pgid || pgid <= 0) return false;
+  try {
+    process.kill(-pgid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function effectiveStatus(projectPath: string): ServiceStatus {
   const record = services.get(projectPath);
   if (!record?.pid) return "stopped";
@@ -96,7 +119,14 @@ function effectiveStatus(projectPath: string): ServiceStatus {
   if (child) {
     return child.exitCode === null ? "running" : "exited";
   }
-  return isAlive(record.pid) ? "running" : "exited";
+  // 双重检测：上报的真实服务 pid 存活 且 进程组存活，两者都成立才算运行中。
+  // 避免仅看进程组导致"服务已死但进程组有残留进程"时误报 running。
+  const pidAlive = isAlive(record.pid);
+  const groupAlive =
+    record.pgid !== null &&
+    record.pgid !== undefined &&
+    isProcessGroupAlive(record.pgid);
+  return pidAlive && groupAlive ? "running" : "exited";
 }
 
 export function getLogPath(projectPath: string): string {
@@ -153,10 +183,46 @@ function snapshot(record: ManagedService): ManagedService {
   };
   if (record.exitCode !== undefined) out.exitCode = record.exitCode;
   if (record.exitSignal !== undefined) out.exitSignal = record.exitSignal;
+  if (record.startError !== undefined) out.startError = record.startError;
+  if (record.pgid !== undefined) out.pgid = record.pgid;
   return out;
 }
 
-export function startService(projectPath: string): ManagedService {
+type ChildOutcome =
+  | { kind: "exit"; code: number | null; signal: NodeJS.Signals | null }
+  | { kind: "timeout" }
+  | { kind: "error" };
+
+/** 阻塞等待子进程退出 / 超时 / spawn 错误，任一触发后移除其余监听。用 close 而非 exit，
+ *  确保 stdout 数据(含 COLLAB_PID/COLLAB_ERROR 标记)已被完整读取后再解析。 */
+function waitForChildOutcome(
+  child: ChildProcess,
+  timeoutMs: number,
+): Promise<ChildOutcome> {
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer: NodeJS.Timeout | null = null;
+    const onClose = (code: number | null, signal: NodeJS.Signals | null) =>
+      finish({ kind: "exit", code, signal });
+    const onError = () => finish({ kind: "error" });
+    const finish = (outcome: ChildOutcome) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      child.removeListener("close", onClose);
+      child.removeListener("error", onError);
+      resolve(outcome);
+    };
+    child.once("close", onClose);
+    child.once("error", onError);
+    timer = setTimeout(() => finish({ kind: "timeout" }), timeoutMs);
+  });
+}
+
+export async function startService(
+  projectPath: string,
+  timeoutMs = START_TIMEOUT_MS,
+): Promise<ManagedService> {
   validateProject(projectPath);
   const existing = services.get(projectPath);
   if (existing?.pid && effectiveStatus(projectPath) === "running") {
@@ -179,43 +245,116 @@ export function startService(projectPath: string): ManagedService {
   const child = spawn("bash", ["start.sh"], {
     cwd: projectPath,
     detached: true,
-    stdio: ["ignore", logFd, logFd],
+    stdio: ["ignore", "pipe", "pipe"],
   });
+  const pgid = child.pid ?? null;
+
+  // 解析脚本通过 stdout 上报的 PID 与失败原因标记，同时 tee 到日志文件
+  let reportedPid: number | null = null;
+  let reportedError: string | null = null;
+  let stdoutBuf = "";
+  const teeLog = (chunk: Buffer) => {
+    try {
+      writeSync(logFd, chunk);
+    } catch {
+      // 日志已关闭
+    }
+  };
+  const parseStdout = (chunk: Buffer) => {
+    stdoutBuf += chunk.toString("utf-8");
+    let nl: number;
+    while ((nl = stdoutBuf.indexOf("\n")) !== -1) {
+      const line = stdoutBuf.slice(0, nl).trim();
+      stdoutBuf = stdoutBuf.slice(nl + 1);
+      if (line.startsWith("COLLAB_PID:")) {
+        const pidMatch = line.match(/^COLLAB_PID:(\d+)/);
+        if (pidMatch) reportedPid = Number(pidMatch[1]);
+        continue;
+      }
+      const errMatch = line.match(/^COLLAB_ERROR:(.+)/);
+      if (errMatch) reportedError = errMatch[1].trim();
+    }
+  };
+  child.stdout?.on("data", (chunk) => {
+    teeLog(chunk);
+    parseStdout(chunk);
+  });
+  child.stderr?.on("data", (chunk) => {
+    teeLog(chunk);
+  });
+
+  const outcome = await waitForChildOutcome(child, timeoutMs);
+
+  // stdout 流关闭后兜底解析残留行（最后一行可能无换行符）
+  if (stdoutBuf.trim().length > 0) {
+    const line = stdoutBuf.trim();
+    const pidMatch = line.match(/^COLLAB_PID:(\d+)/);
+    if (pidMatch) {
+      reportedPid = Number(pidMatch[1]);
+    } else {
+      const errMatch = line.match(/^COLLAB_ERROR:(.+)/);
+      if (errMatch) reportedError = errMatch[1].trim();
+    }
+  }
 
   const record: ManagedService = {
     projectPath,
-    pid: child.pid ?? null,
+    pid: null,
     startedAt: Date.now(),
     status: "running",
+    pgid,
   };
-  services.set(projectPath, record);
-  children.set(projectPath, child);
 
-  child.on("exit", (code, signal) => {
-    const cur = services.get(projectPath);
-    if (cur && cur.pid === child.pid) {
-      cur.status = "exited";
-      cur.exitCode = code;
-      cur.exitSignal = signal ?? null;
-      persist();
-    }
-    children.delete(projectPath);
-    const fd = logFds.get(projectPath);
-    if (fd !== undefined) {
-      try {
-        closeSync(fd);
-      } catch {
-        // 已关闭
+  if (outcome.kind === "exit") {
+    record.exitCode = outcome.code;
+    record.exitSignal = outcome.signal;
+    if (outcome.code === 0) {
+      if (reportedPid !== null) {
+        record.status = "running";
+        record.pid = reportedPid;
+      } else {
+        record.status = "failed";
+        record.startError = "no-pid";
       }
-      logFds.delete(projectPath);
+    } else {
+      record.status = "failed";
+      record.startError = reportedError ?? undefined;
     }
-  });
-  child.on("error", (err) => {
-    console.error("[service-manager] spawn error:", projectPath, err.message);
-  });
+  } else if (outcome.kind === "timeout") {
+    record.status = "failed";
+    record.startError = "timeout";
+    if (pgid !== null) killProcessTree(pgid);
+  } else {
+    record.status = "failed";
+    record.startError = "spawn";
+  }
+
+  services.set(projectPath, record);
+  children.delete(projectPath);
+
+  const fd = logFds.get(projectPath);
+  if (fd !== undefined) {
+    try {
+      closeSync(fd);
+    } catch {
+      // 已关闭
+    }
+    logFds.delete(projectPath);
+  }
 
   persist();
-  return snapshot(record);
+  // 返回启动判定结果：成功=running，失败=failed；不经过实时探活覆盖。
+  const result: ManagedService = {
+    projectPath,
+    pid: record.pid,
+    startedAt: record.startedAt,
+    status: record.status,
+  };
+  if (record.exitCode !== undefined) result.exitCode = record.exitCode;
+  if (record.exitSignal !== undefined) result.exitSignal = record.exitSignal;
+  if (record.startError !== undefined) result.startError = record.startError;
+  if (record.pgid !== undefined) result.pgid = record.pgid;
+  return result;
 }
 
 function killProcessTree(pid: number): void {
@@ -234,19 +373,19 @@ function killProcessTree(pid: number): void {
   }
 }
 
-async function waitForExit(pid: number, timeoutMs: number): Promise<void> {
+async function waitForExit(pgid: number, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (!isAlive(pid)) return;
+    if (!isProcessGroupAlive(pgid)) return;
     await new Promise((r) => setTimeout(r, 100));
   }
   try {
     if (IS_WIN) {
-      spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], {
+      spawnSync("taskkill", ["/pid", String(pgid), "/T", "/F"], {
         stdio: "ignore",
       });
     } else {
-      process.kill(-pid, "SIGKILL");
+      process.kill(-pgid, "SIGKILL");
     }
   } catch {
     // 已退出
@@ -257,12 +396,14 @@ export async function stopService(
   projectPath: string,
 ): Promise<ManagedService> {
   const record = services.get(projectPath);
-  if (!record?.pid) {
+  if (!record?.pid && !record?.pgid) {
     return { projectPath, pid: null, startedAt: null, status: "stopped" };
   }
-  killProcessTree(record.pid);
-  await waitForExit(record.pid, 5000);
+  const pgid = record.pgid ?? record.pid;
+  killProcessTree(pgid);
+  await waitForExit(pgid, 5000);
   record.pid = null;
+  record.pgid = null;
   record.startedAt = null;
   persist();
   return snapshot(record);

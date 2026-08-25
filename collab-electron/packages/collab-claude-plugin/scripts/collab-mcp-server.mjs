@@ -104,7 +104,7 @@ function rpcCall(method, params = {}) {
     const timer = setTimeout(() => {
       sock.destroy();
       reject(new Error("socket rpc timeout"));
-    }, 10_000);
+    }, 150_000);
     sock.on("connect", () => sock.write(payload));
     sock.on("data", (chunk) => {
       buf += chunk.toString();

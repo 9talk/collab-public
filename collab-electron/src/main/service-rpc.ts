@@ -17,7 +17,7 @@ function requireProjectPath(params: unknown): string {
 export function registerServiceRpc(): void {
   registerMethod(
     "devtool_start",
-    (params) => services.startService(requireProjectPath(params)),
+    async (params) => services.startService(requireProjectPath(params)),
     {
       description:
         "在指定项目目录启动服务，要求该目录下存在 start.sh 脚本，否则报错。返回服务状态。",
