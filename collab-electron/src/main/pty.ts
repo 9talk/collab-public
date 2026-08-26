@@ -42,6 +42,16 @@ const WINDOWS_POWERSHELL_PTY_BATCH_MS = 16;
  */
 const trailingUtf8Bytes = new Map<string, Buffer>();
 
+// XTVERSION 查询/应答 (CSI > 0 q → DCS > | name ST)。TUI 程序(Claude Code 的
+// ink)用它探测宿主终端: 识别为 xterm.js 后会把 OSC 8 链接打开权让给宿主
+// (其 linkHandler), 避免宿主的 linkHandler 与程序自身打开同一链接造成双开。
+// xterm.js 自身不响应此查询, 且我们伪装 TERM_PROGRAM=iTerm.app, 因此需要
+// 在这里代为应答, 让程序(如 Claude Code)走 xterm.js 宿主分支。
+const XTVERSION_QUERY = "\x1b[>0q";
+const XTVERSION_REPLY = "\x1bP>|xterm.js(6.0.0)\x1b\\";
+// 跨 chunk 拆分的查询前缀缓存(仅保留可能构成查询的尾缀)。
+const xtversionScanBuffers = new Map<string, string>();
+
 function getSidecarClient(): SidecarClient {
   if (!sidecarClient) throw new Error("Sidecar client not initialized");
   return sidecarClient;
@@ -136,6 +146,7 @@ function clearPendingPtyData(sessionId: string): void {
   }
   pendingPtyData.delete(sessionId);
   trailingUtf8Bytes.delete(sessionId);
+  xtversionScanBuffers.delete(sessionId);
 }
 
 function flushPendingPtyData(
@@ -153,6 +164,20 @@ function flushPendingPtyData(
     data: data.toString("utf-8"),
   });
   scheduleForegroundCheck(sessionId);
+}
+
+function respondToXtversionQuery(sessionId: string, text: string): void {
+  const scan = (xtversionScanBuffers.get(sessionId) ?? "") + text;
+  if (scan.includes(XTVERSION_QUERY)) {
+    writeToSession(sessionId, XTVERSION_REPLY);
+  }
+  // 仅当 chunk 尾部可能是被拆开的查询前缀时才缓存, 避免长期积累。
+  const idx = scan.lastIndexOf("\x1b[>");
+  if (idx >= 0 && scan.length - idx < XTVERSION_QUERY.length) {
+    xtversionScanBuffers.set(sessionId, scan.slice(idx));
+  } else {
+    xtversionScanBuffers.delete(sessionId);
+  }
 }
 
 function forwardPtyData(
@@ -175,6 +200,8 @@ function forwardPtyData(
 
   const safeLen = tail > 0 ? full.length - tail : full.length;
   const text = full.subarray(0, safeLen).toString("utf-8");
+
+  respondToXtversionQuery(sessionId, text);
 
   // Enrich PTY output: colorize URLs and wrap file paths with OSC 8 hyperlinks
   const enriched = hyperlinkFilePaths(text);

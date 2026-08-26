@@ -405,11 +405,13 @@ export function registerMiscHandlers(ctx: IpcContext): void {
 
   // Open external URL
   ipcMain.on("shell:open-external", (_event, url: string) => {
+    console.log("[open-external] from", _event.sender.getURL(), ":", url);
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
   });
 
   // Open file with system default application
   ipcMain.on("shell:open-path", (_event, path: string) => {
+    console.log("[open-path] from", _event.sender.getURL(), ":", path);
     shell.openPath(path);
   });
 

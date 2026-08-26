@@ -43,6 +43,7 @@ import {
 } from "./claude-md";
 import { registerClaudeIpc } from "./claude-rpc";
 import { registerClaudeEditsRpc, findLatestEditLine } from "./claude-edits-rpc";
+import { registerDebugMouseRpc } from "./debug-mouse-rpc";
 import {
   registerMethod,
   startJsonRpcServer,
@@ -1008,6 +1009,8 @@ app.whenReady().then(async () => {
   registerMethod("workspace.getConfig", () => config, {
     description: "Return the current app configuration",
   });
+
+  registerDebugMouseRpc();
 
   try {
     await startJsonRpcServer();

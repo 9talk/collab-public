@@ -167,6 +167,7 @@ function TerminalTab({
     const linkHandler = {
       allowNonHttpProtocols: true,
       activate: async (event: MouseEvent, text: string) => {
+        console.log("[link-activate] text:", text, "meta:", event.metaKey);
         // Determine if the link is a file path (OSC 8 URI or bare absolute path)
         let filePath: string | null = null;
         if (text.startsWith("file://")) {
@@ -176,12 +177,14 @@ function TerminalTab({
         }
 
         if (!filePath) {
+          console.log("[link-activate] not a file path, openExternal");
           window.api.openExternal(text);
           return;
         }
 
         // Cmd+Click (macOS) / Ctrl+Click (other platforms): show editor picker
         if (IS_MAC ? event.metaKey : event.ctrlKey) {
+          console.log("[link-activate] metaKey, showEditorPicker:", filePath);
           await showEditorPicker(filePath);
           return;
         }
@@ -209,6 +212,7 @@ function TerminalTab({
         }
 
         if (matchedEditor) {
+          console.log("[link-activate] matched group editor:", matchedEditor);
           if (matchedEditor === "system-app") {
             window.api.openPath(filePath);
           } else {
@@ -221,6 +225,7 @@ function TerminalTab({
         try {
           const useExt = await window.api.getPref("useExternalEditor");
           if (useExt) {
+            console.log("[link-activate] global editor (useExternalEditor)");
             window.api.openFileInExternalEditor(filePath);
             return;
           }
@@ -228,6 +233,7 @@ function TerminalTab({
           // Preference unavailable — fall through
         }
 
+        console.log("[link-activate] fallback openPath");
         // Fallback: open with system default application
         window.api.openPath(filePath);
       },
@@ -239,6 +245,10 @@ function TerminalTab({
     term.loadAddon(fit);
     term.open(container);
     fitRef.current = fit;
+
+    // 调试入口: 供自动化测试(debug.terminalClick RPC)在页面内定位 cell 与构造
+    // 合成鼠标事件; 无特权 API, 仅暴露 xterm 实例供坐标换算。
+    (window as unknown as Record<string, unknown>).__collabTerm = term;
 
     // IME composition handling: suppress onData during composition
     // to prevent partial/composed text from being sent to PTY multiple
@@ -482,20 +492,61 @@ function TerminalTab({
       if (sel.didSelect) markArmed();
       else disarm();
     };
-    const processSgrMouse = (data: string) => {
+    // 点击的 SGR 视口坐标(col/row 1-based)处是否为 OSC 8 链接 cell:
+    // 直接实时查询 buffer — 与 OscLinkProvider 读 cell.extended.urlId、TUI
+    // 程序(Claude Code getHyperlinkAt)的判定依据完全一致。不用 hover 快照:
+    // Claude Code 等 TUI 全屏重绘会让链接的 buffer 绝对行漂移, 快照换算不可靠。
+    const isLinkCell = (col: number, row: number): boolean => {
+      try {
+        const buffer = term.buffer.active;
+        const line = buffer.getLine(row - 1 + buffer.viewportY);
+        if (!line) return false;
+        const cell = line.getCell(col - 1);
+        return !!(cell && cell.hasExtendedAttrs() && cell.extended.urlId > 0);
+      } catch {
+        return false;
+      }
+    };
+    // 解析 SGR 鼠标序列并返回"应转发给 pty 的数据"。
+    // 命中链接 cell 的左键按下/松开(非滚轮/非拖拽移动)会被剥离 — 该点击已由
+    // linkHandler.activate 消费(打开编辑器), 再转发给 TUI 会导致其自行打开链接
+    // (双重打开)。被剥离的序列同样跳过宿主选中状态机, 与程序端状态保持一致。
+    const processSgrMouse = (data: string): string => {
       let s = mouseBufRef.current + data;
       mouseBufRef.current = "";
+      // 跨 chunk 的半截 SGR 前缀在上一个 chunk 已原样转发, 无法回收, 故只剥离
+      // 完整落在本 chunk 内的序列。
+      const cachedLen = s.length - data.length;
       SGR_MOUSE_RE.lastIndex = 0;
       let m: RegExpExecArray | null;
       let matched = false;
+      const suppressed: Array<[number, number]> = [];
       while ((m = SGR_MOUSE_RE.exec(s)) !== null) {
-        onSgrMouse(
-          parseInt(m[1]!, 10),
-          parseInt(m[2]!, 10),
-          parseInt(m[3]!, 10),
-          m[4] === "M" ? "M" : "m",
-        );
         matched = true;
+        const button = parseInt(m[1]!, 10);
+        const col = parseInt(m[2]!, 10);
+        const row = parseInt(m[3]!, 10);
+        const terminator = m[4] === "M" ? "M" : "m";
+        if (
+          (button & 0x40) === 0 &&
+          (button & 0x03) === 0 &&
+          (button & 0x20) === 0
+        ) {
+          console.log(
+            `[sgr-click] btn=${button} col=${col} row=${row} ${terminator} viewportY=${term.buffer.active.viewportY} inLink=${isLinkCell(col, row)}`,
+          );
+        }
+        if (
+          m.index >= cachedLen &&
+          (button & 0x40) === 0 &&
+          (button & 0x03) === 0 &&
+          (button & 0x20) === 0 &&
+          isLinkCell(col, row)
+        ) {
+          suppressed.push([m.index, m.index + m[0].length]);
+          continue;
+        }
+        onSgrMouse(button, col, row, terminator);
       }
       // 无完整序列但尾部像是半截 SGR 前缀(跨 chunk 拆分)时缓存, 下一段补齐。
       if (!matched) {
@@ -504,6 +555,15 @@ function TerminalTab({
           mouseBufRef.current = s.slice(i);
         }
       }
+      if (suppressed.length === 0) return s;
+      console.log(`[link-intercept] suppressed ${suppressed.length} SGR click`);
+      let out = "";
+      let pos = 0;
+      for (const [start, end] of suppressed) {
+        out += s.slice(pos, start);
+        pos = end;
+      }
+      return out + s.slice(pos);
     };
 
     term.attachCustomKeyEventHandler((e) => {
@@ -604,8 +664,9 @@ function TerminalTab({
 
     term.onData((data: string) => {
       // SGR 鼠标事件在转发给 pty 前先解析, 还原程序自身的选中状态(见上)。
-      // 不消费字节, 原样透传。
-      processSgrMouse(data);
+      // 命中 hovered 链接的点击序列被剥离(链接已由 linkHandler.activate 消费),
+      // 其余字节原样透传。
+      const forwarded = processSgrMouse(data);
 
       // Suppress sending data to PTY during IME composition; the
       // completed text is sent once via compositionend instead.
@@ -613,8 +674,12 @@ function TerminalTab({
         return;
       }
 
+      if (forwarded.length === 0) {
+        return;
+      }
+
       window.api.sendToHost("term:user-input", sessionId);
-      window.api.ptyWrite(sessionId, data);
+      window.api.ptyWrite(sessionId, forwarded);
     });
 
     const flushData = () => {
