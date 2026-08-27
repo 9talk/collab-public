@@ -1,6 +1,7 @@
 import { describe, test, expect, afterAll, mock } from "bun:test";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -8,7 +9,7 @@ import {
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 const dataDir = mkdtempSync(join(tmpdir(), "svc-test-data-"));
 
@@ -28,8 +29,9 @@ function makeProject(): string {
   return mkdtempSync(join(tmpdir(), "svc-test-proj-"));
 }
 
-function writeStartSh(dir: string, body: string): void {
-  writeFileSync(join(dir, "start.sh"), body, "utf-8");
+function writeStartSh(dir: string, body: string, rel = "start.sh"): void {
+  mkdirSync(join(dir, dirname(rel)), { recursive: true });
+  writeFileSync(join(dir, rel), body, "utf-8");
 }
 
 // 后台型成功脚本：后台拉起 sleep 后上报其真实 pid，脚本自身退出
@@ -48,9 +50,35 @@ afterAll(async () => {
 });
 
 describe("service-manager", () => {
-  test("startService rejects when start.sh missing", async () => {
+  test("startService rejects when no start script found", async () => {
     const dir = makeProject();
-    await expect(startService(dir)).rejects.toThrow(/没有 start.sh 脚本/);
+    await expect(startService(dir)).rejects.toThrow(
+      /没有 start.sh 或 scripts\/start.sh 脚本/,
+    );
+  });
+
+  test("start uses scripts/start.sh when root start.sh missing", async () => {
+    const dir = makeProject();
+    writeStartSh(dir, SUCCESS_SH, "scripts/start.sh");
+    const s = await startService(dir);
+    expect(s.status).toBe("running");
+    expect(s.pid).toBeGreaterThan(0);
+  });
+
+  test("start prefers root start.sh over scripts/start.sh", async () => {
+    const dir = makeProject();
+    writeStartSh(
+      dir,
+      '#!/bin/bash\nnohup sleep 30 >/dev/null 2>&1 &\necho "COLLAB_PID:$!"\necho "COLLAB_MESSAGE:root"\nexit 0\n',
+    );
+    writeStartSh(
+      dir,
+      '#!/bin/bash\nnohup sleep 30 >/dev/null 2>&1 &\necho "COLLAB_PID:$!"\necho "COLLAB_MESSAGE:scripts"\nexit 0\n',
+      "scripts/start.sh",
+    );
+    const s = await startService(dir);
+    expect(s.status).toBe("running");
+    expect(s.message).toBe("root");
   });
 
   test("startService rejects when projectPath is not a directory", async () => {

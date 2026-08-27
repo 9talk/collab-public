@@ -166,6 +166,17 @@ export function readServiceLogs(
   return { projectPath, logPath, content, totalLines: total };
 }
 
+/** 探测启动脚本：优先项目根目录 start.sh，次优先 scripts/start.sh，均无则抛错 */
+function findStartScript(projectPath: string): string {
+  const root = join(projectPath, "start.sh");
+  if (existsSync(root)) return root;
+  const nested = join(projectPath, "scripts", "start.sh");
+  if (existsSync(nested)) return nested;
+  throw new Error(
+    `项目 ${projectPath} 下没有 start.sh 或 scripts/start.sh 脚本`,
+  );
+}
+
 function validateProject(projectPath: string): void {
   if (typeof projectPath !== "string" || projectPath.trim() === "") {
     throw new Error("projectPath 不能为空");
@@ -173,9 +184,7 @@ function validateProject(projectPath: string): void {
   if (!existsSync(projectPath) || !statSync(projectPath).isDirectory()) {
     throw new Error(`项目目录不存在: ${projectPath}`);
   }
-  if (!existsSync(join(projectPath, "start.sh"))) {
-    throw new Error(`项目 ${projectPath} 下没有 start.sh 脚本`);
-  }
+  findStartScript(projectPath);
 }
 
 function snapshot(record: ManagedService): ManagedService {
@@ -248,7 +257,7 @@ export async function startService(
   const logFd = openSync(getLogPath(projectPath), "w");
   logFds.set(projectPath, logFd);
 
-  const child = spawn("bash", ["start.sh"], {
+  const child = spawn("bash", [findStartScript(projectPath)], {
     cwd: projectPath,
     detached: true,
     stdio: ["ignore", "pipe", "pipe"],

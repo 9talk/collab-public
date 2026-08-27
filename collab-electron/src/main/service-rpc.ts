@@ -20,7 +20,7 @@ export function registerServiceRpc(): void {
     async (params) => services.startService(requireProjectPath(params)),
     {
       description:
-        "在指定项目目录启动服务，要求该目录下存在 start.sh 脚本，否则报错。返回服务状态。",
+        "在指定项目目录启动服务，要求该目录下存在 start.sh 或 scripts/start.sh 脚本，否则报错。返回服务状态。",
       params: { projectPath: "string (required)" },
     },
   );
@@ -30,7 +30,7 @@ export function registerServiceRpc(): void {
     async (params) => services.restartService(requireProjectPath(params)),
     {
       description:
-        "重启指定项目目录的服务：先停止整个进程组，再重新执行该目录下的 start.sh。",
+        "重启指定项目目录的服务：先停止整个进程组，再重新执行该目录下的启动脚本（start.sh 或 scripts/start.sh）。",
       params: { projectPath: "string (required)" },
     },
   );
