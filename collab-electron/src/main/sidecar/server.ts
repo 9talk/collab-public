@@ -5,6 +5,7 @@ import * as crypto from "node:crypto";
 import * as pty from "node-pty";
 import type { IDisposable } from "node-pty";
 import { displayCommandName } from "@collab/shared/path-utils";
+import { buildRebuildQueryRe } from "@collab/shared/terminal-queries";
 import { cleanupEndpoint, prepareEndpoint } from "../ipc-endpoint";
 import { RingBuffer } from "./ring-buffer";
 import {
@@ -86,19 +87,26 @@ export class SidecarServer {
   }
 
   /**
-   * 重连/重建回放 ring buffer 时, 剥离 shell 早前发出的 DSR/DA 查询
-   * (\x1b[6n 光标询问, \x1b[...c 设备属性)。这些是历史查询, 回放给新 xterm
-   * 会触发它对过期查询重新应答, 应答涌入 shell 侧被回显成 "37;3R"/"1;2c"
-   * 泄漏。仅作用于回放快照, 实时数据不受影响。
+   * 重连/重建回放 ring buffer 时, 剥离 shell 早前发出的 DSR/DA/XTVERSION/
+   * XTGETTCAP 查询 (\x1b[6n、\x1b[...c、\x1b[>0q、\x1b[?Psq)。这些是历史
+   * 查询, 回放给新 xterm 会触发对过期查询的应答, 应答涌入 shell 侧被回显成
+   * "37;3R"/"1;2c"/">|xterm.js(6.0.0)2026;2$y" 泄漏(主进程 pty.ts 拦截
+   * 回放流中的 \x1b[>0q 时也会重复应答写回 pty, zsh 将其当键盘输入回显)。
+   * 仅作用于回放快照, 实时数据不受影响。
    */
   private stripRebuildReportQueries(buf: Buffer): Buffer {
     if (buf.length === 0) return buf;
     const s = buf.toString("utf-8");
     const cleaned = s
-      // 剥离历史 DSR/DA 查询, 防全新 xterm 对过期查询重复应答
-      .replace(/\x1b\[(?:[?>=]?[0-9;]*c|[?]?6n)/g, "")
+      // 剥离历史查询(DA/DSR/DECRQM/XTGETTCAP/XTVERSION, 清单见
+      // @collab/shared/terminal-queries), 防全新 xterm / 主进程对过期查询
+      // 重复应答
+      .replace(buildRebuildQueryRe(), "")
       // 剥离回放里已污染的无 \x1b 前缀应答载荷(上次泄漏残留), 防再次显示
-      .replace(/(?<![\d\x1b[?])(?:\d{1,4};\d{1,4}R|\d{1,3};2c)/g, "");
+      .replace(/(?<![\d\x1b[?])(?:\d{1,4};\d{1,4}R|\d{1,3};2c)/g, "")
+      // 剥离 XTVERSION/XTGETTCAP 应答被 shell 回显后的纯文本残留(如
+      // ">|xterm.js(6.0.0)2026;2$y"), 防历史泄漏在重建后再次回放显示
+      .replace(/>\|xterm\.js\([^)]*\)[\d;]*\$y/g, "");
     return cleaned === s ? buf : Buffer.from(cleaned, "utf-8");
   }
 
@@ -344,16 +352,17 @@ export class SidecarServer {
     const socketPath = this.sessionSocketPath(sessionId);
 
     const target = params.target || "shell";
+    // Shell env 完全以主进程传入的 params.env 为准 (其基座为主进程的
+    // login shell 快照), 不再展开 sidecar 自身 process.env, 避免应用环境
+    // (ELECTRON_*/npm_* 等) 泄漏进用户 shell。
     const env: Record<string, string> = {
-      ...(process.env as Record<string, string>),
-      ...params.env,
+      ...(params.env ?? {}),
       COLLAB_PTY_SESSION_ID: sessionId,
     };
-    // ELECTRON_RUN_AS_NODE is set on the sidecar process so it runs
-    // as plain Node.js, but must not leak into user shells — it would
-    // cause any `electron` invocation to behave as Node instead of
-    // the Electron runtime (e.g. `bun run dev` failing with
-    // "module 'electron' does not provide an export named 'BrowserWindow'").
+    // ELECTRON_RUN_AS_NODE 曾由主进程设置在 sidecar 上; 若仍出现在传入
+    // env 中必须清除, 否则任何 `electron` 调用会以 Node 模式运行
+    // (例如 `bun run dev` 报 "module 'electron' does not provide an
+    // export named 'BrowserWindow'")。
     delete env.ELECTRON_RUN_AS_NODE;
     if (!env.LANG || !env.LANG.includes("UTF-8")) {
       env.LANG = "en_US.UTF-8";
@@ -458,8 +467,15 @@ export class SidecarServer {
         if (snapshot.length > 0) {
           client.write(this.stripRebuildReportQueries(snapshot));
         }
-        for (const queued of session.reconnectQueue) {
-          client.write(queued);
+        // 先合并再剥离: 查询序列可能被断开期间的分块输出切断,
+        // 逐块剥离会漏掉跨块的查询。
+        const queued = session.reconnectQueue.map((c) => this.chunkToBuffer(c));
+        if (queued.length > 0) {
+          client.write(
+            this.stripRebuildReportQueries(
+              queued.length === 1 ? queued[0]! : Buffer.concat(queued),
+            ),
+          );
         }
         session.reconnectQueue = null;
       } else if (!session.hasAttachedClient) {

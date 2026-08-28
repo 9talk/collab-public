@@ -3,8 +3,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as net from "node:net";
 import * as crypto from "crypto";
+import { execFile } from "node:child_process";
 import { displayBasename } from "@collab/shared/path-utils";
 import { hyperlinkFilePaths } from "./hyperlink-paths";
+import { HOST_DEFERRED_REPLIES } from "@collab/shared/terminal-queries";
 import {
   writeSessionMeta,
   readSessionMeta,
@@ -42,15 +44,16 @@ const WINDOWS_POWERSHELL_PTY_BATCH_MS = 16;
  */
 const trailingUtf8Bytes = new Map<string, Buffer>();
 
-// XTVERSION 查询/应答 (CSI > 0 q → DCS > | name ST)。TUI 程序(Claude Code 的
-// ink)用它探测宿主终端: 识别为 xterm.js 后会把 OSC 8 链接打开权让给宿主
-// (其 linkHandler), 避免宿主的 linkHandler 与程序自身打开同一链接造成双开。
-// xterm.js 自身不响应此查询, 且我们伪装 TERM_PROGRAM=iTerm.app, 因此需要
-// 在这里代为应答, 让程序(如 Claude Code)走 xterm.js 宿主分支。
-const XTVERSION_QUERY = "\x1b[>0q";
-const XTVERSION_REPLY = "\x1bP>|xterm.js(6.0.0)\x1b\\";
+// 宿主代答的查询/应答规则见 @collab/shared/terminal-queries (HOST_DEFERRED_REPLIES)。
+// 目的: TUI 程序(Claude Code 的 ink)用它探测宿主终端, 识别为 xterm.js 后
+// 会把 OSC 8 链接打开权让给宿主(其 linkHandler), 避免宿主的 linkHandler 与
+// 程序自身打开同一链接造成双开。xterm.js 自身不响应这些查询, 且我们伪装
+// TERM_PROGRAM=iTerm.app, 因此需要在这里代为应答。
 // 跨 chunk 拆分的查询前缀缓存(仅保留可能构成查询的尾缀)。
-const xtversionScanBuffers = new Map<string, string>();
+const queryScanBuffers = new Map<string, string>();
+// 查询前缀可能被 chunk 切断: 尾缀缓存阈值覆盖最长查询形态, 保证跨 chunk
+// 的查询也能在下一段拼齐后命中。
+const MAX_QUERY_PREFIX_LEN = 16;
 
 function getSidecarClient(): SidecarClient {
   if (!sidecarClient) throw new Error("Sidecar client not initialized");
@@ -146,7 +149,7 @@ function clearPendingPtyData(sessionId: string): void {
   }
   pendingPtyData.delete(sessionId);
   trailingUtf8Bytes.delete(sessionId);
-  xtversionScanBuffers.delete(sessionId);
+  queryScanBuffers.delete(sessionId);
 }
 
 function flushPendingPtyData(
@@ -166,17 +169,19 @@ function flushPendingPtyData(
   scheduleForegroundCheck(sessionId);
 }
 
-function respondToXtversionQuery(sessionId: string, text: string): void {
-  const scan = (xtversionScanBuffers.get(sessionId) ?? "") + text;
-  if (scan.includes(XTVERSION_QUERY)) {
-    writeToSession(sessionId, XTVERSION_REPLY);
+function respondToHostQueries(sessionId: string, text: string): void {
+  const scan = (queryScanBuffers.get(sessionId) ?? "") + text;
+  for (const rule of HOST_DEFERRED_REPLIES) {
+    if (rule.query.test(scan)) {
+      writeToSession(sessionId, rule.reply);
+    }
   }
   // 仅当 chunk 尾部可能是被拆开的查询前缀时才缓存, 避免长期积累。
-  const idx = scan.lastIndexOf("\x1b[>");
-  if (idx >= 0 && scan.length - idx < XTVERSION_QUERY.length) {
-    xtversionScanBuffers.set(sessionId, scan.slice(idx));
+  const idx = scan.lastIndexOf("\x1b[");
+  if (idx >= 0 && scan.length - idx < MAX_QUERY_PREFIX_LEN) {
+    queryScanBuffers.set(sessionId, scan.slice(idx));
   } else {
-    xtversionScanBuffers.delete(sessionId);
+    queryScanBuffers.delete(sessionId);
   }
 }
 
@@ -201,7 +206,7 @@ function forwardPtyData(
   const safeLen = tail > 0 ? full.length - tail : full.length;
   const text = full.subarray(0, safeLen).toString("utf-8");
 
-  respondToXtversionQuery(sessionId, text);
+  respondToHostQueries(sessionId, text);
 
   // Enrich PTY output: colorize URLs and wrap file paths with OSC 8 hyperlinks
   const enriched = hyperlinkFilePaths(text);
@@ -252,8 +257,51 @@ function forwardPtyData(
   }
 }
 
-function utf8Env(): Record<string, string> {
-  const env = { ...process.env } as Record<string, string>;
+/**
+ * macOS GUI 应用启动时环境来自 launchd (PATH 等基础变量), 而从终端启动时又会
+ * 继承 npm/electron/代理工具注入的变量。每次新建终端都以最小环境为基座启动
+ * login shell 抓取快照: 不继承本进程 process.env, 由 login 配置
+ * (path_helper/.zprofile/.zshenv) 重建 PATH 与用户变量, 与"谁启动的
+ * Collaborator"彻底无关。必然依赖继承的少量基础变量显式带入, 其余
+ * (LANG/COLORTERM/TERM_PROGRAM/COLLAB_*) 由调用方 shellEnv 补足。
+ * 仅 darwin 尝试; 抓取失败时返回 null, 调用方回退到 process.env,
+ * 不阻塞终端可用性。
+ */
+function fetchShellEnvSnapshot(): Promise<Record<string, string> | null> {
+  if (process.platform !== "darwin") return Promise.resolve(null);
+  const minimalBase: Record<string, string> = {
+    HOME: process.env.HOME ?? os.homedir(),
+  };
+  // 这些变量 login 配置不会重建, 只能靠继承带入; 存在才带, 不填假值。
+  for (const key of ["USER", "LOGNAME", "SHELL", "TMPDIR", "SSH_AUTH_SOCK"]) {
+    const value = process.env[key];
+    if (value) minimalBase[key] = value;
+  }
+  return new Promise((resolve) => {
+    const shell = process.env.SHELL || "/bin/zsh";
+    execFile(
+      shell,
+      ["-l", "-c", "env -0"],
+      { encoding: "utf8", timeout: 5000, env: minimalBase },
+      (err, stdout) => {
+        if (err) {
+          resolve(null);
+          return;
+        }
+        const env: Record<string, string> = {};
+        for (const part of stdout.split("\0")) {
+          if (!part) continue;
+          const eq = part.indexOf("=");
+          if (eq > 0) env[part.slice(0, eq)] = part.slice(eq + 1);
+        }
+        resolve(env.PATH ? env : null);
+      },
+    );
+  });
+}
+
+function shellEnv(base: Record<string, string>): Record<string, string> {
+  const env = { ...base } as Record<string, string>;
   if (!env.LANG || !env.LANG.includes("UTF-8")) {
     env.LANG = "en_US.UTF-8";
   }
@@ -513,7 +561,9 @@ export async function createSession(
 
   await ensureSidecar();
   const client = getSidecarClient();
-  const sidecarEnv = utf8Env();
+  const baseEnv =
+    (await fetchShellEnvSnapshot()) ?? (process.env as Record<string, string>);
+  const sidecarEnv = shellEnv(baseEnv);
   if (tileId) sidecarEnv.COLLAB_TILE_ID = tileId;
 
   let zshIntegrated = false;

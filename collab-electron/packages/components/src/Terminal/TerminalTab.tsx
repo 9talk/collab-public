@@ -6,6 +6,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { getTheme } from "./theme";
 import {
+  isCodeFile,
   matchesPattern,
   type FileTypeGroup,
 } from "@collab/shared/external-app";
@@ -221,10 +222,15 @@ function TerminalTab({
           return;
         }
 
-        // No file-type match: use global editor preference
+        // No file-type match: code files use the global editor preference,
+        // other types (images, PDFs, ...) open with the system default app.
+        // Mirrors the isCodeFile gate in nav/App.tsx selectFile.
         try {
-          const useExt = await window.api.getPref("useExternalEditor");
-          if (useExt) {
+          const useExt =
+            (await window.api.getPref("useExternalEditor")) === true;
+          const dot = filePath.lastIndexOf(".");
+          const ext = dot >= 0 ? filePath.slice(dot).toLowerCase() : "";
+          if (useExt && (isCodeFile(filePath) || !ext)) {
             console.log("[link-activate] global editor (useExternalEditor)");
             window.api.openFileInExternalEditor(filePath);
             return;
@@ -575,6 +581,24 @@ function TerminalTab({
       if (e.key === "Enter" && e.shiftKey) {
         if (e.type === "keydown") {
           window.api.ptySendRawKeys(sessionId, "\x1b[13;2u");
+        }
+        return false;
+      }
+      // macOS Option+左右方向键: xterm 默认编码为 CSI 修饰符序列 \x1b[1;3D/C,
+      // zsh/bash 默认无对应 bindkey, 按词跳转失效; 改发 Meta+b/f (与 Terminal.app 一致)。
+      if (
+        IS_MAC &&
+        e.altKey &&
+        !e.shiftKey &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        (e.key === "ArrowLeft" || e.key === "ArrowRight")
+      ) {
+        if (e.type === "keydown") {
+          window.api.ptySendRawKeys(
+            sessionId,
+            e.key === "ArrowLeft" ? "\x1bb" : "\x1bf",
+          );
         }
         return false;
       }
