@@ -152,6 +152,8 @@ export const en = {
   "files.title": "Files",
   "files.description": "Configure external editor for code files.",
   "files.defaultExternalEditor": "Use external editor",
+  "files.openBehaviorDesc":
+    "Unrecognized file types (e.g. *.png, *.pdf) open with the system default app; code files open with the default editor. Cmd+Click lets you pick an app manually.",
   "files.externalEditor": "Default editor",
   "files.recognizedFileTypes": "Recognized Files",
   "files.extensionColumn": "Extension",

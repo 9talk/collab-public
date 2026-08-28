@@ -810,10 +810,14 @@ ipcMain.on(
     console.log("[external-editor] open-file:", { editorId, filePath });
     const ws = workspaceForFile(filePath, config.workspaces);
     if (!ws) {
+      // 文件不在任何 workspace 内时编辑器无法定位上下文(idea --line
+      // 等工作区相关参数), 降级为系统应用打开, 避免点击无任何反馈。
       console.log(
         "[external-editor] open-file: no workspace found for",
         filePath,
+        "fallback shell.openPath",
       );
+      void shell.openPath(filePath);
       return;
     }
     const line = findLatestEditLine(filePath);

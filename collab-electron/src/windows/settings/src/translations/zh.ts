@@ -151,6 +151,8 @@ export const zh: Record<TranslationKey, string> = {
   "files.title": "文件",
   "files.description": "配置代码文件的外部编辑器。",
   "files.defaultExternalEditor": "使用外部编辑器",
+  "files.openBehaviorDesc":
+    "未识别的文件类型(如 *.png、*.pdf)在点击时使用系统默认应用打开;代码文件使用默认编辑器打开。按住 Cmd 点击可随时手动选择打开方式。",
   "files.externalEditor": "默认编辑器",
   "files.recognizedFileTypes": "识别的文件",
   "files.extensionColumn": "扩展名",

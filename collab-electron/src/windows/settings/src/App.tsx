@@ -1600,6 +1600,9 @@ function FilesPane({ t }: { t: (key: TranslationKey) => string }) {
           }}
         />
       </div>
+      <p className="text-xs text-muted-foreground">
+        {t("files.openBehaviorDesc")}
+      </p>
 
       {useExternalEditor && (
         <>
