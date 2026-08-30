@@ -4,9 +4,7 @@ import { join } from "node:path";
 import { shell, systemPreferences } from "electron";
 
 export type PermissionKind =
-  | "fullDiskAccess"
-  | "filesAndFolders"
-  | "accessibility";
+  "fullDiskAccess" | "filesAndFolders" | "accessibility";
 
 export type PermissionStatus = "granted" | "denied" | "unknown";
 

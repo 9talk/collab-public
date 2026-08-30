@@ -100,9 +100,7 @@ interface AgentSessionEndedEvent {
 }
 
 type AgentEvent =
-  | AgentSessionEvent
-  | AgentFileTouchedEvent
-  | AgentSessionEndedEvent;
+  AgentSessionEvent | AgentFileTouchedEvent | AgentSessionEndedEvent;
 
 export interface CollabApi {
   // Config

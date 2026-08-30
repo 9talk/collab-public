@@ -195,8 +195,7 @@ export function WikiLinkAutocomplete({ editor }: WikiLinkAutocompleteProps) {
   useEffect(() => {
     if (!active) return;
     const item = dropdownRef.current?.children[selectedIndex] as
-      | HTMLElement
-      | undefined;
+      HTMLElement | undefined;
     item?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex, active]);
 

@@ -951,8 +951,7 @@ app.whenReady().then(async () => {
   });
   ipcMain.on("permissions:close", closePermissionWindow);
   const autoCheckUpdates = getPref(config, "autoCheckUpdates") as
-    | boolean
-    | null;
+    boolean | null;
   updateManager.init({
     onBeforeQuit: () => shutdownBackgroundServices(),
     autoCheckEnabled: autoCheckUpdates ?? false,
