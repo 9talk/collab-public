@@ -808,21 +808,17 @@ ipcMain.on(
       ((getPref(config, "externalEditor") as string | undefined) ??
         "intellij-idea");
     console.log("[external-editor] open-file:", { editorId, filePath });
+    // 文件不在任何 workspace 内时缺少工作区上下文(idea --line 等参数),
+    // workspacePath 传空让编辑器以单文件方式打开, 不再降级系统应用。
     const ws = workspaceForFile(filePath, config.workspaces);
-    if (!ws) {
-      // 文件不在任何 workspace 内时编辑器无法定位上下文(idea --line
-      // 等工作区相关参数), 降级为系统应用打开, 避免点击无任何反馈。
-      console.log(
-        "[external-editor] open-file: no workspace found for",
-        filePath,
-        "fallback shell.openPath",
-      );
-      void shell.openPath(filePath);
-      return;
-    }
     const line = findLatestEditLine(filePath);
     console.log("[external-editor] open-file: line =", line);
-    openFileInEditor(resolvedEditorId, filePath, ws, line ?? undefined);
+    openFileInEditor(
+      resolvedEditorId,
+      filePath,
+      ws ?? undefined,
+      line ?? undefined,
+    );
   },
 );
 

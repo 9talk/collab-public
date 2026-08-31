@@ -69,11 +69,7 @@ function spawnEditor(bin: string, args: string[]): void {
   spawn(bin, args, { detached: true, stdio: "ignore" }).unref();
 }
 
-function openWithCodeFork(
-  appPath: string,
-  filePath: string,
-  workspacePath: string,
-): void {
+function openWithCodeFork(appPath: string, filePath: string): void {
   const codeBin = `${appPath}/Contents/Resources/app/bin/code`;
   spawnEditor(codeBin, [filePath]);
 }
@@ -89,11 +85,14 @@ function openWorkspaceWithCodeFork(
 export function openFileInEditor(
   editorId: string,
   filePath: string,
-  workspacePath: string,
+  workspacePath?: string,
   line?: number,
 ): void {
   if (editorId === "intellij-idea") {
-    const args = [workspacePath];
+    const args: string[] = [];
+    if (workspacePath) {
+      args.push(workspacePath);
+    }
     if (line && Number.isFinite(line)) {
       args.push("--line", String(line));
     }
@@ -107,11 +106,11 @@ export function openFileInEditor(
   } else if (editorId === "typora") {
     spawnEditor("open", ["-a", "Typora", filePath]);
   } else if (editorId === "cursor") {
-    openWithCodeFork("/Applications/Cursor.app", filePath, workspacePath);
+    openWithCodeFork("/Applications/Cursor.app", filePath);
   } else if (editorId === "trae") {
-    openWithCodeFork("/Applications/Trae.app", filePath, workspacePath);
+    openWithCodeFork("/Applications/Trae.app", filePath);
   } else if (editorId === "qoder") {
-    openWithCodeFork("/Applications/Qoder.app", filePath, workspacePath);
+    openWithCodeFork("/Applications/Qoder.app", filePath);
   } else if (editorId === "zed") {
     spawnEditor("/Applications/Zed.app/Contents/MacOS/cli", [filePath]);
   } else if (editorId === "sublime-text") {
@@ -122,8 +121,8 @@ export function openFileInEditor(
   }
 }
 
-function sublimeArgs(workspacePath: string, filePath?: string): string[] {
-  const projectFile = findSublimeProject(workspacePath);
+function sublimeArgs(workspacePath?: string, filePath?: string): string[] {
+  const projectFile = workspacePath ? findSublimeProject(workspacePath) : null;
   if (projectFile) {
     return filePath
       ? ["--project", projectFile, filePath]
@@ -131,8 +130,8 @@ function sublimeArgs(workspacePath: string, filePath?: string): string[] {
   }
   // 打开文件时不带 workspace 上下文，只传文件路径
   if (filePath) return [filePath];
-  // 打开工作区时用 -n 新窗口
-  return ["-n", workspacePath];
+  // 打开工作区时用 -n 新窗口(仅 openWorkspaceInEditor 调用,workspacePath 必传)
+  return ["-n", workspacePath!];
 }
 
 function findSublimeProject(dir: string): string | null {
