@@ -17,7 +17,7 @@ const TOOLS = [
   {
     name: "devtool_start",
     description:
-      "在指定项目目录启动服务，要求该目录下存在 start.sh 或 scripts/start.sh 脚本，否则报错。返回服务状态。",
+      "在指定项目目录启动服务，要求该目录下存在 start.sh 或 scripts/start.sh 脚本，否则报错。脚本必须是后台型的：启动服务进程后立即退出（exit 0），不能前台阻塞运行，否则判定超时失败。脚本通过 stdout 按行输出约定标记上报信息：COLLAB_PID:<pid>（必需，未上报判定启动失败 no-pid）、COLLAB_HTTP_PORT:<port>（HTTP 端口）、COLLAB_MESSAGE:<文本>（成功提示，如访问地址）、COLLAB_ERROR:<文本>（失败原因）。返回服务状态，status 为 running 即启动成功。",
     inputSchema: {
       type: "object",
       properties: {
@@ -29,7 +29,7 @@ const TOOLS = [
   {
     name: "devtool_restart",
     description:
-      "重启指定项目目录的服务：先停止整个进程组，再重新执行该目录下的启动脚本（start.sh 或 scripts/start.sh）。",
+      "重启指定项目目录的服务：先停止整个进程组，再重新执行该目录下的启动脚本（start.sh 或 scripts/start.sh）。脚本要求与 devtool_start 相同：必须为后台型（启动服务进程后立即退出），并通过 stdout 输出 COLLAB_PID/COLLAB_HTTP_PORT/COLLAB_MESSAGE/COLLAB_ERROR 约定标记。",
     inputSchema: {
       type: "object",
       properties: {
