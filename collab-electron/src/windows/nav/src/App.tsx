@@ -153,6 +153,8 @@ export default function App() {
   const [workspacePaths, setWorkspacePaths] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // B 端（client 远程模式）下 workspace 列表镜像自 A 端，隐藏「+ Add workspace」
+  const [remoteClientActive, setRemoteClientActive] = useState(false);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [highlightPath, setHighlightPath] = useState<string | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -446,6 +448,31 @@ export default function App() {
         setError(String(err));
         setLoading(false);
       });
+  }, []);
+
+  // 远程控制端（client）模式下隐藏「+ Add workspace」：workspace 由 A 端管理
+  const remoteClientActiveRef = useRef(false);
+  useEffect(() => {
+    const apply = (s: unknown) => {
+      const role = (s as { role?: string } | null)?.role;
+      const active = role === "client";
+      const wasActive = remoteClientActiveRef.current;
+      remoteClientActiveRef.current = active;
+      setRemoteClientActive(active);
+      // 退出远程模式：重新拉取本地 workspace 列表（远程期间列表来自 A 端）
+      if (wasActive && !active) {
+        window.api
+          .getConfig()
+          .then((cfg) => setWorkspacePaths(cfg.workspaces))
+          .catch(() => {});
+      }
+    };
+    window.api
+      .getRemoteStatus()
+      .then(apply)
+      .catch(() => {});
+    const off = window.api.onRemoteStatus(apply);
+    return () => off?.();
   }, []);
 
   useEffect(() => {
@@ -1279,18 +1306,20 @@ export default function App() {
               listView={listView}
               onToggleListView={toggleListView}
             />
-            <div className="workspace-add-row">
-              <button
-                type="button"
-                className="ws-add-btn"
-                onClick={() => window.api.workspaceAdd()}
-              >
-                + Add workspace
-                <kbd className="ws-add-kbd">
-                  {PLATFORM === "darwin" ? "Shift+Cmd+O" : "Shift+Ctrl+O"}
-                </kbd>
-              </button>
-            </div>
+            {!remoteClientActive && (
+              <div className="workspace-add-row">
+                <button
+                  type="button"
+                  className="ws-add-btn"
+                  onClick={() => window.api.workspaceAdd()}
+                >
+                  + Add workspace
+                  <kbd className="ws-add-kbd">
+                    {PLATFORM === "darwin" ? "Shift+Cmd+O" : "Shift+Ctrl+O"}
+                  </kbd>
+                </button>
+              </div>
+            )}
             <div className="table-wrapper">
               <div
                 ref={containerRef}

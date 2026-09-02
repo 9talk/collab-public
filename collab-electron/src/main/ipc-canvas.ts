@@ -1,5 +1,6 @@
 import { ipcMain, type BrowserWindow } from "electron";
 import * as canvasPersistence from "./canvas-persistence";
+import { bindIpc, markForward } from "./ipc-registry";
 
 interface IpcContext {
   mainWindow: () => BrowserWindow | null;
@@ -14,16 +15,16 @@ export function registerCanvasHandlers(ctx: IpcContext): void {
   let pendingDragPaths: string[] = [];
 
   // Canvas persistence
-  ipcMain.handle("canvas:load-state", async () =>
+  bindIpc("canvas:load-state", "handle", async () =>
     canvasPersistence.loadState(),
   );
 
-  ipcMain.handle("canvas:save-state", async (_event, state) =>
+  bindIpc("canvas:save-state", "handle", async (_event, state) =>
     canvasPersistence.saveState(state),
   );
 
   // Request current canvas state from renderer (used during quit)
-  ipcMain.handle("canvas:get-state-for-save", async () => {
+  bindIpc("canvas:get-state-for-save", "handle", async () => {
     const win = ctx.mainWindow();
     if (!win || win.isDestroyed()) return null;
     try {
@@ -56,4 +57,13 @@ export function registerCanvasHandlers(ctx: IpcContext): void {
     pendingDragPaths = [];
     return paths;
   });
+
+  // ---- remote forwarding whitelist ----
+  for (const channel of [
+    "canvas:load-state",
+    "canvas:save-state",
+    "canvas:get-state-for-save",
+  ]) {
+    markForward(channel);
+  }
 }

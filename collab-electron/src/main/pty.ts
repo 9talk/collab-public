@@ -29,6 +29,53 @@ let sidecarClient: SidecarClient | null = null;
 const dataSockets = new Map<string, net.Socket>();
 
 /**
+ * sessionId -> renderer webContents ids attached to this session. A session
+ * can have multiple viewers (local UI + remote client), so data is fanned
+ * out to all of them.
+ */
+const sessionSenders = new Map<string, Set<number>>();
+
+function addSessionSender(
+  sessionId: string,
+  senderId: number | undefined,
+): void {
+  if (senderId == null) return;
+  let set = sessionSenders.get(sessionId);
+  if (!set) {
+    set = new Set();
+    sessionSenders.set(sessionId, set);
+  }
+  set.add(senderId);
+}
+
+function removeSessionSender(
+  sessionId: string,
+  senderId: number | undefined,
+): void {
+  if (senderId == null) return;
+  const set = sessionSenders.get(sessionId);
+  if (!set) return;
+  set.delete(senderId);
+  if (set.size === 0) sessionSenders.delete(sessionId);
+}
+
+function clearSessionSenders(sessionId: string): void {
+  sessionSenders.delete(sessionId);
+}
+
+function sendToSenders(
+  sessionId: string,
+  channel: string,
+  payload: unknown,
+): void {
+  const set = sessionSenders.get(sessionId);
+  if (!set) return;
+  for (const id of [...set]) {
+    sendToSender(id, channel, payload);
+  }
+}
+
+/**
  * Track which sessions are sidecar-managed.
  */
 const sidecarSessionIds = new Set<string>();
@@ -44,8 +91,7 @@ const WINDOWS_POWERSHELL_PTY_BATCH_MS = 16;
  */
 const trailingUtf8Bytes = new Map<string, Buffer>();
 
-// 宿主代答的查询/应答规则见 @collab/shared/terminal-queries (HOST_DEFERRED_REPLIES)。
-// 目的: TUI 程序(Claude Code 的 ink)用它探测宿主终端, 识别为 xterm.js 后
+// 宿主代答的查询/应答规则见 @collab/shared/terminal-queries (HOST_DEFERRED_REPLIES)。// 目的: TUI 程序(Claude Code 的 ink)用它探测宿主终端, 识别为 xterm.js 后
 // 会把 OSC 8 链接打开权让给宿主(其 linkHandler), 避免宿主的 linkHandler 与
 // 程序自身打开同一链接造成双开。xterm.js 自身不响应这些查询, 且我们伪装
 // TERM_PROGRAM=iTerm.app, 因此需要在这里代为应答。
@@ -54,6 +100,22 @@ const queryScanBuffers = new Map<string, string>();
 // 查询前缀可能被 chunk 切断: 尾缀缓存阈值覆盖最长查询形态, 保证跨 chunk
 // 的查询也能在下一段拼齐后命中。
 const MAX_QUERY_PREFIX_LEN = 16;
+
+// Remote-control consumers (registered by remote-server.ts when the host
+// remote mode is active). null = no remote consumer, zero overhead.
+export interface PtyRemoteConsumers {
+  onData: (sessionId: string, data: string) => void;
+  onExit: (payload: { sessionId: string; exitCode: number }) => void;
+  onStatusChanged: (payload: { sessionId: string; foreground: string }) => void;
+}
+
+let remotePtyConsumers: PtyRemoteConsumers | null = null;
+
+export function setRemotePtyConsumers(
+  consumers: PtyRemoteConsumers | null,
+): void {
+  remotePtyConsumers = consumers;
+}
 
 function getSidecarClient(): SidecarClient {
   if (!sidecarClient) throw new Error("Sidecar client not initialized");
@@ -161,10 +223,12 @@ function flushPendingPtyData(
   if (!chunks || chunks.length === 0) return;
   pendingPtyData.delete(sessionId);
 
-  const data = chunks.length === 1 ? chunks[0] : Buffer.concat(chunks);
-  sendToSender(senderWebContentsId, "pty:data", {
+  const data = chunks.length === 1 ? chunks[0]! : Buffer.concat(chunks);
+  const text = data.toString("utf-8");
+  remotePtyConsumers?.onData(sessionId, text);
+  sendToSenders(sessionId, "pty:data", {
     sessionId,
-    data: data.toString("utf-8"),
+    data: text,
   });
   scheduleForegroundCheck(sessionId);
 }
@@ -235,7 +299,8 @@ function forwardPtyData(
   }
 
   if (!shouldBatchWindowsPowerShellOutput(sessionId)) {
-    sendToSender(senderWebContentsId, "pty:data", {
+    remotePtyConsumers?.onData(sessionId, enriched);
+    sendToSenders(sessionId, "pty:data", {
       sessionId,
       data: enriched,
     });
@@ -370,9 +435,12 @@ async function doEnsureSidecar(): Promise<void> {
         clearPendingPtyData(sessionId);
         dataSockets.get(sessionId)?.destroy();
         dataSockets.delete(sessionId);
+        clearSessionSenders(sessionId);
         sidecarPowerShellSessionIds.delete(sessionId);
         deleteSessionMeta(sessionId);
-        sendToMainWindow("pty:exit", { sessionId, exitCode });
+        const exitPayload = { sessionId, exitCode };
+        remotePtyConsumers?.onExit(exitPayload);
+        sendToMainWindow("pty:exit", exitPayload);
       }
     });
   }
@@ -600,6 +668,7 @@ export async function createSession(
     forwardPtyData(sessionId, senderWebContentsId, data);
   });
   dataSockets.set(sessionId, dataSock);
+  addSessionSender(sessionId, senderWebContentsId);
 
   writeSessionMeta(
     sessionId,
@@ -650,7 +719,7 @@ export async function reconnectSession(
   sessionId: string,
   cols: number,
   rows: number,
-  senderWebContentsId: number,
+  senderWebContentsId: number | undefined,
 ): Promise<{
   sessionId: string;
   shell: string;
@@ -674,6 +743,7 @@ export async function reconnectSession(
 
   dataSockets.get(sessionId)?.destroy();
   dataSockets.set(sessionId, dataSock);
+  addSessionSender(sessionId, senderWebContentsId);
 
   const shell = meta?.command || meta?.shell || process.env.SHELL || "/bin/zsh";
   const displayName = meta?.displayName || displayBasename(shell) || "shell";
@@ -731,6 +801,7 @@ export async function killSession(sessionId: string): Promise<void> {
   clearForegroundCache(sessionId);
   dataSockets.get(sessionId)?.destroy();
   dataSockets.delete(sessionId);
+  clearSessionSenders(sessionId);
   try {
     const client = getSidecarClient();
     await client.killSession(sessionId);
@@ -923,10 +994,12 @@ export function scheduleForegroundCheck(sessionId: string): void {
         if (fg === prev) return;
 
         lastForeground.set(sessionId, fg);
-        sendToMainWindow("pty:status-changed", {
+        const statusPayload = {
           sessionId,
           foreground: fg,
-        });
+        };
+        remotePtyConsumers?.onStatusChanged(statusPayload);
+        sendToMainWindow("pty:status-changed", statusPayload);
       });
     }, STATUS_DEBOUNCE_MS),
   );

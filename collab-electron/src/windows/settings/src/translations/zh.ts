@@ -15,6 +15,7 @@ export const zh: Record<TranslationKey, string> = {
   "nav.updates": "更新",
   "nav.files": "文件",
   "nav.claude": "Claude",
+  "nav.remote": "远程",
   "claude.title": "Claude 集成",
   "claude.description":
     "配置与 Claude Code 的深度集成。开启后，终端 tile 将自动恢复 Claude Code 会话。",
@@ -168,6 +169,32 @@ export const zh: Record<TranslationKey, string> = {
   "files.ignoreCase": "忽略大小写",
   "files.ignoreCaseDesc":
     '启用时规则不限大小写匹配（如 "Logs" 会隐藏 "logs"）。',
+
+  // Remote pane
+  "remote.title": "远程控制",
+  "remote.description":
+    "让另一台 Collaborator 控制本机，或从此处控制另一台机器。",
+  "remote.hostSection": "作为被控端（接受控制）",
+  "remote.hostSectionDesc":
+    "允许配对设备控制本机。仅在开启并连接后才会向中继发送数据。",
+  "remote.enable": "开启远程控制",
+  "remote.relayUrl": "中继服务器地址",
+  "remote.deviceToken": "设备令牌",
+  "remote.pairCode": "配对码",
+  "remote.connecting": "连接中…",
+  "remote.connected": "已连接",
+  "remote.off": "已关闭",
+  "remote.host": "主机",
+  "remote.peerNone": "暂无设备配对",
+  "remote.peer": "已配对设备",
+  "remote.clientSection": "作为控制端（控制另一台）",
+  "remote.clientSectionDesc":
+    "连接中继并输入被控端的配对码，即可像在本地一样控制它。",
+  "remote.pairCodeInput": "配对码",
+  "remote.connect": "连接",
+  "remote.disconnect": "断开",
+  "remote.notConfigured": "缺少中继地址或设备令牌",
+  "remote.copy": "复制",
 
   // Misc
   esc: "esc",

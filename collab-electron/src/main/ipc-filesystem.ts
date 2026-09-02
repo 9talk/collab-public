@@ -21,6 +21,7 @@ import {
 import type { FileFilter } from "./file-filter";
 import * as wikilinkIndex from "./wikilink-index";
 import { workspaceForFile } from "./ipc-workspace";
+import { bindIpc, markForward } from "./ipc-registry";
 import type { FolderTableData, FolderTableFile } from "@collab/shared/types";
 
 export interface IpcFilesystemContext {
@@ -53,8 +54,58 @@ function bumpRenameRefCount(oldPath: string): void {
   }, 2000);
 }
 
+export async function readFolderTable(
+  folderPath: string,
+  workspaces: string[],
+): Promise<FolderTableData> {
+  const workspace = workspaceForFile(folderPath, workspaces);
+  if (!workspace || !workspaceRootMatch(workspace, folderPath)) {
+    throw new Error("Folder is outside workspace");
+  }
+  const entries = await readdir(folderPath, {
+    withFileTypes: true,
+  });
+  const columnSet = new Set<string>();
+  const mdEntries = entries.filter((e) => e.isFile() && e.name.endsWith(".md"));
+
+  const files = (
+    await Promise.all(
+      mdEntries.map(async (entry): Promise<FolderTableFile | null> => {
+        const fullPath = join(folderPath, entry.name);
+        try {
+          const [stats, content] = await Promise.all([
+            stat(fullPath),
+            readFile(fullPath, "utf-8"),
+          ]);
+          let attributes: Record<string, unknown> = {};
+          try {
+            attributes = fm<Record<string, unknown>>(content).attributes;
+          } catch {
+            // Malformed frontmatter
+          }
+          for (const key of Object.keys(attributes)) {
+            columnSet.add(key);
+          }
+          return {
+            path: fullPath,
+            filename: entry.name,
+            frontmatter: attributes,
+            mtime: stats.mtime.toISOString(),
+            ctime: stats.birthtime.toISOString(),
+          };
+        } catch {
+          return null;
+        }
+      }),
+    )
+  ).filter((f): f is FolderTableFile => f !== null);
+
+  const columns = [...columnSet].sort((a, b) => a.localeCompare(b));
+  return { folderPath, files, columns };
+}
+
 export function registerFilesystemHandlers(ctx: IpcFilesystemContext): void {
-  ipcMain.handle("fs:readdir", (_event, path) =>
+  bindIpc("fs:readdir", "handle", (_event, path) =>
     fsReadDir(
       path,
       ctx.fileFilter() ?? undefined,
@@ -62,7 +113,7 @@ export function registerFilesystemHandlers(ctx: IpcFilesystemContext): void {
     ),
   );
 
-  ipcMain.handle("fs:count-files", (_event, path) =>
+  bindIpc("fs:count-files", "handle", (_event, path) =>
     countTreeFiles(
       path,
       ctx.fileFilter() ?? undefined,
@@ -70,10 +121,11 @@ export function registerFilesystemHandlers(ctx: IpcFilesystemContext): void {
     ),
   );
 
-  ipcMain.handle("fs:readfile", (_event, path) => fsReadFile(path));
+  bindIpc("fs:readfile", "handle", (_event, path) => fsReadFile(path));
 
-  ipcMain.handle(
+  bindIpc(
     "fs:writefile",
+    "handle",
     async (_event, path, content, expectedMtime?: string) => {
       const result = await fsWriteFile(path, content, expectedMtime);
       if (result.ok) {
@@ -92,8 +144,9 @@ export function registerFilesystemHandlers(ctx: IpcFilesystemContext): void {
     },
   );
 
-  ipcMain.handle(
+  bindIpc(
     "fs:rename",
+    "handle",
     async (_event, oldPath: string, newTitle: string) => {
       const sanitized = newTitle
         .replace(/[<>:"/\\|?*\x00-\x1f]/g, "")
@@ -121,7 +174,7 @@ export function registerFilesystemHandlers(ctx: IpcFilesystemContext): void {
     },
   );
 
-  ipcMain.handle("fs:stat", async (_event, path: string) => {
+  bindIpc("fs:stat", "handle", async (_event, path: string) => {
     const stats = await stat(path);
     return {
       ctime: stats.birthtime.toISOString(),
@@ -129,7 +182,7 @@ export function registerFilesystemHandlers(ctx: IpcFilesystemContext): void {
     };
   });
 
-  ipcMain.handle("fs:is-directory", async (_event, filePath: string) => {
+  bindIpc("fs:is-directory", "handle", async (_event, filePath: string) => {
     try {
       const s = await stat(filePath);
       return s.isDirectory();
@@ -138,13 +191,13 @@ export function registerFilesystemHandlers(ctx: IpcFilesystemContext): void {
     }
   });
 
-  ipcMain.handle("fs:trash", async (_event, path: string) => {
+  bindIpc("fs:trash", "handle", async (_event, path: string) => {
     await shell.trashItem(path);
     ctx.trackEvent("file_trashed");
     ctx.fileFilter()?.invalidateBinaryCache([path]);
   });
 
-  ipcMain.handle("fs:mkdir", async (_event, path: string) => {
+  bindIpc("fs:mkdir", "handle", async (_event, path: string) => {
     await fsMkdir(path);
     ctx.trackEvent("folder_created");
     const event = [
@@ -157,8 +210,9 @@ export function registerFilesystemHandlers(ctx: IpcFilesystemContext): void {
     ctx.forwardToWebview("viewer", "fs-changed", event);
   });
 
-  ipcMain.handle(
+  bindIpc(
     "fs:move",
+    "handle",
     async (_event, oldPath: string, newParentDir: string) => {
       bumpRenameRefCount(oldPath);
       const newPath = await fsMove(oldPath, newParentDir);
@@ -172,67 +226,24 @@ export function registerFilesystemHandlers(ctx: IpcFilesystemContext): void {
     },
   );
 
-  ipcMain.handle(
+  bindIpc(
     "fs:read-folder-table",
+    "handle",
     async (_event, folderPath: string): Promise<FolderTableData> => {
-      const workspace = workspaceForFile(folderPath, ctx.workspaces());
-      if (!workspace || !workspaceRootMatch(workspace, folderPath)) {
-        throw new Error("Folder is outside workspace");
-      }
-      const entries = await readdir(folderPath, {
-        withFileTypes: true,
-      });
-      const columnSet = new Set<string>();
-      const mdEntries = entries.filter(
-        (e) => e.isFile() && e.name.endsWith(".md"),
-      );
-
-      const files = (
-        await Promise.all(
-          mdEntries.map(async (entry): Promise<FolderTableFile | null> => {
-            const fullPath = join(folderPath, entry.name);
-            try {
-              const [stats, content] = await Promise.all([
-                stat(fullPath),
-                readFile(fullPath, "utf-8"),
-              ]);
-              let attributes: Record<string, unknown> = {};
-              try {
-                attributes = fm<Record<string, unknown>>(content).attributes;
-              } catch {
-                // Malformed frontmatter
-              }
-              for (const key of Object.keys(attributes)) {
-                columnSet.add(key);
-              }
-              return {
-                path: fullPath,
-                filename: entry.name,
-                frontmatter: attributes,
-                mtime: stats.mtime.toISOString(),
-                ctime: stats.birthtime.toISOString(),
-              };
-            } catch {
-              return null;
-            }
-          }),
-        )
-      ).filter((f): f is FolderTableFile => f !== null);
-
-      const columns = [...columnSet].sort((a, b) => a.localeCompare(b));
-      return { folderPath, files, columns };
+      return readFolderTable(folderPath, ctx.workspaces());
     },
   );
 
   // Image handlers
-  ipcMain.handle("image:thumbnail", (_event, path: string, size: number) =>
+  bindIpc("image:thumbnail", "handle", (_event, path: string, size: number) =>
     getImageThumbnail(path, size),
   );
 
-  ipcMain.handle("image:full", (_event, path: string) => getImageFull(path));
+  bindIpc("image:full", "handle", (_event, path: string) => getImageFull(path));
 
-  ipcMain.handle(
+  bindIpc(
     "image:resolve-path",
+    "handle",
     (_event, reference: string, fromNotePath: string) =>
       resolveImagePath(
         reference,
@@ -241,8 +252,9 @@ export function registerFilesystemHandlers(ctx: IpcFilesystemContext): void {
       ),
   );
 
-  ipcMain.handle(
+  bindIpc(
     "image:save-dropped",
+    "handle",
     async (_event, noteDir: string, fileName: string, buffer: ArrayBuffer) => {
       const ws = workspaceForFile(noteDir, ctx.workspaces());
       if (!ws || !workspaceRootMatch(ws, noteDir)) {
@@ -251,4 +263,25 @@ export function registerFilesystemHandlers(ctx: IpcFilesystemContext): void {
       return saveDroppedImage(noteDir, fileName, Buffer.from(buffer));
     },
   );
+
+  // ---- remote forwarding whitelist ----
+  for (const channel of [
+    "fs:readdir",
+    "fs:count-files",
+    "fs:readfile",
+    "fs:writefile",
+    "fs:rename",
+    "fs:stat",
+    "fs:is-directory",
+    "fs:trash",
+    "fs:mkdir",
+    "fs:move",
+    "fs:read-folder-table",
+    "image:thumbnail",
+    "image:full",
+    "image:resolve-path",
+    "image:save-dropped",
+  ]) {
+    markForward(channel);
+  }
 }

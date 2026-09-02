@@ -1,7 +1,6 @@
 import { createServer, type Server, type Socket } from "node:net";
 import { mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import { COLLAB_DIR } from "./paths";
 import {
   cleanupEndpoint,
@@ -13,17 +12,22 @@ import { registerClaudeRpc } from "./claude-rpc";
 import { registerServiceRpc } from "./service-rpc";
 
 const SOCKET_PATH = makeEndpointPath("ipc");
-// Write the breadcrumb to the base directory (~/.collab/)
-// so the hook script can discover the socket regardless of
-// whether the app is running in dev or prod mode.
-const BASE_DIR = join(homedir(), ".collab");
-const SOCKET_PATH_FILE = join(BASE_DIR, "socket-path");
-const NODE_PATH_FILE = join(BASE_DIR, "node-path");
+// Write the breadcrumb to COLLAB_DIR (instance-isolated in dev worktrees so
+// multiple instances on one machine never clobber each other) so the hook
+// script can discover the socket in both dev and prod mode.
+const SOCKET_PATH_FILE = join(COLLAB_DIR, "socket-path");
+const NODE_PATH_FILE = join(COLLAB_DIR, "node-path");
 
 type MethodHandler = (params: unknown) => unknown | Promise<unknown>;
 
 interface MethodEntry {
   handler: MethodHandler;
+  description: string;
+  params?: Record<string, string>;
+}
+
+interface MethodInfo {
+  name: string;
   description: string;
   params?: Record<string, string>;
 }
@@ -42,70 +46,126 @@ interface JsonRpcResponse {
   error?: { code: number; message: string; data?: unknown };
 }
 
-const methods = new Map<string, MethodEntry>();
+export type CallResult =
+  | { ok: true; result: unknown }
+  | { ok: false; code: number; message: string };
 
-function discoverMethods(): {
-  name: string;
-  description: string;
-  params?: Record<string, string>;
-}[] {
-  return [...methods.entries()].map(([name, entry]) => ({
-    name,
-    description: entry.description,
-    ...(entry.params ? { params: entry.params } : {}),
-  }));
-}
-let server: Server | null = null;
-const connections = new Set<Socket>();
-
-function isJsonRpcRequest(obj: unknown): obj is JsonRpcRequest {
-  if (typeof obj !== "object" || obj === null) return false;
-  const rec = obj as Record<string, unknown>;
-  return (
-    rec.jsonrpc === "2.0" &&
-    (typeof rec.id === "number" || typeof rec.id === "string") &&
-    typeof rec.method === "string"
-  );
+export interface MethodTable {
+  register(
+    method: string,
+    handler: MethodHandler,
+    meta?: { description?: string; params?: Record<string, string> },
+  ): void;
+  call(method: string, params: unknown): Promise<CallResult>;
+  handleMessage(raw: string): Promise<JsonRpcResponse | null>;
+  discover(): MethodInfo[];
+  has(method: string): boolean;
 }
 
-function makeErrorResponse(
-  id: number | string | null,
-  code: number,
-  message: string,
-): JsonRpcResponse {
-  return { jsonrpc: "2.0", id, error: { code, message } };
-}
+export function createMethodTable(): MethodTable {
+  const methods = new Map<string, MethodEntry>();
 
-async function handleMessage(raw: string): Promise<JsonRpcResponse | null> {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return makeErrorResponse(null, -32700, "Parse error");
+  function discover(): MethodInfo[] {
+    return [...methods.entries()].map(([name, entry]) => ({
+      name,
+      description: entry.description,
+      ...(entry.params ? { params: entry.params } : {}),
+    }));
   }
 
-  if (!isJsonRpcRequest(parsed)) {
-    return makeErrorResponse(null, -32600, "Invalid request");
+  function register(
+    method: string,
+    handler: MethodHandler,
+    meta?: { description?: string; params?: Record<string, string> },
+  ): void {
+    methods.set(method, {
+      handler,
+      description: meta?.description ?? "",
+      ...(meta?.params ? { params: meta.params } : {}),
+    });
   }
 
-  const entry = methods.get(parsed.method);
-  const handler = entry?.handler;
-  if (!handler) {
-    return makeErrorResponse(
-      parsed.id,
-      -32601,
-      `Method not found: ${parsed.method}`,
+  async function call(method: string, params: unknown): Promise<CallResult> {
+    const entry = methods.get(method);
+    if (!entry) {
+      return {
+        ok: false,
+        code: -32601,
+        message: `Method not found: ${method}`,
+      };
+    }
+    try {
+      const result = await entry.handler(params);
+      return { ok: true, result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, code: -32000, message };
+    }
+  }
+
+  function isJsonRpcRequest(obj: unknown): obj is JsonRpcRequest {
+    if (typeof obj !== "object" || obj === null) return false;
+    const rec = obj as Record<string, unknown>;
+    return (
+      rec.jsonrpc === "2.0" &&
+      (typeof rec.id === "number" || typeof rec.id === "string") &&
+      typeof rec.method === "string"
     );
   }
 
-  try {
-    const result = await handler(parsed.params);
-    return { jsonrpc: "2.0", id: parsed.id, result };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return makeErrorResponse(parsed.id, -32000, message);
+  async function handleMessage(raw: string): Promise<JsonRpcResponse | null> {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return {
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32700, message: "Parse error" },
+      };
+    }
+
+    if (!isJsonRpcRequest(parsed)) {
+      return {
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32600, message: "Invalid request" },
+      };
+    }
+
+    const result = await call(parsed.method, parsed.params);
+    if (result.ok) {
+      return { jsonrpc: "2.0", id: parsed.id, result: result.result };
+    }
+    return {
+      jsonrpc: "2.0",
+      id: parsed.id,
+      error: { code: result.code, message: result.message },
+    };
   }
+
+  return {
+    register,
+    call,
+    handleMessage,
+    discover,
+    has: (m) => methods.has(m),
+  };
 }
+
+const localTable = createMethodTable();
+
+/** Register a method on the local Unix-socket JSON-RPC server. */
+export function registerMethod(
+  method: string,
+  handler: MethodHandler,
+  meta?: { description?: string; params?: Record<string, string> },
+): void {
+  localTable.register(method, handler, meta);
+}
+
+let server: Server | null = null;
+const connections = new Set<Socket>();
 
 function handleConnection(socket: Socket): void {
   connections.add(socket);
@@ -120,7 +180,7 @@ function handleConnection(socket: Socket): void {
       buffer = buffer.slice(newlineIdx + 1);
 
       if (line.length > 0) {
-        void handleMessage(line).then((response) => {
+        void localTable.handleMessage(line).then((response) => {
           if (response && !socket.destroyed) {
             socket.write(JSON.stringify(response) + "\n");
           }
@@ -141,33 +201,10 @@ function handleConnection(socket: Socket): void {
   });
 }
 
-function makeMethodEntry(
-  handler: MethodHandler,
-  description: string,
-  params?: Record<string, string>,
-): MethodEntry {
-  return {
-    handler,
-    description,
-    ...(params ? { params } : {}),
-  };
-}
-
-export function registerMethod(
-  method: string,
-  handler: MethodHandler,
-  meta?: { description?: string; params?: Record<string, string> },
-): void {
-  methods.set(
-    method,
-    makeMethodEntry(handler, meta?.description ?? "", meta?.params),
-  );
-}
-
 export function startJsonRpcServer(): Promise<void> {
   return new Promise((resolve, reject) => {
     prepareEndpoint(SOCKET_PATH);
-    mkdirSync(BASE_DIR, { recursive: true });
+    mkdirSync(COLLAB_DIR, { recursive: true });
 
     server = createServer(handleConnection);
 
@@ -176,7 +213,7 @@ export function startJsonRpcServer(): Promise<void> {
       reject(err);
     });
 
-    registerMethod("rpc.discover", () => ({ methods: discoverMethods() }), {
+    registerMethod("rpc.discover", () => ({ methods: localTable.discover() }), {
       description: "List all available RPC methods",
     });
 

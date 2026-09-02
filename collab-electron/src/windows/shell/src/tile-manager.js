@@ -386,6 +386,15 @@ export function createTileManager({
     const termConfig = configs.terminalTile;
     const params = new URLSearchParams();
     params.set("tileId", tile.id);
+    params.set(
+      "layout",
+      JSON.stringify({
+        x: safeCoord(tile.x),
+        y: safeCoord(tile.y),
+        width: tile.width,
+        height: tile.height,
+      }),
+    );
     if (tile.ptySessionId) {
       params.set("sessionId", tile.ptySessionId);
       params.set("restored", "1");
@@ -752,6 +761,20 @@ export function createTileManager({
     saveCanvasImmediate();
   }
 
+  // 远程镜像全量对齐用：清空本地 tile（含 DOM），但不 kill PTY session
+  // （session 在 A 端，B 端重放后经 pty:reconnect 重新 attach）。
+  function clearCanvasKeepSessions() {
+    for (const [id, dom] of [...tileDOMs]) {
+      dom.container.remove();
+      tileDOMs.delete(id);
+    }
+    for (const t of [...tiles]) {
+      deselectTile(t.id);
+      removeTile(t.id);
+    }
+    onReposition?.();
+  }
+
   // -- Canvas state restore --
 
   function restoreCanvasState(savedTiles) {
@@ -812,6 +835,7 @@ export function createTileManager({
   return {
     createCanvasTile,
     closeCanvasTile,
+    clearCanvasKeepSessions,
     focusCanvasTile,
     blurCanvasTileGuest,
     clearTileFocusRing,

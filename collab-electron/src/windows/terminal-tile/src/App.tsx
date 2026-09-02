@@ -29,11 +29,30 @@ function App() {
     const isRestored = params.get("restored") === "1";
     const cwd = params.get("cwd") || undefined;
     const tileId = params.get("tileId") || undefined;
+    const layoutParam = params.get("layout");
+    let layout:
+      | { x: number; y: number; width: number; height: number }
+      | undefined;
+    if (layoutParam) {
+      try {
+        const parsed = JSON.parse(layoutParam);
+        if (
+          typeof parsed?.x === "number" &&
+          typeof parsed?.y === "number" &&
+          typeof parsed?.width === "number" &&
+          typeof parsed?.height === "number"
+        ) {
+          layout = parsed;
+        }
+      } catch {
+        // 非法 layout 忽略，镜像创建时回退到自动布局
+      }
+    }
 
     const createFreshSession = (target?: string, nextCwd?: string) => {
       const est = estimateTermSize();
       window.api
-        .ptyCreate(nextCwd ?? cwd, est.cols, est.rows, target, tileId)
+        .ptyCreate(nextCwd ?? cwd, est.cols, est.rows, target, tileId, layout)
         .then((result) => {
           setSessionId(result.sessionId);
           window.api.notifyPtySessionId(result.sessionId);

@@ -49,6 +49,14 @@ contextBridge.exposeInMainWorld("shellApi", {
   setPref: (key: string, value: unknown): Promise<void> =>
     ipcRenderer.invoke("pref:set", key, value),
 
+  getRemoteStatus: (): Promise<unknown> =>
+    ipcRenderer.invoke("remote:get-status"),
+  onRemoteStatus: (cb: (s: unknown) => void) => {
+    const handler = (_event: unknown, s: unknown) => cb(s);
+    ipcRenderer.on("remote-status", handler);
+    return () => ipcRenderer.removeListener("remote-status", handler);
+  },
+
   onForwardToWebview: (
     cb: (target: string, channel: string, ...args: unknown[]) => void,
   ) => {
@@ -70,8 +78,14 @@ contextBridge.exposeInMainWorld("shellApi", {
     return () => ipcRenderer.removeListener("shell:forward", handler);
   },
 
-  onSettingsToggle: (cb: (action: "open" | "close") => void) => {
-    const handler = (_event: unknown, action: "open" | "close") => cb(action);
+  onSettingsToggle: (
+    cb: (action: "open" | "close" | "open-pane", pane?: string) => void,
+  ) => {
+    const handler = (
+      _event: unknown,
+      action: "open" | "close" | "open-pane",
+      pane?: string,
+    ) => cb(action, pane);
     ipcRenderer.on("shell:settings", handler);
     return () => ipcRenderer.removeListener("shell:settings", handler);
   },
@@ -274,4 +288,7 @@ contextBridge.exposeInMainWorld("shellApi", {
   // Register webview name for memory stats
   registerWebviewName: (name: string, webContentsId: number) =>
     ipcRenderer.send("webview:register-name", name, webContentsId),
+
+  openSettingsPane: (pane: string) =>
+    ipcRenderer.send("settings:open-pane", pane),
 });

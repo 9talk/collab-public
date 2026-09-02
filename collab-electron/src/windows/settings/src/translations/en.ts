@@ -13,6 +13,7 @@ export const en = {
 
   // Claude pane
   "nav.claude": "Claude",
+  "nav.remote": "Remote",
   "claude.title": "Claude Integration",
   "claude.description":
     "Configure deep integration with Claude Code. When enabled, terminal tiles will automatically resume Claude Code sessions.",
@@ -169,6 +170,32 @@ export const en = {
   "files.ignoreCase": "Ignore case",
   "files.ignoreCaseDesc":
     'When enabled, patterns match regardless of case (e.g. "Logs" hides "logs").',
+
+  // Remote pane
+  "remote.title": "Remote Control",
+  "remote.description":
+    "Control this machine from another Collaborator instance, or control another one from here.",
+  "remote.hostSection": "As Host (be controlled)",
+  "remote.hostSectionDesc":
+    "Allow a paired machine to control this one. Data is sent to the relay only while enabled and connected.",
+  "remote.enable": "Enable remote control",
+  "remote.relayUrl": "Relay server URL",
+  "remote.deviceToken": "Device token",
+  "remote.pairCode": "Pairing code",
+  "remote.connecting": "Connecting…",
+  "remote.connected": "Connected",
+  "remote.off": "Off",
+  "remote.host": "Host",
+  "remote.peerNone": "No device paired",
+  "remote.peer": "Paired device",
+  "remote.clientSection": "As Client (control another machine)",
+  "remote.clientSectionDesc":
+    "Connect to the relay and enter the host's pairing code to control it.",
+  "remote.pairCodeInput": "Pairing code",
+  "remote.connect": "Connect",
+  "remote.disconnect": "Disconnect",
+  "remote.notConfigured": "Missing relay URL or token",
+  "remote.copy": "Copy",
 
   // Misc
   esc: "esc",

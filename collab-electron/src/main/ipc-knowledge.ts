@@ -4,6 +4,7 @@ import * as wikilinkIndex from "./wikilink-index";
 import { buildWorkspaceGraph } from "./workspace-graph";
 import * as agentActivity from "./agent-activity";
 import { workspaceForFile } from "./ipc-workspace";
+import { bindIpc, markForward } from "./ipc-registry";
 
 interface IpcContext {
   mainWindow: () => BrowserWindow | null;
@@ -19,15 +20,15 @@ interface IpcContext {
 
 export function registerKnowledgeHandlers(ctx: IpcContext): void {
   // Wikilinks
-  ipcMain.handle("wikilink:resolve", (_event, target: string) =>
+  bindIpc("wikilink:resolve", "handle", (_event, target: string) =>
     wikilinkIndex.resolve(target),
   );
 
-  ipcMain.handle("wikilink:suggest", (_event, partial: string) =>
+  bindIpc("wikilink:suggest", "handle", (_event, partial: string) =>
     wikilinkIndex.suggest(partial),
   );
 
-  ipcMain.handle("wikilink:backlinks", (_event, filePath: string) =>
+  bindIpc("wikilink:backlinks", "handle", (_event, filePath: string) =>
     wikilinkIndex.backlinksWithContext(filePath),
   );
 
@@ -68,12 +69,23 @@ export function registerKnowledgeHandlers(ctx: IpcContext): void {
     ctx.forwardToWebview("canvas", "open-terminal", path);
   });
 
-  ipcMain.on("nav:reveal-in-finder", (_event, path: string) => {
+  bindIpc("nav:reveal-in-finder", "on", (_event, path: string) => {
     ctx.trackEvent("file_revealed_in_finder");
     shell.showItemInFolder(path);
   });
 
-  ipcMain.on("nav:locate-terminal", (_event, folderPath: string) => {
+  bindIpc("nav:locate-terminal", "on", (_event, folderPath: string) => {
     ctx.forwardToWebview("canvas", "locate-terminal", folderPath);
   });
+
+  // ---- remote forwarding whitelist ----
+  for (const channel of [
+    "wikilink:resolve",
+    "wikilink:suggest",
+    "wikilink:backlinks",
+    "nav:reveal-in-finder",
+    "nav:locate-terminal",
+  ]) {
+    markForward(channel);
+  }
 }

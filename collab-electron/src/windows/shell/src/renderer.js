@@ -179,7 +179,6 @@ async function init() {
   const newTileBtn = document.getElementById("new-tile-btn");
   const relayoutBtn = document.getElementById("relayout-btn");
   const settingsBtn = document.getElementById("settings-btn");
-  const updatePill = document.getElementById("update-pill");
   const dragDropOverlay = document.getElementById("drag-drop-overlay");
   const loadingOverlay = document.getElementById("loading-overlay");
   const loadingStatusEl = document.getElementById("loading-status");
@@ -1188,7 +1187,41 @@ async function init() {
   // -- IPC forwarding --
 
   window.shellApi.onForwardToWebview((target, channel, ...args) => {
-    if (target === "settings" && singletonWebviews.settings) {
+    if (target === "shell") {
+      if (channel === "canvas:remote-state") {
+        // Remote mode (client side): replay the host's canvas snapshot。
+        // 全量对齐：先清空本地 tile（不 kill A 端 session），再重放 ——
+        // A 端是 B 端的持久化权威。
+        tileManager.clearCanvasKeepSessions();
+        void applyCanvasState(args[0]);
+        return;
+      }
+      if (channel === "remote:pty-opened") {
+        // A 端镜像：B 端经远程 pty:create 新建了终端，本端同步创建镜像 tile。
+        // B 端自身也会收到该事件（forwardToWebview 的 mirror），按 tileId 幂等忽略。
+        const payload = args[0];
+        if (!payload?.tileId || !payload?.sessionId) return;
+        if (tileManager.getTile(payload.tileId)) return;
+        const layout = payload.layout;
+        const tile = tileManager.createCanvasTile(
+          "term",
+          layout?.x ?? 0,
+          layout?.y ?? 0,
+          {
+            id: payload.tileId,
+            width: layout?.width,
+            height: layout?.height,
+            ptySessionId: payload.sessionId,
+            cwd: payload.cwd,
+            autoTitle: payload.displayName,
+          },
+        );
+        tileManager.spawnTerminalWebview(tile, false);
+        tileManager.saveCanvasImmediate();
+        minimap.update();
+        return;
+      }
+    } else if (target === "settings" && singletonWebviews.settings) {
       singletonWebviews.settings.send(channel, ...args);
     } else if (target === "nav") {
       workspaceManager.getNavWebview().send(channel, ...args);
@@ -1357,8 +1390,8 @@ async function init() {
     window.shellApi.closeSettings();
   });
 
-  window.shellApi.onSettingsToggle((action) => {
-    const open = action === "open";
+  window.shellApi.onSettingsToggle((action, pane) => {
+    const open = action !== "close";
     settingsModalOpen = open;
     if (open) {
       if (!singletonWebviews.settings) {
@@ -1374,6 +1407,21 @@ async function init() {
         });
       }
       blurNonModalSurfaces();
+      if (pane) {
+        const wv = singletonWebviews.settings.webview;
+        const sendPane = () => {
+          try {
+            wv.send("settings:open-pane", pane);
+          } catch {
+            // webview already gone
+          }
+        };
+        if (wv.isLoading()) {
+          wv.addEventListener("dom-ready", sendPane, { once: true });
+        } else {
+          sendPane();
+        }
+      }
     } else {
       singletonWebviews.settings?.webview.blur();
     }
@@ -1389,69 +1437,6 @@ async function init() {
       singletonWebviews.settings = null;
     }
     focusSurface(lastNonModalSurface);
-  });
-
-  // -- Update pill --
-
-  let updateState = { status: "idle" };
-  const isDevMode = import.meta.env.DEV;
-
-  function renderUpdatePill() {
-    if (updateState.status === "downloading") {
-      updatePill.style.display = "inline-block";
-      updatePill.classList.add("is-downloading");
-      updatePill.classList.remove("is-error");
-      updatePill.textContent = `Updating ${Math.round(updateState.progress ?? 0)}%`;
-      updatePill.title = "Downloading update...";
-    } else if (updateState.status === "installing") {
-      updatePill.style.display = "inline-block";
-      updatePill.classList.add("is-downloading");
-      updatePill.classList.remove("is-error");
-      updatePill.textContent = "Installing…";
-      updatePill.title = "Extracting and verifying update...";
-    } else if (updateState.status === "available") {
-      updatePill.style.display = "inline-block";
-      updatePill.classList.remove("is-downloading");
-      updatePill.classList.remove("is-error");
-      updatePill.textContent = "Download & Update";
-      updatePill.title = `Click to download v${updateState.version}`;
-    } else if (updateState.status === "ready") {
-      updatePill.style.display = "inline-block";
-      updatePill.classList.remove("is-downloading");
-      updatePill.classList.remove("is-error");
-      updatePill.textContent = "Update & Restart";
-      updatePill.title = `Click to install v${updateState.version}`;
-    } else if (updateState.status === "error") {
-      updatePill.style.display = "inline-block";
-      updatePill.classList.remove("is-downloading");
-      updatePill.classList.add("is-error");
-      updatePill.textContent = "Update failed — retry";
-      updatePill.title = updateState.error || "Update failed";
-    } else if (isDevMode) {
-      updatePill.style.display = "inline-block";
-      updatePill.classList.remove("is-downloading");
-      updatePill.classList.remove("is-error");
-      updatePill.textContent =
-        updateState.status === "checking" ? "Checking…" : "Check for Update";
-      updatePill.title = "Click to check for updates";
-    } else {
-      updatePill.style.display = "none";
-      updatePill.classList.remove("is-downloading");
-      updatePill.classList.remove("is-error");
-    }
-  }
-
-  window.shellApi
-    .updateGetStatus()
-    .then((s) => {
-      updateState = s;
-      renderUpdatePill();
-    })
-    .catch(() => {});
-
-  window.shellApi.onUpdateStatus((s) => {
-    updateState = s;
-    renderUpdatePill();
   });
 
   newTileBtn.addEventListener("click", async () => {
@@ -1474,6 +1459,50 @@ async function init() {
     window.shellApi.toggleSettings();
   });
 
+  // -- Remote control button + status badge --
+
+  const remoteBtn = document.getElementById("remote-btn");
+  const remoteIndicator = document.getElementById("remote-indicator");
+  const remoteStatusDot = document.getElementById("remote-status-dot");
+  const remoteStatusText = document.getElementById("remote-status-text");
+
+  remoteBtn.addEventListener("click", () => {
+    window.shellApi.openSettingsPane("remote");
+  });
+
+  function renderRemoteBadge(status) {
+    if (!status || typeof status.state !== "string") return;
+    remoteIndicator.style.display = "flex";
+    remoteStatusDot.className = `remote-dot is-${status.state}`;
+    if (status.state === "connected") {
+      const peerId =
+        status.hostInfo?.deviceId ??
+        status.peer?.deviceId ??
+        status.peer?.displayName ??
+        "";
+      remoteStatusText.textContent =
+        status.pairCode ?? (peerId ? `→ ${peerId}` : "");
+      remoteIndicator.title = `Remote: connected${peerId ? ` (${peerId})` : ""}`;
+    } else if (status.state === "connecting") {
+      remoteStatusText.textContent = "";
+      remoteIndicator.title = "Remote: connecting…";
+    } else {
+      remoteStatusText.textContent = "";
+      remoteIndicator.title = "Remote: off";
+    }
+  }
+
+  window.shellApi
+    .getRemoteStatus()
+    .then((s) => renderRemoteBadge(s))
+    .catch(() => {});
+  window.shellApi.onRemoteStatus((s) => {
+    renderRemoteBadge(s);
+    // nav webview 是独立 webContents，收不到主进程 broadcast 的 remote-status，
+    // 由 shell 桥接转发（nav 据此隐藏/恢复「Add workspace」按钮）。
+    workspaceManager.getNavWebview().send("remote-status", s);
+  });
+
   function relayoutTerminalTiles() {
     const positions = computeTerminalLayout();
     for (const [id, x, y] of positions) {
@@ -1488,28 +1517,6 @@ async function init() {
   }
 
   relayoutBtn.addEventListener("click", relayoutTerminalTiles);
-
-  updatePill.addEventListener("click", () => {
-    if (
-      updateState.status === "downloading" ||
-      updateState.status === "installing"
-    )
-      return;
-    if (updateState.status === "available") {
-      window.shellApi.updateDownload();
-    } else if (updateState.status === "ready") {
-      window.shellApi.updateInstall();
-    } else if (updateState.status === "error") {
-      updateState = { status: "idle" };
-      renderUpdatePill();
-      window.shellApi.updateCheck();
-    } else if (
-      isDevMode &&
-      (updateState.status === "idle" || updateState.status === "checking")
-    ) {
-      window.shellApi.updateCheck();
-    }
-  });
 
   // -- Loading --
 
@@ -1624,8 +1631,8 @@ async function init() {
 
   // -- Restore canvas state --
 
-  const savedState = await window.shellApi.canvasLoadState();
-  if (savedState) {
+  async function applyCanvasState(savedState) {
+    if (!savedState) return;
     const { centerX, centerY, zoom } = savedState.viewport;
     const w = canvasEl.clientWidth;
     const h = canvasEl.clientHeight;
@@ -1653,6 +1660,11 @@ async function init() {
       }
       tileManager.saveCanvasDebounced();
     }
+  }
+
+  const savedState = await window.shellApi.canvasLoadState();
+  if (savedState) {
+    await applyCanvasState(savedState);
   }
 
   // -- Initialize workspaces --

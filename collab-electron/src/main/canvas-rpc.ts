@@ -14,27 +14,63 @@ const REQUEST_TIMEOUT_MS = 10_000;
 
 let shellWindow: BrowserWindow | null = null;
 
-function sendToShell(method: string, params: unknown): Promise<unknown> {
+export type CanvasRpcResponseMirror = (response: {
+  requestId: string;
+  result?: unknown;
+  error?: { code: number; message: string };
+}) => void;
+
+let remoteCanvasResponseMirror: CanvasRpcResponseMirror | null = null;
+
+/** 远程 host 模式：shell 响应原样镜像给 remote-client 转推控制端 */
+export function setCanvasRpcResponseMirror(
+  fn: CanvasRpcResponseMirror | null,
+): void {
+  remoteCanvasResponseMirror = fn;
+}
+
+function sendToShellRaw(
+  method: string,
+  params: unknown,
+  requestId?: string,
+): Promise<unknown> {
   if (!shellWindow || shellWindow.isDestroyed()) {
     return Promise.reject(new Error("Shell window not available"));
   }
 
-  const requestId = randomUUID();
+  const rid = requestId ?? randomUUID();
 
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      pending.delete(requestId);
+      pending.delete(rid);
       reject(new Error(`canvas RPC timed out: ${method}`));
     }, REQUEST_TIMEOUT_MS);
 
-    pending.set(requestId, { resolve, reject, timer });
+    pending.set(rid, { resolve, reject, timer });
 
     shellWindow!.webContents.send("canvas:rpc-request", {
-      requestId,
+      requestId: rid,
       method: method.replace(/^canvas\./, ""),
       params,
     });
   });
+}
+
+function sendToShell(method: string, params: unknown): Promise<unknown> {
+  return sendToShellRaw(method, params);
+}
+
+/**
+ * Forward a canvas RPC request coming from the remote client (B) into this
+ * host's shell renderer. The caller-provided requestId is preserved so the
+ * shell's response can be routed back to the matching remote request.
+ */
+export function forwardCanvasRpcRequest(payload: {
+  requestId: string;
+  method: string;
+  params?: unknown;
+}): Promise<unknown> {
+  return sendToShellRaw(payload.method, payload.params, payload.requestId);
 }
 
 export function registerCanvasRpc(win: BrowserWindow): void {
@@ -55,6 +91,8 @@ export function registerCanvasRpc(win: BrowserWindow): void {
 
       pending.delete(response.requestId);
       clearTimeout(entry.timer);
+
+      remoteCanvasResponseMirror?.(response);
 
       if (response.error) {
         entry.reject(new Error(response.error.message));

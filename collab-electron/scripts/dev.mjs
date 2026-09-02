@@ -14,6 +14,11 @@ function normalizeWindowsPath(path) {
 
 const repoDir = normalizeWindowsPath(process.cwd());
 
+// REMOTE_DEBUG_PORT 透传给 electron（--remote-debugging-port），供 e2e 的 CDP 驱动使用
+const debugArgs = process.env.REMOTE_DEBUG_PORT
+  ? ["--remoteDebuggingPort", process.env.REMOTE_DEBUG_PORT]
+  : [];
+
 const child =
   process.platform === "win32"
     ? spawn(
@@ -30,16 +35,18 @@ const child =
           cwd: repoDir,
           env: {
             ...process.env,
-            COLLAB_DEV_WORKTREE_ROOT: repoDir,
+            COLLAB_DEV_WORKTREE_ROOT:
+              process.env.COLLAB_DEV_WORKTREE_ROOT ?? repoDir,
           },
         },
       )
-    : spawn(process.execPath, ["x", "electron-vite", "dev"], {
+    : spawn(process.execPath, ["x", "electron-vite", "dev", ...debugArgs], {
         stdio: "inherit",
         cwd: repoDir,
         env: {
           ...process.env,
-          COLLAB_DEV_WORKTREE_ROOT: repoDir,
+          COLLAB_DEV_WORKTREE_ROOT:
+            process.env.COLLAB_DEV_WORKTREE_ROOT ?? repoDir,
         },
       });
 

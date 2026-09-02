@@ -315,50 +315,79 @@ body.platform-win {
   transform: scale(0.94);
 }
 
-#update-pill {
+#remote-btn {
   position: absolute;
-  top: 8px;
-  right: 42px;
-  z-index: 101;
+  top: 6px;
+  right: 40px;
+  z-index: 601;
   -webkit-app-region: no-drag;
-  padding: 2px 9px;
-  border-radius: 9999px;
-  border: 1.5px solid var(--primary, #1d76dc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
   background: transparent;
-  color: var(--primary, #1d76dc);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 500;
+  color: var(--muted);
   cursor: pointer;
   transition:
-    background 0.15s ease,
-    transform 0.1s ease;
+    color 0.15s ease,
+    background 0.15s ease;
+  flex-shrink: 0;
+}
+
+#remote-btn:hover {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+#remote-btn:active {
+  transform: scale(0.94);
+}
+
+#remote-indicator {
+  position: absolute;
+  top: 10px;
+  right: 74px;
+  z-index: 601;
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--muted);
   white-space: nowrap;
-}
-
-#update-pill:hover {
-  background: color-mix(in srgb, var(--primary, #1d76dc) 10%, transparent);
-}
-
-#update-pill:active {
-  transform: scale(0.98);
-}
-
-#update-pill.is-downloading {
-  border-color: transparent;
-  background: transparent;
-  color: var(--muted, rgba(0, 0, 0, 0.5));
-  cursor: default;
   pointer-events: none;
 }
 
-#update-pill.is-error {
-  border-color: var(--destructive, #e5484d);
-  color: var(--destructive, #e5484d);
+.remote-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-#update-pill.is-error:hover {
-  background: color-mix(in srgb, var(--destructive, #e5484d) 10%, transparent);
+.remote-dot.is-connected {
+  background: #30a46c;
+}
+
+.remote-dot.is-connecting {
+  background: #f5a524;
+}
+
+.remote-dot.is-error {
+  background: #e5484d;
+}
+
+.remote-dot.is-idle {
+  background: color-mix(in srgb, var(--fg) 30%, transparent);
 }
 
 /* ── Resize ── */

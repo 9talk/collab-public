@@ -22,6 +22,7 @@ import { shouldIncludeEntryWithContent, fsWriteFile } from "./files";
 import * as watcher from "./watcher";
 import * as wikilinkIndex from "./wikilink-index";
 import { trackEvent } from "./analytics";
+import { bindIpc, markForward } from "./ipc-registry";
 import type { TreeNode } from "@collab/shared/types";
 
 export interface IpcWorkspaceContext {
@@ -35,7 +36,7 @@ export interface IpcWorkspaceContext {
 
 const wsConfigMap = new Map<string, WorkspaceConfig>();
 
-function getWsConfig(workspacePath: string): WorkspaceConfig {
+export function getWsConfig(workspacePath: string): WorkspaceConfig {
   let config = wsConfigMap.get(workspacePath);
   if (!config) {
     config = loadWorkspaceConfig(workspacePath);
@@ -141,7 +142,7 @@ export function stopSingleWorkspaceServices(path: string): void {
 
 const LEGACY_FM_FIELDS = new Set(["createdAt", "modifiedAt", "author"]);
 
-async function readTreeRecursive(
+export async function readTreeRecursive(
   dirPath: string,
   rootPath: string,
   filter: FileFilter | null,
@@ -223,17 +224,49 @@ async function readTreeRecursive(
   return [...folders, ...files];
 }
 
+export async function updateFrontmatter(
+  filePath: string,
+  field: string,
+  value: unknown,
+): Promise<{ ok: boolean; retried?: boolean }> {
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const fileStat = await stat(filePath);
+    const expectedMtime = fileStat.mtime.toISOString();
+
+    const content = await readFile(filePath, "utf-8");
+    const parsed = fm<Record<string, unknown>>(content);
+    const attrs = { ...parsed.attributes, [field]: value };
+
+    for (const key of LEGACY_FM_FIELDS) {
+      delete attrs[key];
+    }
+
+    const yaml = Object.entries(attrs)
+      .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+      .join("\n");
+    const output = `---\n${yaml}\n---\n${parsed.body}`;
+
+    const result = await fsWriteFile(filePath, output, expectedMtime);
+    if (result.ok) {
+      return { ok: true, retried: attempt > 0 };
+    }
+  }
+  return { ok: false };
+}
+
 export function registerWorkspaceHandlers(
   ctx: IpcWorkspaceContext,
   appConfig: AppConfig,
   fileFilterRef: { current: FileFilter | null },
 ): void {
-  ipcMain.handle("config:get", () => appConfig);
-  ipcMain.handle("app:version", () => app.getVersion());
-  ipcMain.handle("app:commit-sha", () => __GIT_COMMIT_SHA__);
+  bindIpc("config:get", "handle", () => appConfig);
+  bindIpc("app:version", "handle", () => app.getVersion());
+  bindIpc("app:commit-sha", "handle", () => __GIT_COMMIT_SHA__);
 
-  ipcMain.handle(
+  bindIpc(
     "workspace-pref:get",
+    "handle",
     (_event, params: { key: string; workspacePath: string }) => {
       if (!params.workspacePath) return null;
       const config = getWsConfig(params.workspacePath);
@@ -245,8 +278,9 @@ export function registerWorkspaceHandlers(
     },
   );
 
-  ipcMain.handle(
+  bindIpc(
     "workspace-pref:set",
+    "handle",
     (
       _event,
       params: {
@@ -271,7 +305,7 @@ export function registerWorkspaceHandlers(
     },
   );
 
-  ipcMain.handle("workspace:list", () => {
+  bindIpc("workspace:list", "handle", () => {
     const aliases: Record<string, string> = {};
     for (const ws of appConfig.workspaces) {
       const cfg = getWsConfig(ws);
@@ -280,7 +314,7 @@ export function registerWorkspaceHandlers(
     return { workspaces: appConfig.workspaces, aliases };
   });
 
-  ipcMain.handle("workspace:add", async () => {
+  bindIpc("workspace:add", "handle", async () => {
     const win = ctx.mainWindow();
     if (!win) return null;
     const result = await dialog.showOpenDialog(win, {
@@ -320,8 +354,9 @@ export function registerWorkspaceHandlers(
     return { workspaces: appConfig.workspaces };
   });
 
-  ipcMain.handle(
+  bindIpc(
     "workspace:add-by-path",
+    "handle",
     async (_event, folderPath: string) => {
       if (!folderPath || typeof folderPath !== "string") return null;
       const chosen = realpathSync(folderPath);
@@ -356,7 +391,7 @@ export function registerWorkspaceHandlers(
     },
   );
 
-  ipcMain.handle("workspace:remove", (_event, index: number) => {
+  bindIpc("workspace:remove", "handle", (_event, index: number) => {
     if (index < 0 || index >= appConfig.workspaces.length) {
       return { workspaces: appConfig.workspaces };
     }
@@ -373,7 +408,7 @@ export function registerWorkspaceHandlers(
     return { workspaces: appConfig.workspaces };
   });
 
-  ipcMain.handle("workspace:remove-by-path", (_event, path: string) => {
+  bindIpc("workspace:remove-by-path", "handle", (_event, path: string) => {
     const index = appConfig.workspaces.indexOf(path);
     if (index === -1) {
       return { workspaces: appConfig.workspaces };
@@ -390,45 +425,42 @@ export function registerWorkspaceHandlers(
     return { workspaces: appConfig.workspaces };
   });
 
-  ipcMain.handle(
+  bindIpc(
     "workspace:read-tree",
+    "handle",
     async (_event, params: { root: string }): Promise<TreeNode[]> => {
       return readTreeRecursive(params.root, params.root, fileFilterRef.current);
     },
   );
 
-  ipcMain.handle(
+  bindIpc(
     "workspace:update-frontmatter",
+    "handle",
     async (
       _event,
       filePath: string,
       field: string,
       value: unknown,
     ): Promise<{ ok: boolean; retried?: boolean }> => {
-      const MAX_ATTEMPTS = 3;
-      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-        const fileStat = await stat(filePath);
-        const expectedMtime = fileStat.mtime.toISOString();
-
-        const content = await readFile(filePath, "utf-8");
-        const parsed = fm<Record<string, unknown>>(content);
-        const attrs = { ...parsed.attributes, [field]: value };
-
-        for (const key of LEGACY_FM_FIELDS) {
-          delete attrs[key];
-        }
-
-        const yaml = Object.entries(attrs)
-          .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
-          .join("\n");
-        const output = `---\n${yaml}\n---\n${parsed.body}`;
-
-        const result = await fsWriteFile(filePath, output, expectedMtime);
-        if (result.ok) {
-          return { ok: true, retried: attempt > 0 };
-        }
-      }
-      return { ok: false };
+      return updateFrontmatter(filePath, field, value);
     },
   );
+
+  // ---- remote forwarding whitelist ----
+  for (const channel of [
+    "config:get",
+    "app:version",
+    "app:commit-sha",
+    "workspace-pref:get",
+    "workspace-pref:set",
+    "workspace:list",
+    "workspace:add",
+    "workspace:add-by-path",
+    "workspace:remove",
+    "workspace:remove-by-path",
+    "workspace:read-tree",
+    "workspace:update-frontmatter",
+  ]) {
+    markForward(channel);
+  }
 }

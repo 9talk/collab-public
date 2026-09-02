@@ -15,6 +15,7 @@ import * as agentActivity from "./agent-activity";
 import { registerMethod } from "./json-rpc-server";
 import { DISABLE_GIT_REPLAY } from "@collab/shared/replay-types";
 import { workspaceForFile } from "./ipc-workspace";
+import { bindIpc, markForward } from "./ipc-registry";
 
 interface IpcContext {
   mainWindow: () => BrowserWindow | null;
@@ -300,7 +301,7 @@ export function registerMiscHandlers(ctx: IpcContext): void {
   });
 
   // Dialog: open folder
-  ipcMain.handle("dialog:open-folder", async () => {
+  bindIpc("dialog:open-folder", "handle", async () => {
     const win = ctx.mainWindow();
     if (!win) return null;
     const result = await dialog.showOpenDialog(win, {
@@ -313,7 +314,7 @@ export function registerMiscHandlers(ctx: IpcContext): void {
   });
 
   // Dialog: open image
-  ipcMain.handle("dialog:open-image", async () => {
+  bindIpc("dialog:open-image", "handle", async () => {
     const win = ctx.mainWindow();
     if (!win) return null;
     const result = await dialog.showOpenDialog(win, {
@@ -404,13 +405,13 @@ export function registerMiscHandlers(ctx: IpcContext): void {
   );
 
   // Open external URL
-  ipcMain.on("shell:open-external", (_event, url: string) => {
+  bindIpc("shell:open-external", "on", (_event, url: string) => {
     console.log("[open-external] from", _event.sender.getURL(), ":", url);
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
   });
 
   // Open file with system default application
-  ipcMain.on("shell:open-path", (_event, path: string) => {
+  bindIpc("shell:open-path", "on", (_event, path: string) => {
     console.log("[open-path] from", _event.sender.getURL(), ":", path);
     shell.openPath(path);
   });
@@ -422,22 +423,24 @@ export function registerMiscHandlers(ctx: IpcContext): void {
     });
   }
 
-  ipcMain.handle(
+  bindIpc(
     "replay:start",
+    "handle",
     (_event, params: { workspacePath: string }): boolean => {
       if (DISABLE_GIT_REPLAY) return false;
       return gitReplay.startReplay(params.workspacePath);
     },
   );
 
-  ipcMain.handle("replay:stop", () => {
+  bindIpc("replay:stop", "handle", () => {
     if (DISABLE_GIT_REPLAY) return;
     gitReplay.stopReplay();
   });
 
   // Import web article
-  ipcMain.handle(
+  bindIpc(
     "import:web-article",
+    "handle",
     async (_event, url: string, targetDir: string) => {
       const ws = workspaceForFile(targetDir, ctx.workspaces());
       if (!ws) {
@@ -462,9 +465,23 @@ export function registerMiscHandlers(ctx: IpcContext): void {
   });
 
   // Viewer: run in terminal
-  ipcMain.on("viewer:run-in-terminal", (_event, command: string) => {
+  bindIpc("viewer:run-in-terminal", "on", (_event, command: string) => {
     ctx.forwardToWebview("terminal", "run-in-terminal", command);
   });
+
+  // ---- remote forwarding whitelist ----
+  for (const channel of [
+    "dialog:open-folder",
+    "dialog:open-image",
+    "shell:open-external",
+    "shell:open-path",
+    "replay:start",
+    "replay:stop",
+    "import:web-article",
+    "viewer:run-in-terminal",
+  ]) {
+    markForward(channel);
+  }
 
   // JSON-RPC methods
   registerMethod(

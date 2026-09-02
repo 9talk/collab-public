@@ -32,13 +32,32 @@ const fileFilterRef: { current: FileFilter | null } = {
   current: null,
 };
 
+export interface RemoteEventMirrorEvent {
+  target: string;
+  channel: string;
+  args: unknown[];
+}
+
+// Mirrors every forwardToWebview call to the remote-control module (host
+// mode). null = remote disabled, zero overhead.
+let remoteEventMirror: ((ev: RemoteEventMirrorEvent) => void) | null = null;
+
+export function setRemoteEventMirror(
+  fn: ((ev: RemoteEventMirrorEvent) => void) | null,
+): void {
+  remoteEventMirror = fn;
+}
+
 function forwardToWebview(
   target: string,
   channel: string,
   ...args: unknown[]
 ): void {
   mainWindow?.webContents.send("shell:forward", target, channel, ...args);
+  remoteEventMirror?.({ target, channel, args });
 }
+
+export { forwardToWebview };
 
 export function setMainWindow(win: BrowserWindow): void {
   mainWindow = win;

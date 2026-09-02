@@ -12,6 +12,7 @@ import {
   FolderOpen,
   Gauge,
   Robot,
+  Broadcast,
 } from "@phosphor-icons/react";
 import { ResponsiveTreeMap } from "@nivo/treemap";
 import { useTranslation } from "./translations";
@@ -69,6 +70,15 @@ interface SettingsApi {
     processCount: number;
   }>;
   close: () => void;
+  getRemoteStatus: () => Promise<Record<string, unknown> | null>;
+  onRemoteStatus: (cb: (s: Record<string, unknown>) => void) => () => void;
+  setRemoteHostEnabled: (enabled: boolean) => Promise<{ ok?: boolean }>;
+  connectRemoteClient: (
+    relayUrl: string,
+    pairCode: string,
+  ) => Promise<{ ok?: boolean; error?: string }>;
+  disconnectRemoteClient: () => Promise<{ ok?: boolean }>;
+  onOpenPane: (cb: (pane: string) => void) => () => void;
 }
 
 const api = (window as unknown as { api: SettingsApi }).api;
@@ -918,7 +928,8 @@ type Pane =
   | "controls"
   | "updates"
   | "files"
-  | "claude";
+  | "claude"
+  | "remote";
 
 function MemoryPane({ t }: { t: (key: TranslationKey) => string }) {
   const [stats, setStats] = useState<{
@@ -1844,6 +1855,277 @@ function UpdatesPane({ t }: { t: (key: TranslationKey) => string }) {
   );
 }
 
+type RemoteStatus = Record<string, unknown>;
+
+function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
+  const [relayUrl, setRelayUrl] = useState("");
+  const [deviceToken, setDeviceToken] = useState("");
+  const [hostEnabled, setHostEnabled] = useState(false);
+  const [hostStatus, setHostStatus] = useState<RemoteStatus | null>(null);
+  const [clientRelayUrl, setClientRelayUrl] = useState("");
+  const [pairCode, setPairCode] = useState("");
+  const [clientStatus, setClientStatus] = useState<RemoteStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .getPref("remote.relayUrl")
+      .then((v) => {
+        if (typeof v === "string") setRelayUrl(v);
+      })
+      .catch(() => {});
+    api
+      .getPref("remote.deviceToken")
+      .then((v) => {
+        if (typeof v === "string") setDeviceToken(v);
+      })
+      .catch(() => {});
+    api
+      .getPref("remote.enabled")
+      .then((v) => {
+        if (typeof v === "boolean") setHostEnabled(v);
+      })
+      .catch(() => {});
+    api
+      .getRemoteStatus()
+      .then((s) => {
+        if (!s) return;
+        if ("hostInfo" in s) setClientStatus(s);
+        else setHostStatus(s);
+      })
+      .catch(() => {});
+    const unsub = api.onRemoteStatus((s) => {
+      if ("hostInfo" in s) setClientStatus(s);
+      else setHostStatus(s);
+    });
+    return unsub;
+  }, []);
+
+  async function saveRelayUrl(v: string) {
+    setRelayUrl(v);
+    await api.setPref("remote.relayUrl", v);
+  }
+
+  async function saveToken(v: string) {
+    setDeviceToken(v);
+    await api.setPref("remote.deviceToken", v);
+  }
+
+  async function toggleHost(checked: boolean) {
+    setHostEnabled(checked);
+    setBusy(true);
+    setError(null);
+    try {
+      await api.setPref("remote.enabled", checked);
+      const res = await api.setRemoteHostEnabled(checked);
+      if (res && res.ok === false) setError(t("remote.notConfigured"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function connectClient() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.connectRemoteClient(clientRelayUrl, pairCode);
+      if (res && res.ok === false) {
+        setError(
+          typeof res.error === "string" ? res.error : t("remote.notConfigured"),
+        );
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disconnectClient() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.disconnectRemoteClient();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function stateLabel(state: unknown): string {
+    if (state === "connected") return t("remote.connected");
+    if (state === "connecting") return t("remote.connecting");
+    return t("remote.off");
+  }
+
+  const hostStateLabel = stateLabel(hostStatus?.state);
+  const hostPeer = hostStatus?.peer as
+    | { role?: string; deviceId?: string; displayName?: string }
+    | undefined;
+  const hostPairCode = hostStatus?.pairCode as string | undefined;
+  const clientStateLabel = stateLabel(clientStatus?.state);
+  const clientHost = clientStatus?.hostInfo as
+    | { role?: string; deviceId?: string; displayName?: string }
+    | undefined;
+  const clientErr = clientStatus?.lastError as string | undefined;
+
+  return (
+    <div className="space-y-6 p-6">
+      <div className="space-y-1">
+        <h2 className="text-base font-semibold">{t("remote.title")}</h2>
+        <p className="text-sm text-muted-foreground">
+          {t("remote.description")}
+        </p>
+      </div>
+
+      {/* Host section */}
+      <div className="space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">{t("remote.hostSection")}</h3>
+          <p className="text-xs text-muted-foreground">
+            {t("remote.hostSectionDesc")}
+          </p>
+        </div>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={hostEnabled}
+            disabled={busy}
+            onChange={(e) => toggleHost(e.target.checked)}
+          />
+          {t("remote.enable")}
+        </label>
+
+        <label className="block">
+          <span className="text-sm text-muted-foreground">
+            {t("remote.relayUrl")}
+          </span>
+          <input
+            type="text"
+            value={relayUrl}
+            onChange={(e) => saveRelayUrl(e.target.value)}
+            className="mt-1 w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm"
+            spellCheck={false}
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-sm text-muted-foreground">
+            {t("remote.deviceToken")}
+          </span>
+          <input
+            type="password"
+            value={deviceToken}
+            onChange={(e) => saveToken(e.target.value)}
+            className="mt-1 w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm"
+            spellCheck={false}
+          />
+        </label>
+
+        <div className="space-y-1 rounded-md border border-border/50 p-3 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">
+              {t("remote.relayUrl")}
+            </span>
+            <span>{hostStatus?.relayUrl ?? "-"}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">{t("remote.host")}</span>
+            <span>{hostStateLabel}</span>
+          </div>
+          {hostPairCode && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">
+                {t("remote.pairCode")}
+              </span>
+              <span className="font-mono tracking-widest">{hostPairCode}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">{t("remote.peer")}</span>
+            <span>
+              {hostPeer?.deviceId ??
+                (hostStatus?.peerConnected === false
+                  ? t("remote.peerNone")
+                  : "-")}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Client section */}
+      <div className="space-y-4 border-t border-border/50 pt-5">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">{t("remote.clientSection")}</h3>
+          <p className="text-xs text-muted-foreground">
+            {t("remote.clientSectionDesc")}
+          </p>
+        </div>
+
+        <label className="block">
+          <span className="text-sm text-muted-foreground">
+            {t("remote.relayUrl")}
+          </span>
+          <input
+            type="text"
+            value={clientRelayUrl}
+            onChange={(e) => setClientRelayUrl(e.target.value)}
+            className="mt-1 w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm"
+            spellCheck={false}
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-sm text-muted-foreground">
+            {t("remote.pairCodeInput")}
+          </span>
+          <input
+            type="text"
+            value={pairCode}
+            onChange={(e) => setPairCode(e.target.value)}
+            className="mt-1 w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm font-mono tracking-widest"
+            spellCheck={false}
+            maxLength={6}
+          />
+        </label>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={connectClient}
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-foreground"
+          >
+            {t("remote.connect")}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={disconnectClient}
+            className="rounded-md border border-border/50 px-3 py-1.5 text-sm"
+          >
+            {t("remote.disconnect")}
+          </button>
+        </div>
+
+        <div className="space-y-1 rounded-md border border-border/50 p-3 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">{t("remote.host")}</span>
+            <span>{clientStateLabel}</span>
+          </div>
+          {(clientHost || clientErr) && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">{t("remote.peer")}</span>
+              <span>{clientHost?.deviceId ?? clientErr}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {error && <p className="text-sm text-red-500">{error}</p>}
+    </div>
+  );
+}
+
 function ClaudePane({ t }: { t: (key: TranslationKey) => string }) {
   const [enabled, setEnabled] = useState(false);
   const [timeout, setTimeout_] = useState(7);
@@ -2139,6 +2421,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const unsub = api.onOpenPane((pane) => {
+      setActivePane(pane as Pane);
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
     api
       .getAppVersion()
       .then((v) => setAppVersion(v))
@@ -2154,6 +2443,7 @@ export default function App() {
     { id: "updates", label: t("nav.updates"), icon: ArrowClockwise },
     { id: "files", label: t("nav.files"), icon: FolderOpen },
     { id: "claude", label: t("nav.claude"), icon: Robot },
+    { id: "remote", label: t("nav.remote"), icon: Broadcast },
   ];
 
   return (
@@ -2214,6 +2504,7 @@ export default function App() {
         {activePane === "updates" && <UpdatesPane t={t} />}
         {activePane === "files" && <FilesPane t={t} />}
         {activePane === "claude" && <ClaudePane t={t} />}
+        {activePane === "remote" && <RemotePane t={t} />}
       </div>
     </div>
   );

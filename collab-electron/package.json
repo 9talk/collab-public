@@ -5,7 +5,8 @@
   "license": "FSL-1.1-ALv2",
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "../collab-relay"
   ],
   "main": "out/main/index.js",
   "scripts": {
@@ -19,6 +20,7 @@
     "release": "bun format && bun ./scripts/package.mjs --publish",
     "test": "bun format && bun test",
     "test:updater": "bun format && bun test src/main/updater/github-release-fetcher.test.ts && bun test src/main/updater/downloader.test.ts && bun test src/main/updater/update-manager.test.ts",
+    "test:remote": "bun run scripts/remote-e2e/run.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "build:cli": "bun build ./cli/collab-cli.mjs --outfile ./cli/collab-cli.bundled.mjs --target node --format esm --external 'node:*'",
@@ -214,6 +216,7 @@
     "@types/d3": "7.4.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "6.0.2",
     "app-builder-bin": "4.2.0",
     "electron": "^42.3.3",

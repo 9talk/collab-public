@@ -73,6 +73,19 @@ import { workspaceForFile } from "./ipc-workspace";
 import { readSessionMeta } from "./session-meta";
 import * as canvasPersistence from "./canvas-persistence";
 import {
+  startRemoteHostIfConfigured,
+  stopRemoteHost,
+  getRemoteHostStatus,
+} from "./remote-server";
+import {
+  startRemoteClient,
+  startRemoteClientIfConfigured,
+  stopRemoteClient,
+  isRemoteActive,
+  getRemoteClientStatus,
+} from "./remote-client";
+import { bindIpc, markForward } from "./ipc-registry";
+import {
   checkPermissions,
   openPermissionSettings,
   type PermissionKind,
@@ -597,13 +610,13 @@ ipcMain.handle("shell:get-view-config", () => {
   };
 });
 
-ipcMain.handle("pref:get", (_event, key: string) => getPref(config, key));
+bindIpc("pref:get", "handle", (_event, key: string) => getPref(config, key));
 
 ipcMain.on("pref:get-sync", (event, key: string) => {
   event.returnValue = getPref(config, key);
 });
 
-ipcMain.handle("pref:set", (_event, key: string, value: unknown) => {
+bindIpc("pref:set", "handle", (_event, key: string, value: unknown) => {
   setPref(config, key, value);
   if (key === "autoCheckUpdates" && typeof value === "boolean") {
     updateManager.setAutoCheckEnabled(value);
@@ -634,7 +647,7 @@ ipcMain.handle("pref:set", (_event, key: string, value: unknown) => {
   }
 });
 
-ipcMain.handle("terminal:list-targets", () => listTerminalTargets());
+bindIpc("terminal:list-targets", "handle", () => listTerminalTargets());
 
 ipcMain.handle("theme:set", (_event, mode: string) => {
   const valid = mode === "light" || mode === "dark" ? mode : "system";
@@ -642,8 +655,9 @@ ipcMain.handle("theme:set", (_event, mode: string) => {
   setPref(config, "theme", valid);
 });
 
-ipcMain.handle(
+bindIpc(
   "pty:create",
+  "handle",
   (
     event,
     params?: {
@@ -668,14 +682,16 @@ function handlePtyWrite(sessionId: string, data: string): void {
   pty.writeToSession(sessionId, data);
 }
 
-ipcMain.handle(
+bindIpc(
   "pty:write",
+  "handle",
   (_event, { sessionId, data }: { sessionId: string; data: string }) =>
     handlePtyWrite(sessionId, data),
 );
 
-ipcMain.on(
+bindIpc(
   "pty:write",
+  "on",
   (_event, { sessionId, data }: { sessionId: string; data: string }) => {
     handlePtyWrite(sessionId, data);
   },
@@ -685,21 +701,24 @@ function handlePtySendRawKeys(sessionId: string, data: string): void {
   pty.sendRawKeys(sessionId, data);
 }
 
-ipcMain.handle(
+bindIpc(
   "pty:send-raw-keys",
+  "handle",
   (_event, { sessionId, data }: { sessionId: string; data: string }) =>
     handlePtySendRawKeys(sessionId, data),
 );
 
-ipcMain.on(
+bindIpc(
   "pty:send-raw-keys",
+  "on",
   (_event, { sessionId, data }: { sessionId: string; data: string }) => {
     handlePtySendRawKeys(sessionId, data);
   },
 );
 
-ipcMain.handle(
+bindIpc(
   "pty:resize",
+  "handle",
   (
     _event,
     {
@@ -710,12 +729,13 @@ ipcMain.handle(
   ) => pty.resizeSession(sessionId, cols, rows),
 );
 
-ipcMain.handle("pty:kill", (_event, { sessionId }: { sessionId: string }) =>
+bindIpc("pty:kill", "handle", (_event, { sessionId }: { sessionId: string }) =>
   pty.killSession(sessionId),
 );
 
-ipcMain.handle(
+bindIpc(
   "pty:reconnect",
+  "handle",
   (
     event,
     {
@@ -726,26 +746,51 @@ ipcMain.handle(
   ) => pty.reconnectSession(sessionId, cols, rows, event.sender.id),
 );
 
-ipcMain.handle("pty:discover", () => pty.discoverSessions());
+bindIpc("pty:discover", "handle", () => pty.discoverSessions());
 
-ipcMain.handle("pty:read-meta", (_event, sessionId: string) =>
+bindIpc("pty:read-meta", "handle", (_event, sessionId: string) =>
   readSessionMeta(sessionId),
 );
 
-ipcMain.handle("pty:foreground-process", (_event, sessionId: string) =>
+bindIpc("pty:foreground-process", "handle", (_event, sessionId: string) =>
   pty.getForegroundProcess(sessionId),
 );
 
-ipcMain.handle(
+bindIpc(
   "pty:capture",
+  "handle",
   (_event, { sessionId, lines }: { sessionId: string; lines?: number }) =>
     pty.captureSession(sessionId, lines),
 );
 
-ipcMain.handle(
+bindIpc(
   "pty:clear-buffer",
+  "handle",
   (_event, { sessionId }: { sessionId: string }) => pty.clearBuffer(sessionId),
 );
+
+// ---- remote forwarding whitelist (B 端远程模式下转发到 A 的通道) ----
+for (const channel of [
+  "pref:get",
+  "pref:set",
+  "terminal:list-targets",
+  "pty:create",
+  "pty:write",
+  "pty:send-raw-keys",
+  "pty:resize",
+  "pty:kill",
+  "pty:reconnect",
+  "pty:discover",
+  "pty:read-meta",
+  "pty:foreground-process",
+  "pty:capture",
+  "pty:clear-buffer",
+  "external-editor:list",
+  "external-editor:open-file",
+  "external-editor:open-workspace",
+]) {
+  markForward(channel);
+}
 
 // Terminal screenshot: capturePage and copy to clipboard
 ipcMain.handle(
@@ -778,6 +823,12 @@ function setSettingsOpen(open: boolean): void {
 
 ipcMain.on("settings:open", () => setSettingsOpen(true));
 
+ipcMain.on("settings:open-pane", (_event, pane: string) => {
+  if (typeof pane !== "string") return;
+  setSettingsOpen(true);
+  mainWindow?.webContents.send("shell:settings", "open-pane", pane);
+});
+
 const LOG_FN_BY_LEVEL: Record<number, (...args: unknown[]) => void> = {
   0: console.debug,
   1: console.log,
@@ -798,10 +849,11 @@ ipcMain.on("settings:close", () => setSettingsOpen(false));
 ipcMain.on("settings:toggle", () => setSettingsOpen(!settingsOpen));
 
 // External editor
-ipcMain.handle("external-editor:list", () => detectEditors());
+bindIpc("external-editor:list", "handle", () => detectEditors());
 
-ipcMain.on(
+bindIpc(
   "external-editor:open-file",
+  "on",
   (_event, filePath: string, editorId?: string) => {
     const resolvedEditorId =
       editorId ||
@@ -822,8 +874,9 @@ ipcMain.on(
   },
 );
 
-ipcMain.on(
+bindIpc(
   "external-editor:open-workspace",
+  "on",
   (_event, workspacePath: string) => {
     const editorId =
       (getPref(config, "externalEditor") as string | undefined) ??
@@ -874,6 +927,8 @@ async function shutdownBackgroundServices(): Promise<void> {
   watcher.stopWorker();
   if (!DISABLE_GIT_REPLAY) gitReplay.stopWorker();
   stopJsonRpcServer();
+  stopRemoteHost();
+  stopRemoteClient();
   stopImageWorker();
 }
 
@@ -947,7 +1002,8 @@ app.whenReady().then(async () => {
   });
   ipcMain.on("permissions:close", closePermissionWindow);
   const autoCheckUpdates = getPref(config, "autoCheckUpdates") as
-    boolean | null;
+    | boolean
+    | null;
   updateManager.init({
     onBeforeQuit: () => shutdownBackgroundServices(),
     autoCheckEnabled: autoCheckUpdates ?? false,
@@ -1016,6 +1072,60 @@ app.whenReady().then(async () => {
   } catch (err) {
     console.error("Failed to start JSON-RPC server:", err);
   }
+
+  startRemoteHostIfConfigured(config);
+  startRemoteClientIfConfigured(config);
+
+  ipcMain.handle("remote:get-status", () => {
+    if (isRemoteActive()) return getRemoteClientStatus();
+    return getRemoteHostStatus();
+  });
+
+  ipcMain.handle(
+    "remote:host-set-enabled",
+    async (_event, enabled: boolean) => {
+      setPref(config, "remote.enabled", enabled === true);
+      if (!enabled) {
+        await stopRemoteHost();
+        return { ok: true };
+      }
+      const relayUrl = getPref(config, "remote.relayUrl") as string;
+      const deviceToken = getPref(config, "remote.deviceToken") as string;
+      if (!relayUrl || !deviceToken) {
+        return { ok: false, error: "Missing relay URL or device token" };
+      }
+      const deviceName = getPref(config, "remote.deviceName") as
+        | string
+        | undefined;
+      void startRemoteHost({
+        config,
+        relayUrl,
+        deviceToken,
+        ...(deviceName ? { deviceName } : {}),
+      });
+      return { ok: true };
+    },
+  );
+
+  ipcMain.handle(
+    "remote:client-connect",
+    async (_event, opts: { relayUrl?: string; pairCode?: string }) => {
+      if (!opts || !opts.relayUrl || !opts.pairCode) {
+        return { ok: false, error: "Missing relay URL or pair code" };
+      }
+      await startRemoteClient({
+        config,
+        relayUrl: opts.relayUrl,
+        pairCode: opts.pairCode,
+      });
+      return { ok: true };
+    },
+  );
+
+  ipcMain.handle("remote:client-disconnect", async () => {
+    await stopRemoteClient();
+    return { ok: true };
+  });
 });
 
 const QUIT_CONFIRM_HTML = `<!doctype html>

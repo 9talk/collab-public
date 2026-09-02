@@ -100,7 +100,9 @@ interface AgentSessionEndedEvent {
 }
 
 type AgentEvent =
-  AgentSessionEvent | AgentFileTouchedEvent | AgentSessionEndedEvent;
+  | AgentSessionEvent
+  | AgentFileTouchedEvent
+  | AgentSessionEndedEvent;
 
 export interface CollabApi {
   // Config
@@ -190,6 +192,7 @@ export interface CollabApi {
     rows?: number,
     target?: string,
     tileId?: string,
+    layout?: { x: number; y: number; width: number; height: number },
   ) => Promise<PtySession>;
   ptyWrite: (sessionId: string, data: string) => void;
   ptySendRawKeys: (sessionId: string, data: string) => void;
@@ -324,6 +327,22 @@ export interface CollabApi {
 
   // Canvas pinch forwarding
   forwardPinch: (deltaY: number) => void;
+
+  // Remote control
+  getRemoteStatus: () => Promise<RemoteStatus>;
+  onRemoteStatus: (cb: (s: RemoteStatus) => void) => Unsubscribe;
+}
+
+export interface RemoteStatus {
+  role?: "host" | "client";
+  state: string;
+  relayUrl: string;
+  enabled?: boolean;
+  peerConnected?: boolean;
+  pairCode?: string;
+  hostInfo?: { role: string; deviceId: string; displayName?: string };
+  peer?: { role: string; deviceId: string; displayName?: string };
+  lastError?: string;
 }
 
 declare global {

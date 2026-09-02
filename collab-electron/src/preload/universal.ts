@@ -152,6 +152,22 @@ const navVisBuffer = (_event: unknown, visible: boolean) => {
 };
 ipcRenderer.on("nav-visibility", navVisBuffer);
 
+// -- Remote status ---------------------------------------------------
+type RemoteStatusCb = (s: unknown) => void;
+const remoteStatusListeners = new Set<RemoteStatusCb>();
+ipcRenderer.on("remote-status", (_event: unknown, s: unknown) => {
+  for (const cb of remoteStatusListeners) cb(s);
+});
+
+// -- Settings pane navigation ---------------------------------------
+type OpenPaneCb = (pane: string) => void;
+const openPaneListeners = new Set<OpenPaneCb>();
+ipcRenderer.on("settings:open-pane", (_event: unknown, pane: string) => {
+  if (typeof pane === "string") {
+    for (const cb of openPaneListeners) cb(pane);
+  }
+});
+
 // -- Unified API surface --------------------------------------------
 
 contextBridge.exposeInMainWorld("api", {
@@ -164,6 +180,24 @@ contextBridge.exposeInMainWorld("api", {
   getPrefSync: (key: string) => ipcRenderer.sendSync("pref:get-sync", key),
   setPref: (key: string, value: unknown) =>
     ipcRenderer.invoke("pref:set", key, value),
+  getRemoteStatus: () => ipcRenderer.invoke("remote:get-status"),
+  onRemoteStatus: (cb: RemoteStatusCb) => {
+    remoteStatusListeners.add(cb);
+    return () => {
+      remoteStatusListeners.delete(cb);
+    };
+  },
+  setRemoteHostEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke("remote:host-set-enabled", enabled),
+  connectRemoteClient: (relayUrl: string, pairCode: string) =>
+    ipcRenderer.invoke("remote:client-connect", { relayUrl, pairCode }),
+  disconnectRemoteClient: () => ipcRenderer.invoke("remote:client-disconnect"),
+  onOpenPane: (cb: OpenPaneCb) => {
+    openPaneListeners.add(cb);
+    return () => {
+      openPaneListeners.delete(cb);
+    };
+  },
   getMemoryStats: () => ipcRenderer.invoke("memory:stats"),
   listTerminalTargets: () => ipcRenderer.invoke("terminal:list-targets"),
   getWorkspacePref: (key: string, workspacePath: string) =>
@@ -233,7 +267,16 @@ contextBridge.exposeInMainWorld("api", {
     rows?: number,
     target?: string,
     tileId?: string,
-  ) => ipcRenderer.invoke("pty:create", { cwd, cols, rows, target, tileId }),
+    layout?: { x: number; y: number; width: number; height: number },
+  ) =>
+    ipcRenderer.invoke("pty:create", {
+      cwd,
+      cols,
+      rows,
+      target,
+      tileId,
+      layout,
+    }),
   ptyWrite: (sessionId: string, data: string) => {
     ipcRenderer.send("pty:write", { sessionId, data });
   },
