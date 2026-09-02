@@ -20,13 +20,26 @@ interface Options {
   maxClients?: number;
 }
 
+function parseTokens(raw: string | undefined): Set<string> {
+  return new Set(
+    (raw ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+}
+
 function parseArgs(argv: string[]): Options {
-  let port = 8787;
-  let tokens: Set<string> = new Set();
-  let persistDir: string | null = "data";
-  let tlsKey: string | undefined;
-  let tlsCert: string | undefined;
-  let maxClients = 1;
+  // 环境变量作为默认值（容器内用 env 指定参数），显式 CLI 参数优先
+  let port = Number(process.env.RELAY_PORT ?? 8787);
+  let tokens = parseTokens(process.env.RELAY_DEVICE_TOKENS);
+  let persistDir: string | null =
+    process.env.RELAY_NO_PERSIST === "1" || process.env.RELAY_NO_PERSIST === "true"
+      ? null
+      : (process.env.RELAY_PERSIST_DIR ?? "data");
+  let tlsKey: string | undefined = process.env.RELAY_TLS_KEY || undefined;
+  let tlsCert: string | undefined = process.env.RELAY_TLS_CERT || undefined;
+  let maxClients = Number(process.env.RELAY_MAX_CLIENTS ?? 1);
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -37,12 +50,7 @@ function parseArgs(argv: string[]): Options {
         break;
       case "--token":
       case "--tokens":
-        tokens = new Set(
-          (next() ?? "")
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean),
-        );
+        tokens = parseTokens(next());
         break;
       case "--no-persist":
         persistDir = null;
@@ -64,16 +72,12 @@ function parseArgs(argv: string[]): Options {
         console.log(
           `Usage: bun run src/index.ts [--port 8787] [--token t1,t2] [--no-persist] [--persist-dir DIR] [--tls-key FILE --tls-cert FILE] [--max-clients N]`,
         );
+        console.log(
+          `Env:   RELAY_PORT RELAY_DEVICE_TOKENS RELAY_PERSIST_DIR RELAY_NO_PERSIST RELAY_TLS_KEY RELAY_TLS_CERT RELAY_MAX_CLIENTS`,
+        );
         process.exit(0);
         break;
     }
-  }
-  if (process.env.RELAY_DEVICE_TOKENS) {
-    tokens = new Set(
-      process.env.RELAY_DEVICE_TOKENS.split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-    );
   }
   return { port, tokens, persistDir, tlsKey, tlsCert, maxClients };
 }
