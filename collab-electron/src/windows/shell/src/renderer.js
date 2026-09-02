@@ -1472,6 +1472,10 @@ async function init() {
 
   function renderRemoteBadge(status) {
     if (!status || typeof status.state !== "string") return;
+    if (status.state === "idle") {
+      remoteIndicator.style.display = "none";
+      return;
+    }
     remoteIndicator.style.display = "flex";
     remoteStatusDot.className = `remote-dot is-${status.state}`;
     if (status.state === "connected") {

@@ -73,6 +73,10 @@ interface SettingsApi {
   getRemoteStatus: () => Promise<Record<string, unknown> | null>;
   onRemoteStatus: (cb: (s: Record<string, unknown>) => void) => () => void;
   setRemoteHostEnabled: (enabled: boolean) => Promise<{ ok?: boolean }>;
+  testRemoteHost: (
+    relayUrl: string,
+    deviceToken: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   connectRemoteClient: (
     relayUrl: string,
     pairCode: string,
@@ -1860,13 +1864,20 @@ type RemoteStatus = Record<string, unknown>;
 function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
   const [relayUrl, setRelayUrl] = useState("");
   const [deviceToken, setDeviceToken] = useState("");
-  const [hostEnabled, setHostEnabled] = useState(false);
   const [hostStatus, setHostStatus] = useState<RemoteStatus | null>(null);
   const [clientRelayUrl, setClientRelayUrl] = useState("");
   const [pairCode, setPairCode] = useState("");
   const [clientStatus, setClientStatus] = useState<RemoteStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    message: string;
+  } | null>(null);
+  // 关闭/被控/控制三选一；初始按当前状态适配，用户手动切换后不再覆盖
+  const [roleTab, setRoleTab] = useState<"off" | "host" | "client">("off");
+  const [roleTouched, setRoleTouched] = useState(false);
 
   useEffect(() => {
     api
@@ -1882,25 +1893,38 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
       })
       .catch(() => {});
     api
-      .getPref("remote.enabled")
+      .getPref("remote.roleTab")
       .then((v) => {
-        if (typeof v === "boolean") setHostEnabled(v);
+        if (v === "host" || v === "client" || v === "off") setRoleTab(v);
       })
       .catch(() => {});
     api
       .getRemoteStatus()
       .then((s) => {
         if (!s) return;
-        if ("hostInfo" in s) setClientStatus(s);
+        if (s.role === "client") setClientStatus(s);
         else setHostStatus(s);
       })
       .catch(() => {});
     const unsub = api.onRemoteStatus((s) => {
-      if ("hostInfo" in s) setClientStatus(s);
+      console.log("[remote-ui] status-event", JSON.stringify(s));
+      if (s.role === "client") setClientStatus(s);
       else setHostStatus(s);
     });
     return unsub;
   }, []);
+
+  // 状态到达后自动选中当前角色（未手动切换时）
+  useEffect(() => {
+    if (roleTouched) return;
+    if (clientStatus?.role === "client") setRoleTab("client");
+    else if (hostStatus?.role === "host") setRoleTab("host");
+  }, [clientStatus, hostStatus, roleTouched]);
+
+  const clientActive =
+    clientStatus?.state === "connected" || clientStatus?.state === "connecting";
+  const hostActive =
+    hostStatus?.state === "connected" || hostStatus?.state === "connecting";
 
   async function saveRelayUrl(v: string) {
     setRelayUrl(v);
@@ -1912,16 +1936,78 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
     await api.setPref("remote.deviceToken", v);
   }
 
-  async function toggleHost(checked: boolean) {
-    setHostEnabled(checked);
+  function selectRole(r: "off" | "host" | "client") {
+    setRoleTab(r);
+    setRoleTouched(true);
+    void api.setPref("remote.roleTab", r);
+  }
+
+  async function testHost() {
     setBusy(true);
     setError(null);
+    setTestResult(null);
     try {
-      await api.setPref("remote.enabled", checked);
-      const res = await api.setRemoteHostEnabled(checked);
-      if (res && res.ok === false) setError(t("remote.notConfigured"));
+      const res = await api.testRemoteHost(relayUrl.trim(), deviceToken.trim());
+      if (res && res.ok) {
+        setTestResult({ ok: true, message: t("remote.testOk") });
+      } else {
+        const resErr = res as { error?: string; code?: string } | undefined;
+        setTestResult({
+          ok: false,
+          message: resErr?.error
+            ? remoteErrorText(resErr.code, resErr.error, t)
+            : t("remote.notConfigured"),
+        });
+      }
+    } catch (err) {
+      setTestResult({
+        ok: false,
+        message: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function toggleHost(checked: boolean) {
+    setBusy(true);
+    setError(null);
+    setTestResult(null);
+    try {
+      // remote.hostEnabled 不在此预写：由主进程在连接成功（auth-ok）时置 true、
+      // 断开时置 false，保证「已连接=true / 未连接=false」的持久化语义。
+      const res = await api.setRemoteHostEnabled(checked);
+      if (res && res.ok === false) {
+        setError(t("remote.notConfigured"));
+      } else {
+        // 主动拉取最新状态刷新状态卡（不依赖事件推送时序）
+        const s = await api.getRemoteStatus();
+        if (s && s.role !== "client") setHostStatus(s);
+      }
+    } catch (err) {
+      // IPC 异常（如 handler 内部错误）也展示出来，避免「点了没反应」
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disconnectHost() {
+    setBusy(true);
+    setDisconnecting(true);
+    setError(null);
+    setTestResult(null);
+    try {
+      await api.setPref("remote.hostEnabled", false);
+      await api.setRemoteHostEnabled(false);
+      // 主动拉取最新状态刷新状态卡（不依赖事件推送时序）
+      const s = await api.getRemoteStatus();
+      if (s && s.role !== "client") setHostStatus(s);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+      setDisconnecting(false);
     }
   }
 
@@ -1934,7 +2020,13 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
         setError(
           typeof res.error === "string" ? res.error : t("remote.notConfigured"),
         );
+      } else {
+        // 主动拉取最新状态刷新状态卡（不依赖事件推送时序）
+        const s = await api.getRemoteStatus();
+        if (s?.role === "client") setClientStatus(s);
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -1945,6 +2037,11 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
     setError(null);
     try {
       await api.disconnectRemoteClient();
+      // 控制端已停：清空本地 client 状态（主状态回落被控端/空闲）
+      const s = await api.getRemoteStatus();
+      if (!s || s.role !== "client") setClientStatus(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -1953,7 +2050,32 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
   function stateLabel(state: unknown): string {
     if (state === "connected") return t("remote.connected");
     if (state === "connecting") return t("remote.connecting");
-    return t("remote.off");
+    if (state === "error") return t("remote.error");
+    return t("remote.notConnected");
+  }
+
+  function remoteErrorText(
+    code: string | undefined,
+    raw: string,
+    tFn: (key: TranslationKey) => string,
+  ): string {
+    switch (code) {
+      case "EHOSTUNREACH":
+      case "ENETUNREACH":
+      case "ENETDOWN":
+        return tFn("remote.errUnreachable");
+      case "ECONNREFUSED":
+        return tFn("remote.errRefused");
+      case "ETIMEDOUT":
+        return tFn("remote.errTimeout");
+      case "ENOTFOUND":
+      case "EAI_AGAIN":
+        return tFn("remote.errDns");
+      case "ECONNRESET":
+        return tFn("remote.errReset");
+      default:
+        return raw;
+    }
   }
 
   const hostStateLabel = stateLabel(hostStatus?.state);
@@ -1967,6 +2089,13 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
     | undefined;
   const clientErr = clientStatus?.lastError as string | undefined;
 
+  const segBtn = (active: boolean) =>
+    `flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+      active
+        ? "bg-accent text-foreground"
+        : "text-muted-foreground hover:text-foreground"
+    }`;
+
   return (
     <div className="space-y-6 p-6">
       <div className="space-y-1">
@@ -1976,150 +2105,264 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
         </p>
       </div>
 
-      {/* Host section */}
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">{t("remote.hostSection")}</h3>
-          <p className="text-xs text-muted-foreground">
-            {t("remote.hostSectionDesc")}
-          </p>
+      {/* 关闭/被控/控制三选一 */}
+      <div className="flex rounded-lg border border-border/50 p-0.5">
+        <button
+          type="button"
+          className={segBtn(roleTab === "off")}
+          onClick={() => selectRole("off")}
+        >
+          {t("remote.roleOff")}
+        </button>
+        <button
+          type="button"
+          className={segBtn(roleTab === "host")}
+          onClick={() => selectRole("host")}
+        >
+          {t("remote.roleHost")}
+        </button>
+        <button
+          type="button"
+          className={segBtn(roleTab === "client")}
+          onClick={() => selectRole("client")}
+        >
+          {t("remote.roleClient")}
+        </button>
+      </div>
+
+      {roleTab === "off" && (
+        <div className="rounded-md border border-border/50 p-4 text-sm text-muted-foreground">
+          {t("remote.offViewDesc")}
         </div>
+      )}
 
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={hostEnabled}
-            disabled={busy}
-            onChange={(e) => toggleHost(e.target.checked)}
-          />
-          {t("remote.enable")}
-        </label>
+      {roleTab === "host" && (
+        <div className="space-y-4">
+          {/* Host section */}
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold">{t("remote.hostSection")}</h3>
+            <p className="text-xs text-muted-foreground">
+              {t("remote.hostSectionDesc")}
+            </p>
+          </div>
 
-        <label className="block">
-          <span className="text-sm text-muted-foreground">
-            {t("remote.relayUrl")}
-          </span>
-          <input
-            type="text"
-            value={relayUrl}
-            onChange={(e) => saveRelayUrl(e.target.value)}
-            className="mt-1 w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm"
-            spellCheck={false}
-          />
-        </label>
-
-        <label className="block">
-          <span className="text-sm text-muted-foreground">
-            {t("remote.deviceToken")}
-          </span>
-          <input
-            type="password"
-            value={deviceToken}
-            onChange={(e) => saveToken(e.target.value)}
-            className="mt-1 w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm"
-            spellCheck={false}
-          />
-        </label>
-
-        <div className="space-y-1 rounded-md border border-border/50 p-3 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">
+          <label className="block">
+            <span className="text-sm text-muted-foreground">
               {t("remote.relayUrl")}
             </span>
-            <span>{hostStatus?.relayUrl ?? "-"}</span>
+            <input
+              type="text"
+              value={relayUrl}
+              onChange={(e) => saveRelayUrl(e.target.value)}
+              className="mt-1 w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm"
+              placeholder="ws://192.168.8.57:8787"
+              spellCheck={false}
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm text-muted-foreground">
+              {t("remote.deviceToken")}
+            </span>
+            <input
+              type="password"
+              value={deviceToken}
+              onChange={(e) => saveToken(e.target.value)}
+              className="mt-1 w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm"
+              placeholder={t("remote.deviceTokenPlaceholder")}
+              spellCheck={false}
+            />
+          </label>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={
+                busy || clientActive || !relayUrl.trim() || !deviceToken.trim()
+              }
+              onClick={testHost}
+              className="rounded-md border border-border/50 px-3 py-1.5 text-sm disabled:opacity-40"
+            >
+              {busy ? t("remote.testing") : t("remote.test")}
+            </button>
+            <button
+              type="button"
+              disabled={
+                busy ||
+                clientActive ||
+                hostActive ||
+                !relayUrl.trim() ||
+                !deviceToken.trim()
+              }
+              onClick={() => void toggleHost(true)}
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-background disabled:opacity-40"
+              style={{ backgroundColor: "var(--foreground)" }}
+            >
+              {hostStatus?.state === "connected"
+                ? t("remote.connected")
+                : hostStatus?.state === "connecting"
+                  ? t("remote.connecting")
+                  : t("remote.connect")}
+            </button>
+            {hostActive && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void disconnectHost()}
+                className="rounded-md border border-border/50 px-3 py-1.5 text-sm disabled:opacity-40"
+              >
+                {disconnecting
+                  ? t("remote.disconnecting")
+                  : t("remote.disconnect")}
+              </button>
+            )}
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">{t("remote.host")}</span>
-            <span>{hostStateLabel}</span>
-          </div>
-          {hostPairCode && (
+          {clientActive && (
+            <p className="text-xs text-muted-foreground">
+              {t("remote.hostBlockedByClient")}
+            </p>
+          )}
+          {testResult && (
+            <p
+              className="text-xs"
+              style={{ color: testResult.ok ? "#16a34a" : "#ef4444" }}
+            >
+              {testResult.message}
+            </p>
+          )}
+
+          <div className="space-y-1 rounded-md border border-border/50 p-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">
-                {t("remote.pairCode")}
+                {t("remote.relayUrl")}
               </span>
-              <span className="font-mono tracking-widest">{hostPairCode}</span>
+              <span>{hostStatus?.relayUrl ?? "-"}</span>
             </div>
-          )}
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">{t("remote.peer")}</span>
-            <span>
-              {hostPeer?.deviceId ??
-                (hostStatus?.peerConnected === false
-                  ? t("remote.peerNone")
-                  : "-")}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Client section */}
-      <div className="space-y-4 border-t border-border/50 pt-5">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">{t("remote.clientSection")}</h3>
-          <p className="text-xs text-muted-foreground">
-            {t("remote.clientSectionDesc")}
-          </p>
-        </div>
-
-        <label className="block">
-          <span className="text-sm text-muted-foreground">
-            {t("remote.relayUrl")}
-          </span>
-          <input
-            type="text"
-            value={clientRelayUrl}
-            onChange={(e) => setClientRelayUrl(e.target.value)}
-            className="mt-1 w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm"
-            spellCheck={false}
-          />
-        </label>
-
-        <label className="block">
-          <span className="text-sm text-muted-foreground">
-            {t("remote.pairCodeInput")}
-          </span>
-          <input
-            type="text"
-            value={pairCode}
-            onChange={(e) => setPairCode(e.target.value)}
-            className="mt-1 w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm font-mono tracking-widest"
-            spellCheck={false}
-            maxLength={6}
-          />
-        </label>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={connectClient}
-            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-foreground"
-          >
-            {t("remote.connect")}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={disconnectClient}
-            className="rounded-md border border-border/50 px-3 py-1.5 text-sm"
-          >
-            {t("remote.disconnect")}
-          </button>
-        </div>
-
-        <div className="space-y-1 rounded-md border border-border/50 p-3 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">{t("remote.host")}</span>
-            <span>{clientStateLabel}</span>
-          </div>
-          {(clientHost || clientErr) && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">{t("remote.host")}</span>
+              <span>{hostStateLabel}</span>
+            </div>
+            {hostPairCode && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">
+                  {t("remote.pairCode")}
+                </span>
+                <span className="font-mono tracking-widest">
+                  {hostPairCode}
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">{t("remote.peer")}</span>
-              <span>{clientHost?.deviceId ?? clientErr}</span>
+              <span>
+                {hostPeer?.deviceId ??
+                  (hostStatus?.peerConnected === false
+                    ? t("remote.peerNone")
+                    : "-")}
+              </span>
             </div>
-          )}
+            {hostStatus?.lastError && (
+              <p className="text-xs" style={{ color: "#ef4444" }}>
+                {hostStatus.lastError as string}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {roleTab === "client" && (
+        <div className="space-y-4">
+          {/* Client section */}
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold">
+              {t("remote.clientSection")}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {t("remote.clientSectionDesc")}
+            </p>
+          </div>
+
+          <label className="block">
+            <span className="text-sm text-muted-foreground">
+              {t("remote.relayUrl")}
+            </span>
+            <input
+              type="text"
+              value={clientRelayUrl}
+              onChange={(e) => setClientRelayUrl(e.target.value)}
+              className="mt-1 w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm"
+              placeholder="ws://192.168.8.57:8787"
+              spellCheck={false}
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm text-muted-foreground">
+              {t("remote.pairCodeInput")}
+            </span>
+            <input
+              type="text"
+              value={pairCode}
+              onChange={(e) => setPairCode(e.target.value)}
+              className="mt-1 w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm font-mono tracking-widest"
+              placeholder="123456"
+              spellCheck={false}
+              maxLength={6}
+            />
+          </label>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={busy || hostActive || clientActive}
+              onClick={connectClient}
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-background disabled:opacity-40"
+              style={{ backgroundColor: "var(--foreground)" }}
+            >
+              {clientStatus?.state === "connected"
+                ? t("remote.connected")
+                : clientStatus?.state === "connecting"
+                  ? t("remote.connecting")
+                  : t("remote.connect")}
+            </button>
+            {clientActive && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={disconnectClient}
+                className="rounded-md border border-border/50 px-3 py-1.5 text-sm disabled:opacity-40"
+              >
+                {t("remote.disconnect")}
+              </button>
+            )}
+          </div>
+          {hostActive && (
+            <p className="text-xs text-muted-foreground">
+              {t("remote.clientBlockedByHost")}
+            </p>
+          )}
+
+          <div className="space-y-1 rounded-md border border-border/50 p-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">{t("remote.host")}</span>
+              <span>{clientStateLabel}</span>
+            </div>
+            {clientHost && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">
+                  {t("remote.peer")}
+                </span>
+                <span>{clientHost.deviceId}</span>
+              </div>
+            )}
+            {clientErr && (
+              <p className="text-xs" style={{ color: "#ef4444" }}>
+                {clientErr}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {error && <p className="text-sm text-red-500">{error}</p>}
     </div>

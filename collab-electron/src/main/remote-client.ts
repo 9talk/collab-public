@@ -53,9 +53,14 @@ let nextRpcId = 1;
 const ownerBySession = new Map<string, number>();
 
 function status(): RemoteClientStatus {
+  const active = !stopped && opts !== null;
   return {
-    ...(!stopped && opts ? { role: "client" as const } : {}),
-    state: ws && ws.readyState === WebSocket.OPEN ? "connected" : "connecting",
+    ...(active ? { role: "client" as const } : {}),
+    state: !active
+      ? "idle"
+      : ws && ws.readyState === WebSocket.OPEN
+        ? "connected"
+        : "connecting",
     relayUrl: opts?.relayUrl ?? "",
     ...(hostInfo ? { hostInfo } : {}),
     ...(lastError ? { lastError } : {}),
@@ -70,6 +75,9 @@ function emitStatus(): void {
       win.webContents.send("remote-status", s);
     }
   }
+  // settings 是 shell 窗口内的惰性 webview（独立 webContents），收不到上面的
+  // broadcast——经 shell:forward 桥接，仅面板打开（webview 存在）时送达。
+  forwardToWebview("settings", "remote-status", s);
   console.log(
     `[remote] client state=${s.state} relay=${s.relayUrl} host=${s.hostInfo?.deviceId ?? "none"}`,
   );
@@ -189,14 +197,12 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
       break;
     }
     case "auth-error": {
+      // 配对失败（码过期/错误）：回到 idle 由用户重新输入，不能让模块
+      // 停留在 active+connecting 死态——否则 isRemoteActive() 恒为 true，
+      // 会遮蔽 host 侧的状态上报与操作。
       lastError = (frame.message as string) ?? "auth failed";
       console.log(`[remote] auth error: ${lastError}`);
-      if (ws) {
-        const old = ws;
-        ws = null;
-        old.close();
-      }
-      emitStatus();
+      void stopRemoteClient();
       break;
     }
     case "peer-connected": {
@@ -306,10 +312,11 @@ function connectOnce(): void {
     scheduleRetry();
     return;
   }
+  const socket = ws;
 
-  ws.on("open", () => {
-    if (!opts || !ws) return;
-    ws.send(
+  socket.on("open", () => {
+    if (!opts || ws !== socket) return; // 已被断开或替换，忽略陈旧连接
+    socket.send(
       JSON.stringify({
         v: 1,
         type: "auth",
@@ -321,7 +328,7 @@ function connectOnce(): void {
     );
   });
 
-  ws.on("message", (data: RawData, isBinary: boolean) => {
+  socket.on("message", (data: RawData, isBinary: boolean) => {
     if (isBinary) {
       handlePtyBinary(data);
       return;
@@ -336,12 +343,14 @@ function connectOnce(): void {
     handleFrame(frame);
   });
 
-  ws.on("error", (err: Error) => {
+  socket.on("error", (err: Error) => {
+    if (ws !== socket) return; // 陈旧连接的错误忽略
     lastError = err.message;
     console.log(`[remote] ws error: ${err.message}`);
   });
 
-  ws.on("close", () => {
+  socket.on("close", () => {
+    if (ws !== socket) return; // 已被新连接替换，忽略旧连接的 close
     ws = null;
     hostInfo = undefined;
     deactivateRemoteForwarding();

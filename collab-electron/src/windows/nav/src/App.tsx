@@ -451,16 +451,19 @@ export default function App() {
   }, []);
 
   // 远程控制端（client）模式下隐藏「+ Add workspace」：workspace 由 A 端管理
-  const remoteClientActiveRef = useRef(false);
+  // 仅 state=connected 才视为进入镜像态：role 在 connecting 阶段即翻转，此刻
+  // 转发层未激活，getConfig 仍返回本地 workspace，过早切换会停在本地列表。
+  const remoteConnectedRef = useRef(false);
   useEffect(() => {
     const apply = (s: unknown) => {
       const role = (s as { role?: string } | null)?.role;
-      const active = role === "client";
-      const wasActive = remoteClientActiveRef.current;
-      remoteClientActiveRef.current = active;
-      setRemoteClientActive(active);
-      // 退出远程模式：重新拉取本地 workspace 列表（远程期间列表来自 A 端）
-      if (wasActive && !active) {
+      const state = (s as { state?: string } | null)?.state;
+      const connected = role === "client" && state === "connected";
+      const wasConnected = remoteConnectedRef.current;
+      remoteConnectedRef.current = connected;
+      setRemoteClientActive(connected);
+      if (connected !== wasConnected) {
+        // 进入：getConfig 经转发返回 A 的 config；退出：重新拉取本地 workspace
         window.api
           .getConfig()
           .then((cfg) => setWorkspacePaths(cfg.workspaces))

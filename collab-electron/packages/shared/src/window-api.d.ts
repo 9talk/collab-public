@@ -331,6 +331,18 @@ export interface CollabApi {
   // Remote control
   getRemoteStatus: () => Promise<RemoteStatus>;
   onRemoteStatus: (cb: (s: RemoteStatus) => void) => Unsubscribe;
+  setRemoteHostEnabled: (
+    enabled: boolean,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  testRemoteHost: (
+    relayUrl: string,
+    deviceToken: string,
+  ) => Promise<{ ok: true; deviceId?: string } | { ok: false; error: string }>;
+  connectRemoteClient: (
+    relayUrl: string,
+    pairCode: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  disconnectRemoteClient: () => Promise<{ ok: boolean }>;
 }
 
 export interface RemoteStatus {

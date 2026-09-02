@@ -73,9 +73,11 @@ import { workspaceForFile } from "./ipc-workspace";
 import { readSessionMeta } from "./session-meta";
 import * as canvasPersistence from "./canvas-persistence";
 import {
+  startRemoteHost,
   startRemoteHostIfConfigured,
   stopRemoteHost,
   getRemoteHostStatus,
+  testRemoteHostConnection,
 } from "./remote-server";
 import {
   startRemoteClient,
@@ -979,7 +981,21 @@ app.on("web-contents-created", (_event, contents) => {
   });
 });
 
+// 单实例锁：防止残留进程 + 新开实例双跑（同 token 会互踢 relay 连接）
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
 app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock) return;
+  app.on("second-instance", () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+
   protocol.handle("collab-file", (request) => {
     const filePath = fromCollabFileUrl(request.url);
     return net.fetch(pathToFileURL(filePath).toString());
@@ -1084,11 +1100,16 @@ app.whenReady().then(async () => {
   ipcMain.handle(
     "remote:host-set-enabled",
     async (_event, enabled: boolean) => {
-      setPref(config, "remote.enabled", enabled === true);
       if (!enabled) {
+        // 用户显式断开 = 被控端关闭：持久化，下次启动不再自动连接
+        setPref(config, "remote.hostEnabled", false);
         await stopRemoteHost();
         return { ok: true };
       }
+      // 注意：连接成功（auth-ok）后才把 remote.hostEnabled 置 true 并持久化，
+      // 此处不预写，避免连接失败/未完成时残留「已开启」。
+      // 同实例 host/client 互斥（UI 层已互斥，此处兜底 env/自动化双开）
+      await stopRemoteClient();
       const relayUrl = getPref(config, "remote.relayUrl") as string;
       const deviceToken = getPref(config, "remote.deviceToken") as string;
       if (!relayUrl || !deviceToken) {
@@ -1108,11 +1129,23 @@ app.whenReady().then(async () => {
   );
 
   ipcMain.handle(
+    "remote:host-test",
+    async (_event, opts: { relayUrl?: string; deviceToken?: string }) => {
+      if (!opts || !opts.relayUrl || !opts.deviceToken) {
+        return { ok: false, error: "Missing relay URL or device token" };
+      }
+      return testRemoteHostConnection(opts.relayUrl, opts.deviceToken);
+    },
+  );
+
+  ipcMain.handle(
     "remote:client-connect",
     async (_event, opts: { relayUrl?: string; pairCode?: string }) => {
       if (!opts || !opts.relayUrl || !opts.pairCode) {
         return { ok: false, error: "Missing relay URL or pair code" };
       }
+      // 同实例 host/client 互斥：切到控制端先停被控端
+      await stopRemoteHost();
       await startRemoteClient({
         config,
         relayUrl: opts.relayUrl,

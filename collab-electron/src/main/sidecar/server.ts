@@ -478,6 +478,7 @@ export class SidecarServer {
           );
         }
         session.reconnectQueue = null;
+        this.scheduleRepaintNudge(session);
       } else if (!session.hasAttachedClient) {
         const snapshot = ringBuffer.snapshot();
         if (snapshot.length > 0) {
@@ -556,6 +557,33 @@ export class SidecarServer {
     }
     session.pty.resize(params.cols as number, params.rows as number);
     sock.write(makeResponse(id, { ok: true }));
+  }
+
+  /**
+   * Reconnect 后的新 xterm（本地恢复 / 远程 B 端）从空画面仅回放字节历史，
+   * 差分式整屏 TUI（ink/ncurses 等按自身模型只重写变更区）缺整帧基态时
+   * 画面无法收敛。±1 行 resize 抖动产生 SIGWINCH，强制此类程序整帧重绘，
+   * 使各 attach 方画面与输出流确定性一致（普通 shell 仅重绘提示行，无副作用）。
+   */
+  private scheduleRepaintNudge(session: Session): void {
+    const { cols, rows } = session.pty;
+    const nudgeTo = (targetRows: number): void => {
+      if (
+        session.exited ||
+        session.terminating ||
+        !session.dataClient ||
+        session.dataClient.destroyed
+      ) {
+        return;
+      }
+      try {
+        session.pty.resize(cols, targetRows);
+      } catch {
+        // PTY already dead
+      }
+    };
+    setTimeout(() => nudgeTo(rows + 1), 120);
+    setTimeout(() => nudgeTo(rows), 400);
   }
 
   private handleKill(

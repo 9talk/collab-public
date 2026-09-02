@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Settings</title>
+    <style>
+      /* theme/styles.css 未定义 --accent，这里补充 settings 窗口的选中/高亮底色 */
+      :root {
+        --accent: rgb(244, 244, 245);
+        --accent-foreground: rgb(24, 24, 27);
+      }
+      .dark {
+        --accent: rgb(24, 24, 27);
+        --accent-foreground: rgb(250, 250, 250);
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

@@ -181,10 +181,19 @@ export const en = {
   "remote.enable": "Enable remote control",
   "remote.relayUrl": "Relay server URL",
   "remote.deviceToken": "Device token",
+  "remote.deviceTokenPlaceholder": "Token assigned by the relay admin",
   "remote.pairCode": "Pairing code",
   "remote.connecting": "Connecting…",
   "remote.connected": "Connected",
-  "remote.off": "Off",
+  "remote.error": "Connection failed",
+  "remote.errUnreachable":
+    "Relay server unreachable — check the address and your network",
+  "remote.errRefused":
+    "Relay server refused the connection — is the service running and the port open?",
+  "remote.errTimeout": "Connection to relay server timed out",
+  "remote.errDns": "Could not resolve the relay server address",
+  "remote.errReset": "Connection to relay server was reset",
+  "remote.notConnected": "Not connected",
   "remote.host": "Host",
   "remote.peerNone": "No device paired",
   "remote.peer": "Paired device",
@@ -194,8 +203,19 @@ export const en = {
   "remote.pairCodeInput": "Pairing code",
   "remote.connect": "Connect",
   "remote.disconnect": "Disconnect",
+  "remote.test": "Test",
+  "remote.testing": "Testing…",
+  "remote.testOk": "Connection OK",
   "remote.notConfigured": "Missing relay URL or token",
   "remote.copy": "Copy",
+  "remote.roleHost": "Host (be controlled)",
+  "remote.roleClient": "Client (control another)",
+  "remote.roleOff": "Off",
+  "remote.offViewDesc":
+    "Remote control is off. No data is sent to the relay server.",
+  "remote.hostBlockedByClient":
+    "Disconnect the client first to enable host mode",
+  "remote.clientBlockedByHost": "Disable host mode first to connect as client",
 
   // Misc
   esc: "esc",

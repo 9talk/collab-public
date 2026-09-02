@@ -103,7 +103,11 @@ function status(): RemoteHostStatus {
   const enabled = stopped === false && opts !== null;
   return {
     ...(enabled ? { role: "host" as const } : {}),
-    state: ws && ws.readyState === WebSocket.OPEN ? "connected" : "connecting",
+    state: !enabled
+      ? "idle"
+      : ws && ws.readyState === WebSocket.OPEN
+        ? "connected"
+        : "connecting",
     relayUrl: opts?.relayUrl ?? "",
     enabled,
     ...(deviceId ? { deviceId } : {}),
@@ -122,6 +126,9 @@ function emitStatus(): void {
       win.webContents.send("remote-status", s);
     }
   }
+  // settings 是 shell 窗口内的惰性 webview（独立 webContents），收不到上面的
+  // broadcast——经 shell:forward 桥接，仅面板打开（webview 存在）时送达。
+  forwardToWebview("settings", "remote-status", s);
   console.log(
     `[remote] host state=${s.state} relay=${s.relayUrl} peer=${s.peerConnected ? (s.peer?.deviceId ?? "?") : "none"}${s.pairCode ? ` code=${s.pairCode}` : ""}`,
   );
@@ -597,6 +604,8 @@ function attachHooks(): void {
     onStatusChanged: (payload) => pushEvent("pty:status-changed", [payload]),
   });
   setRemoteEventMirror((ev) => {
+    // settings 面板属于本地 UI（远程 pane 的状态卡），不外推给控制端
+    if (ev.target === "settings") return;
     pushEvent("shell:forward", [ev.target, ev.channel, ...ev.args]);
   });
   setCanvasRpcResponseMirror((response) => {
@@ -615,6 +624,8 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
     case "auth-ok": {
       deviceId = frame.deviceId as string;
       lastError = undefined;
+      // 连接成功才算被控端「开启」：持久化，下次启动据此自动连接
+      if (opts) setPref(opts.config, "remote.hostEnabled", true);
       emitStatus();
       // Ask for a pairing code right away so the UI always shows a live one.
       if (ws && ws.readyState === WebSocket.OPEN) {
@@ -623,10 +634,14 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
       break;
     }
     case "auth-error": {
+      // 认证失败是配置错误（token/地址），重试无意义：回到 idle 展示错误，
+      // 由用户修正后再次点连接。若保持 ws 不关，UI 会误显「已连接」。
       lastError = (frame.message as string) ?? "auth failed";
       peerConnected = false;
       peerInfo = undefined;
-      emitStatus();
+      // 连接未成功不持久化「开启」，避免下次启动反复自动连接失败
+      if (opts) setPref(opts.config, "remote.hostEnabled", false);
+      void stopRemoteHost();
       break;
     }
     case "pair-created": {
@@ -712,10 +727,11 @@ function connectOnce(): void {
     scheduleRetry();
     return;
   }
+  const socket = ws;
 
-  ws.on("open", () => {
-    if (!opts || !ws) return;
-    ws.send(
+  socket.on("open", () => {
+    if (!opts || ws !== socket) return; // 已被断开或替换，忽略陈旧连接
+    socket.send(
       JSON.stringify({
         v: 1,
         type: "auth",
@@ -727,7 +743,7 @@ function connectOnce(): void {
     );
   });
 
-  ws.on("message", (data: RawData, isBinary: boolean) => {
+  socket.on("message", (data: RawData, isBinary: boolean) => {
     if (isBinary) return; // hosts never receive binary frames
     const raw = data.toString();
     let frame: { type: string; [key: string]: unknown };
@@ -739,12 +755,14 @@ function connectOnce(): void {
     handleFrame(frame);
   });
 
-  ws.on("error", (err: Error) => {
+  socket.on("error", (err: Error) => {
+    if (ws !== socket) return; // 陈旧连接的错误忽略
     lastError = err.message;
     console.log(`[remote] ws error: ${err.message}`);
   });
 
-  ws.on("close", () => {
+  socket.on("close", () => {
+    if (ws !== socket) return; // 已被新连接替换，忽略旧连接的 close
     ws = null;
     peerConnected = false;
     peerInfo = undefined;
@@ -780,7 +798,7 @@ export async function startRemoteHost(o: HostOptions): Promise<void> {
 }
 
 /**
- * Starts the host side if configured via prefs (remote.enabled +
+ * Starts the host side if configured via prefs (remote.hostEnabled +
  * remote.relayUrl + remote.deviceToken) or env vars (REMOTE_RELAY_URL +
  * REMOTE_DEVICE_TOKEN, which also force-enable). Env vars take priority and
  * are the automation/testing entry point.
@@ -793,7 +811,7 @@ export function startRemoteHostIfConfigured(config: AppConfig): void {
     process.env.REMOTE_DEVICE_TOKEN ??
     (getPref(config, "remote.deviceToken") as string);
   const envForced = Boolean(process.env.REMOTE_DEVICE_TOKEN);
-  const enabled = envForced || getPref(config, "remote.enabled") === true;
+  const enabled = envForced || getPref(config, "remote.hostEnabled") === true;
   if (!enabled || !relayUrl || !deviceToken) return;
   void startRemoteHost({
     config,
@@ -829,4 +847,102 @@ export async function stopRemoteHost(): Promise<void> {
   detachHooks();
   emitStatus();
   console.log("[remote] host stopped");
+}
+
+/**
+ * 测试中继连通性与设备令牌有效性：建立临时连接并认证后立即断开（用完即回收）。
+ * host 已启用且连接同一 relay 时直接判定可用——临时连接会以同 token 注册 host，
+ * 把正在运行/重连的 host 顶下线，故此时不做临时连接。
+ * 最多尝试 2 次（间隔 1s），避免网络抖动误报，同时不让测试拖太久。
+ */
+export async function testRemoteHostConnection(
+  relayUrl: string,
+  deviceToken: string,
+): Promise<
+  { ok: true; deviceId?: string } | { ok: false; code?: string; error: string }
+> {
+  if (opts && opts.relayUrl === relayUrl) {
+    return { ok: true };
+  }
+  let last: { ok: false; code?: string; error: string } | null = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    if (attempt > 1) await new Promise((r) => setTimeout(r, 1000));
+    const result = await tryTestOnce(relayUrl, deviceToken);
+    if (result.ok) return result;
+    last = result;
+  }
+  return last ?? { ok: false, code: "ETIMEDOUT", error: "timeout" };
+}
+
+function tryTestOnce(
+  relayUrl: string,
+  deviceToken: string,
+): Promise<
+  { ok: true; deviceId?: string } | { ok: false; code?: string; error: string }
+> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (
+      result:
+        | { ok: true; deviceId?: string }
+        | { ok: false; code?: string; error: string },
+    ) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+    const socket = new WebSocket(relayUrl);
+    const timer = setTimeout(() => {
+      socket.close();
+      finish({ ok: false, code: "ETIMEDOUT", error: "timeout" });
+    }, 5000);
+    socket.on("open", () => {
+      socket.send(
+        JSON.stringify({
+          v: 1,
+          type: "auth",
+          role: "host",
+          deviceToken,
+          deviceName: "test",
+        }),
+      );
+    });
+    socket.on("message", (data: RawData) => {
+      try {
+        const frame = JSON.parse(data.toString()) as {
+          type?: string;
+          deviceId?: string;
+          message?: string;
+        };
+        if (frame.type === "auth-ok") {
+          clearTimeout(timer);
+          socket.close();
+          finish({ ok: true, deviceId: frame.deviceId });
+        } else if (frame.type === "auth-error") {
+          clearTimeout(timer);
+          socket.close();
+          finish({ ok: false, error: frame.message ?? "auth failed" });
+        }
+      } catch {
+        // ignore malformed frames
+      }
+    });
+    socket.on("error", (err) => {
+      clearTimeout(timer);
+      try {
+        socket.close();
+      } catch {
+        // already closed
+      }
+      finish({
+        ok: false,
+        code: (err as { code?: string }).code,
+        error: err.message,
+      });
+    });
+    socket.on("close", () => {
+      clearTimeout(timer);
+      finish({ ok: false, code: "ECONNRESET", error: "connection closed" });
+    });
+  });
 }
