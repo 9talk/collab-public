@@ -38,6 +38,10 @@ export interface AuthErrorFrame {
 export interface PairCreateFrame {
   v: 1;
   type: "pair-create";
+  /** true → 作废该 deviceId 现存活码并立即换新（Host 轮询/立即刷新用）；缺省复用活码 */
+  force?: boolean;
+  /** 新码有效分钟数，clamp 1~1440；缺省 10（旧 Host 不发此字段，行为不变） */
+  ttlMinutes?: number;
 }
 
 export interface PairCreatedFrame {
@@ -136,7 +140,13 @@ export function parseFrame(raw: string): RelayFrame | null {
           typeof rec.appVersion === "string" ? rec.appVersion : undefined,
       };
     case "pair-create":
-      return { v: 1, type: "pair-create" };
+      return {
+        v: 1,
+        type: "pair-create",
+        force: rec.force === true,
+        ttlMinutes:
+          typeof rec.ttlMinutes === "number" ? rec.ttlMinutes : undefined,
+      };
     case "rpc":
       return {
         v: 1,

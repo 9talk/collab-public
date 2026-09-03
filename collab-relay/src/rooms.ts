@@ -13,8 +13,23 @@ export interface PairRecord {
   expiresAt: number;
 }
 
-const PAIR_TTL_MS = 10 * 60 * 1000;
+const DEFAULT_TTL_MINUTES = 10;
+const TTL_MIN_MINUTES = 1;
+const TTL_MAX_MINUTES = 1440;
 const MAX_CODE_ATTEMPTS = 5;
+
+export interface CreatePairOptions {
+  /** 作废该 deviceId 现存活码并换新；缺省幂等复用活码（兼容旧 Host） */
+  force?: boolean;
+  /** 新码有效分钟数，clamp 1~1440；缺省 10 分钟 */
+  ttlMinutes?: number;
+}
+
+function clampTtlMinutes(minutes?: number): number {
+  const n = Number(minutes);
+  if (!Number.isFinite(n)) return DEFAULT_TTL_MINUTES;
+  return Math.min(TTL_MAX_MINUTES, Math.max(TTL_MIN_MINUTES, Math.round(n)));
+}
 
 // 6-digit code avoiding visually-confusing digits (0/O, 1/I).
 const CODE_ALPHABET = "23456789";
@@ -71,23 +86,52 @@ export class Rooms {
     }
   }
 
-  /** Host asks for a fresh pairing code. Idempotent: reuses a live code. */
-  createPairCode(deviceId: string): { code: string; ttlSec: number } {
-    for (const [code, rec] of this.codes) {
+  /**
+   * Host asks for a fresh pairing code.
+   * - 缺省幂等：复用该 deviceId 的活码（兼容旧 Host 的既有行为）
+   * - force: true → 作废现存活码换新码（Host 轮询换新 / 立即刷新）
+   * - ttlMinutes 决定新码 TTL（clamp 1~1440，缺省 10 分钟）
+   */
+  createPairCode(
+    deviceId: string,
+    opts: CreatePairOptions = {},
+  ): { code: string; ttlSec: number } {
+    const ttlMinutes = clampTtlMinutes(opts.ttlMinutes);
+    let live: PairRecord | null = null;
+    for (const rec of this.codes.values()) {
       if (rec.deviceId === deviceId && rec.expiresAt > Date.now()) {
-        return { code, ttlSec: Math.max(1, Math.round((rec.expiresAt - Date.now()) / 1000)) };
+        live = rec;
+        break;
       }
+    }
+    if (live && !opts.force) {
+      return {
+        code: live.code,
+        ttlSec: Math.max(1, Math.round((live.expiresAt - Date.now()) / 1000)),
+      };
+    }
+    if (live && opts.force) {
+      // 作废旧码：客户端若在途会用旧码连不上，重连需新码（Host 已推送新码）
+      this.codes.delete(live.code);
     }
     let code = randomCode();
     while (this.codes.has(code)) code = randomCode();
-    this.codes.set(code, { code, deviceId, expiresAt: Date.now() + PAIR_TTL_MS });
-    return { code, ttlSec: PAIR_TTL_MS / 1000 };
+    const expiresAt = Date.now() + ttlMinutes * 60_000;
+    this.codes.set(code, { code, deviceId, expiresAt });
+    return { code, ttlSec: ttlMinutes * 60 };
   }
 
   /** Client joins the room bound to a pair code. */
   join(pairCode: string, client: Peer):
     | { ok: true; host: Peer }
-    | { ok: false; code: "invalid-pair-code" | "pair-code-expired" | "pair-code-in-use" } {
+    | {
+        ok: false;
+        code:
+          | "invalid-pair-code"
+          | "pair-code-expired"
+          | "pair-code-in-use"
+          | "host-unavailable";
+      } {
     const rec = this.codes.get(pairCode);
     if (!rec) {
       this.bumpAttempt(pairCode);
@@ -99,8 +143,9 @@ export class Rooms {
     }
     const host = this.hosts.get(rec.deviceId);
     if (!host) {
-      // host 暂未注册（正在重连中），保留码让 client 稍后重试
-      return { ok: false, code: "invalid-pair-code" };
+      // host 暂未注册（relay 重启或 host 自身重连中）：码保留，
+      // client 端应将此视为暂态并自动重试，而不是当无效码放弃
+      return { ok: false, code: "host-unavailable" };
     }
     if (this.rooms.get(rec.deviceId) && this.maxClients === 1) {
       return { ok: false, code: "pair-code-in-use" };

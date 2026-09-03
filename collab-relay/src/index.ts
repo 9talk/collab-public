@@ -190,8 +190,15 @@ export function startRelay(opts: Options): WebSocketServer {
 
       if (frame.type === "pair-create") {
         if (peer.role !== "host") return;
-        const { code, ttlSec } = rooms.createPairCode(peer.deviceId);
-        console.log(`[relay] pair-created code=${code} host=${peer.deviceId}`);
+        const { code, ttlSec } = rooms.createPairCode(peer.deviceId, {
+          ...(frame.force ? { force: true } : {}),
+          ...(frame.ttlMinutes !== undefined
+            ? { ttlMinutes: frame.ttlMinutes }
+            : {}),
+        });
+        console.log(
+          `[relay] pair-created code=${code} host=${peer.deviceId} ttl=${ttlSec}s${frame.force ? " force" : ""}`,
+        );
         ws.send(JSON.stringify({ v: 1, type: "pair-created", code, ttlSec }));
         persistNow();
         return;
