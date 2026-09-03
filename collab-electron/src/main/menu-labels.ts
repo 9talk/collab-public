@@ -8,6 +8,7 @@ export interface MenuLabels {
   hideOthers: string;
   unhide: string;
   quit: string;
+  disconnectRemote: string;
   file: string;
   newTile: string;
   closeTile: string;
@@ -46,6 +47,7 @@ export const menuLabels: Record<MenuLocale, MenuLabels> = {
     hideOthers: "Hide Others",
     unhide: "Show All",
     quit: "Quit {app}",
+    disconnectRemote: "Disconnect…",
     file: "File",
     newTile: "New Tile",
     closeTile: "Close Tile",
@@ -81,6 +83,7 @@ export const menuLabels: Record<MenuLocale, MenuLabels> = {
     hideOthers: "隐藏其他",
     unhide: "显示全部",
     quit: "退出 {app}",
+    disconnectRemote: "断开连接…",
     file: "文件",
     newTile: "新建 Tile",
     closeTile: "关闭 Tile",

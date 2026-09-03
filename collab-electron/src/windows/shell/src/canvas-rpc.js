@@ -155,6 +155,25 @@ export function createCanvasRpc({
           result = {};
           break;
         }
+        case "tileSetGeometry": {
+          // 镜像几何同步专用：一次提交位置+尺寸（Host rpc canvas:update-tile-geometry 的落点）。
+          const tile = requireTile(requestId, params.tileId);
+          if (!tile) return;
+          const { x, y, width, height } = params;
+          if (![x, y, width, height].every(Number.isFinite)) {
+            respondError(requestId, 4, "Invalid geometry");
+            return;
+          }
+          tile.x = x;
+          tile.y = y;
+          tile.width = width;
+          tile.height = height;
+          snapToGrid(tile);
+          tileManager.repositionAllTiles();
+          tileManager.saveCanvasImmediate();
+          result = {};
+          break;
+        }
         case "viewportGet": {
           result = {
             pan: {

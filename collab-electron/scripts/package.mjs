@@ -8,6 +8,22 @@ const builderArgs = ["--publish", "never"];
 const env = { ...process.env };
 const cwd = normalizeWindowsPath(process.cwd());
 
+// Product flavor: "full" (Collaborator + Host, default) or "remote"
+// (standalone Collaborator Remote client). The vite build output is shared;
+// only the electron-builder config differs (flavor.json marker, appId, name).
+let flavor = "full";
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === "--flavor") {
+    const value = args[i + 1];
+    if (value === "full" || value === "remote") flavor = value;
+    args.splice(i, 2);
+    break;
+  }
+}
+if (flavor === "remote") {
+  builderArgs.push("-c", "electron-builder.remote.yml");
+}
+
 // Load .env.local (same approach as notarize.cjs) so GH_TOKEN and other
 // credentials are available without requiring a manual export.
 const envLocalPath = join(cwd, ".env.local");

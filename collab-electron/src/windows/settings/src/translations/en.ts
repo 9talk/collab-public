@@ -183,6 +183,12 @@ export const en = {
   "remote.deviceToken": "Device token",
   "remote.deviceTokenPlaceholder": "Token assigned by the relay admin",
   "remote.pairCode": "Pairing code",
+  "remote.pairRefreshLabel": "Auto-rotate period (minutes)",
+  "remote.refreshNow": "Refresh now",
+  "remote.refreshing": "Refreshing…",
+  "remote.pairValidUntil": "Valid until",
+  "remote.pairRotatesEvery": "Rotates every",
+  "remote.minutes": "min",
   "remote.connecting": "Connecting…",
   "remote.connected": "Connected",
   "remote.error": "Connection failed",
@@ -216,6 +222,21 @@ export const en = {
   "remote.hostBlockedByClient":
     "Disconnect the client first to enable host mode",
   "remote.clientBlockedByHost": "Disable host mode first to connect as client",
+
+  // Connection info (remote standalone flavor)
+  "nav.connection": "Connection",
+  "connection.title": "Connection",
+  "connection.description": "Mirror session details for this device",
+  "connection.relay": "Relay URL",
+  "connection.host": "Host",
+  "connection.status": "Status",
+  "connection.status.connected": "Connected",
+  "connection.status.connecting": "Connecting…",
+  "connection.status.idle": "Not connected",
+  "connection.status.error": "Error",
+  "connection.disconnect": "Disconnect",
+  "connection.none": "—",
+  "connection.notAvailable": "No mirror session is active on this device.",
 
   // Misc
   esc: "esc",

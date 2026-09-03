@@ -14,6 +14,12 @@ function normalizeWindowsPath(path) {
 
 const repoDir = normalizeWindowsPath(process.cwd());
 
+// --flavor remote launches the standalone Client flavor (see app-flavor.ts).
+const flavorIndex = process.argv.indexOf("--flavor");
+if (flavorIndex !== -1 && process.argv[flavorIndex + 1]) {
+  process.env.COLLAB_FLAVOR = process.argv[flavorIndex + 1];
+}
+
 // REMOTE_DEBUG_PORT 透传给 electron（--remote-debugging-port），供 e2e 的 CDP 驱动使用
 const debugArgs = process.env.REMOTE_DEBUG_PORT
   ? ["--remoteDebuggingPort", process.env.REMOTE_DEBUG_PORT]

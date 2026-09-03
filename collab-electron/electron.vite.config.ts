@@ -85,6 +85,7 @@ export default defineConfig({
             "src/windows/permission-check/index.html",
           ),
           todos: resolve(__dirname, "src/windows/todos/index.html"),
+          connect: resolve(__dirname, "src/windows/connect/index.html"),
         },
       },
     },

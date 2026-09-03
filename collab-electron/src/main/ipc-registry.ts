@@ -1,4 +1,4 @@
-import { ipcMain, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
+import { ipcMain, webContents, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
 
 /**
  * 集中式 IPC 通道注册表。所有「远程模式可转发」的通道一律经 bindIpc
@@ -105,8 +105,14 @@ export function activateRemoteForwarding(): void {
       const rec = registry.get(keyOf(channel, kind));
       if (!rec) continue;
       detachRec(rec);
-      const wrapper: IpcImpl = (event, ...args) =>
-        remoteCall!(rec.channel, rec.kind, args, event.sender.id);
+      const wrapper: IpcImpl = (event, ...args) => {
+        // 本地设置/连接窗口的调用不转发（local 项：locale、连接存档等），
+        // 直接执行本地实现 —— 避免 locale 读到 Host、pref:set 误写 Host 配置
+        if (isLocalSender(event.sender.id)) {
+          return rec.impl(event, ...args);
+        }
+        return remoteCall!(rec.channel, rec.kind, args, event.sender.id);
+      };
       rec.wrapper = wrapper;
       rec.bound = true;
       if (rec.kind === "handle") {
@@ -116,6 +122,14 @@ export function activateRemoteForwarding(): void {
       }
     }
   }
+}
+
+/** 豁免转发的本地窗口：按渲染页面 URL 判定 */
+function isLocalSender(senderId: number): boolean {
+  const wc = webContents.fromId(senderId);
+  if (!wc || wc.isDestroyed()) return false;
+  const url = wc.getURL();
+  return url.includes("/settings/") || url.includes("/connect/");
 }
 
 /** 退出远程模式：恢复本地实现 */

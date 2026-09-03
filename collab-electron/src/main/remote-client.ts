@@ -5,7 +5,7 @@
 // terminal tile that owns it.
 
 import { WebSocket, type RawData } from "ws";
-import { app, BrowserWindow, webContents } from "electron";
+import { app, BrowserWindow, nativeTheme, webContents } from "electron";
 import { decodePtyBinary } from "@collab/relay/src/protocol";
 import {
   activateRemoteForwarding,
@@ -14,7 +14,7 @@ import {
   type IpcKind,
 } from "./ipc-registry";
 import { forwardToWebview } from "./ipc";
-import { getPref, type AppConfig } from "./config";
+import { getPref, setPref, type AppConfig } from "./config";
 
 export type RemoteClientState = "idle" | "connecting" | "connected" | "error";
 
@@ -98,6 +98,9 @@ export function isRemoteActive(): boolean {
 }
 
 function rpcInvoke(channel: string, args: unknown[]): Promise<unknown> {
+  if (channel === "canvas:update-tile-geometry") {
+    console.log(`[remote] client rpc-out ${channel} ${JSON.stringify(args[0])}`);
+  }
   return new Promise((resolve, reject) => {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       reject(new Error("remote connection not open"));
@@ -192,6 +195,16 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
   switch (frame.type) {
     case "auth-ok": {
       lastError = undefined;
+      // 连接成功 → 存档 relayUrl + 配对码，供下次启动自动连接
+      //（配对码有 TTL，失效后 auth-error 会自然回到表单）
+      if (opts) {
+        try {
+          setPref(opts.config, "remote.relayUrl", opts.relayUrl);
+          setPref(opts.config, "remote.pairCode", opts.pairCode);
+        } catch {
+          // 存档失败不阻断连接
+        }
+      }
       emitStatus();
       onConnected();
       break;
@@ -202,7 +215,21 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
       // 会遮蔽 host 侧的状态上报与操作。
       lastError = (frame.message as string) ?? "auth failed";
       console.log(`[remote] auth error: ${lastError}`);
-      void stopRemoteClient();
+      if (frame.code === "host-unavailable") {
+        // Host 尚未注册（relay 刚重启/host 重连中）是暂态：不清码、不退出，
+        // relay 已关闭本 socket → close handler 会自动重试直到 host 上线
+        emitStatus();
+        return;
+      }
+      // 存档码已失效，清掉避免下次启动重复自动连接失败
+      if (opts) {
+        try {
+          setPref(opts.config, "remote.pairCode", null);
+        } catch {
+          // ignore
+        }
+      }
+      void stopRemoteClient("auth-error");
       break;
     }
     case "peer-connected": {
@@ -257,7 +284,7 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
 /** 连接建立（或重连）后：切换转发层并做全量同步 */
 function onConnected(): void {
   activateRemoteForwarding();
-  void tryInitialSync();
+  void resyncMirror();
 }
 
 let syncRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -266,20 +293,41 @@ let syncRetryTimer: ReturnType<typeof setTimeout> | null = null;
  * 全量同步：画布快照（A 端磁盘状态 → B 端 shell renderer 重放）+ 会话列表。
  * A（host）与 B 同时断线重连时，B 可能先于 A 上线，relay 会静默丢弃
  * 无 peer 的 rpc —— 失败后定时重试，直到 A 上线同步成功。
+ * 镜像 shell 加载完成（did-finish-load）后由编排层再次调用，兜底首连时
+ * shell 尚未就绪导致的全量状态丢失。
  */
-async function tryInitialSync(): Promise<void> {
+export async function resyncMirror(): Promise<void> {
   if (syncRetryTimer) {
     clearTimeout(syncRetryTimer);
     syncRetryTimer = null;
   }
   try {
-    const state = await rpcInvoke("canvas:get-state-for-save", []);
+    // Host 视觉主题同步到本机 nativeTheme，镜像 shell/终端随 Host 深浅色
+    try {
+      const theme = (await rpcInvoke("pref:get", ["theme"])) as unknown;
+      if (theme === "light" || theme === "dark" || theme === "system") {
+        nativeTheme.themeSource = theme;
+      }
+    } catch {
+      // 主题同步失败不阻断画布同步，重连时会再对齐
+    }
+    const [state, winInfo] = await Promise.all([
+      rpcInvoke("canvas:get-state-for-save", []),
+      rpcInvoke("window-info", []).catch(() => null),
+    ]);
     if (state != null) {
-      forwardToWebview("shell", "canvas:remote-state", state);
+      // hostWindow 为 Client 端等比缩放适配的输入（Host 主窗口尺寸），
+      // 不可用时（旧 Host 无 window-info rpc）照常重放画布但不做适配
+      forwardToWebview("shell", "canvas:remote-state", {
+        canvasState: state,
+        hostWindow: winInfo,
+      });
     }
     // 会话列表缓存（B 端 shell 拉起 terminal tile 时会据此 reconnect）
     const sessions = await rpcInvoke("pty:discover", []);
     const sessionCount = Array.isArray(sessions) ? sessions.length : 0;
+    // 通知镜像 shell 重读视觉类 pref（canvasOpacity 等），与 Host 严格对齐
+    forwardToWebview("shell", "remote:resynced");
     console.log(
       `[remote] sync complete: canvas=${state != null ? "ok" : "empty"} ptySessions=${sessionCount}`,
     );
@@ -287,7 +335,7 @@ async function tryInitialSync(): Promise<void> {
     console.log("[remote] initial sync failed:", err);
     syncRetryTimer = setTimeout(() => {
       syncRetryTimer = null;
-      void tryInitialSync();
+      void resyncMirror();
     }, 5000);
   }
 }
@@ -412,20 +460,34 @@ export async function startRemoteClient(o: ClientOptions): Promise<void> {
 
 /**
  * 启动入口：env REMOTE_PAIR_CODE（+ REMOTE_RELAY_URL）为自动化/测试入口，
- * 无 pref 持久化（配对码本身是一次性的）。
+ * 优先于 pref 存档。pref 存档来自上次连接成功(auth-ok)时写入的
+ * remote.relayUrl + remote.pairCode —— 配对码有 TTL，失效后 auth-error
+ * 会清掉存档并回到连接表单。
  */
 export function startRemoteClientIfConfigured(config: AppConfig): void {
   const relayUrl =
     process.env.REMOTE_RELAY_URL ??
     (getPref(config, "remote.relayUrl") as string);
-  const pairCode = process.env.REMOTE_PAIR_CODE;
+  const pairCode =
+    process.env.REMOTE_PAIR_CODE ??
+    (getPref(config, "remote.pairCode") as string);
   if (!relayUrl || !pairCode) return;
   void startRemoteClient({ config, relayUrl, pairCode });
 }
 
-export async function stopRemoteClient(): Promise<void> {
+/**
+ * 停止连接。reason 语义：
+ * - "auth-error"：配对失败自动停，保留 lastError 供 UI 提示码失效
+ * - "user"（或默认）：用户主动断开，清除 lastError（回到连接页表单态）
+ */
+export type RemoteStopReason = "auth-error" | "user";
+
+export async function stopRemoteClient(
+  reason?: RemoteStopReason,
+): Promise<void> {
   stopped = true;
   opts = null;
+  if (reason !== "auth-error") lastError = undefined;
   if (retryTimer) {
     clearTimeout(retryTimer);
     retryTimer = null;

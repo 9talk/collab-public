@@ -1,0 +1,20 @@
+# Standalone Client (Collaborator Remote) packaging config.
+# electron-builder merges this with package.json's "build" section;
+# extraResources arrays are replaced by this list, so list everything needed.
+productName: Collaborator Remote
+appId: com.collaborator.remote
+directories:
+  output: dist-remote
+extraResources:
+  - from: build/flavor.remote.json
+    to: flavor.json
+  - from: resources/terminfo
+    to: terminfo
+  - from: resources/collab-send-file.sh
+    to: collab-send-file.sh
+  - from: cli/collab-cli.bundled.mjs
+    to: collab-cli.mjs
+  - from: packages/collab-canvas-skill
+    to: collab-canvas-skill
+  - from: packages/collab-claude-plugin
+    to: collab-claude-plugin

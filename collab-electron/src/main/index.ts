@@ -79,15 +79,23 @@ import {
   stopRemoteHost,
   getRemoteHostStatus,
   testRemoteHostConnection,
+  applyPairRefreshSchedule,
+  refreshPairNow,
 } from "./remote-server";
 import {
   startRemoteClient,
   startRemoteClientIfConfigured,
   stopRemoteClient,
-  isRemoteActive,
   getRemoteClientStatus,
+  onRemoteStateChanged,
+  resyncMirror,
 } from "./remote-client";
 import { bindIpc, markForward } from "./ipc-registry";
+import {
+  ensureFlavorEnv,
+  getAppFlavor,
+  isRemoteFlavor,
+} from "./app-flavor";
 import {
   checkPermissions,
   openPermissionSettings,
@@ -99,6 +107,10 @@ import {
 if (!process.env.LANG || !process.env.LANG.includes("UTF-8")) {
   process.env.LANG = "en_US.UTF-8";
 }
+
+// Freeze flavor into the env before any child process is spawned so every
+// process resolves the same flavor even without resourcesPath.
+ensureFlavorEnv();
 
 process.on("uncaughtException", (error) => {
   trackEvent("app_crash", {
@@ -354,6 +366,15 @@ function buildAppMenu(): void {
                 registerAccelerator: false,
                 click: () => sendShortcut("toggle-settings"),
               } as Electron.MenuItemConstructorOptions,
+              ...(isRemoteFlavor()
+                ? ([
+                    { type: "separator" as const },
+                    {
+                      label: L.disconnectRemote,
+                      click: () => void stopRemoteClient("user"),
+                    } as Electron.MenuItemConstructorOptions,
+                  ] satisfies Electron.MenuItemConstructorOptions[])
+                : []),
               { type: "separator" as const },
               { role: "services" as const, label: L.services },
               { type: "separator" as const },
@@ -369,6 +390,15 @@ function buildAppMenu(): void {
     {
       label: L.file,
       submenu: [
+        ...(isRemoteFlavor() && !isMac
+          ? ([
+              {
+                label: L.disconnectRemote,
+                click: () => void stopRemoteClient("user"),
+              } as Electron.MenuItemConstructorOptions,
+              { type: "separator" as const },
+            ] satisfies Electron.MenuItemConstructorOptions[])
+          : []),
         {
           label: L.newTile,
           accelerator: "CommandOrControl+N",
@@ -550,6 +580,103 @@ function createWindow(): void {
 
   setMainWindow(mainWindow);
   registerCanvasRpc(mainWindow);
+
+  mainWindow.webContents.once("did-finish-load", () => {
+    sendLoadingDone();
+    if (isRemoteFlavor()) {
+      // 镜像 shell 就绪后再全量同步,兜底首连时 connect 阶段丢掉的 canvas 状态
+      void resyncMirror();
+      return;
+    }
+    if (pendingFilePath) {
+      mainWindow.webContents.send(
+        "shell:forward",
+        "viewer",
+        "file-selected",
+        pendingFilePath,
+      );
+      pendingFilePath = null;
+    }
+  });
+}
+
+// -- Remote flavor: Connect 窗口 + 镜像 shell 生命周期编排 -----------------
+// remote（独立 Client）产物启动只展示 Connect 窗口；连接成功后销毁
+// Connect 并创建镜像 shell；用户主动断开则销毁镜像 shell 回到 Connect。
+// 断线自动重连与 auth-error 由 remote-client 状态驱动，镜像 shell 保留，
+// overlay 由 shell renderer 依据 remote-status 展示。
+
+let connectWindow: BrowserWindow | null = null;
+let remoteOrchestrated = false;
+
+function showRemoteConnectWindow(): void {
+  if (connectWindow && !connectWindow.isDestroyed()) {
+    connectWindow.show();
+    connectWindow.focus();
+    return;
+  }
+  connectWindow = new BrowserWindow({
+    width: 440,
+    height: 600,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    title: "Connect",
+    show: false,
+    webPreferences: {
+      preload: getPreloadPath("universal"),
+      contextIsolation: true,
+      sandbox: true,
+    },
+  });
+  connectWindow.setMenuBarVisibility(false);
+  if (process.platform === "darwin") {
+    connectWindow.setWindowButtonVisibility?.(false);
+  }
+  enforceZoom(connectWindow.webContents);
+  connectWindow.once("ready-to-show", () => {
+    if (connectWindow && !connectWindow.isDestroyed()) {
+      connectWindow.show();
+    }
+  });
+  connectWindow.on("closed", () => {
+    connectWindow = null;
+  });
+  void connectWindow.loadURL(getRendererURL("connect"));
+}
+
+function closeRemoteConnectWindow(): void {
+  if (connectWindow && !connectWindow.isDestroyed()) {
+    connectWindow.destroy();
+  }
+  connectWindow = null;
+}
+
+function setupRemoteClientOrchestration(): void {
+  if (remoteOrchestrated) return;
+  remoteOrchestrated = true;
+  onRemoteStateChanged((s) => {
+    if (s.state === "connected") {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        // 先建镜像 shell 再销毁 Connect，避免瞬时无窗口触发 window-all-closed
+        createWindow();
+        registerToggleShortcuts(mainWindow!);
+      }
+      closeRemoteConnectWindow();
+      return;
+    }
+    if (s.state === "idle" && !s.lastError) {
+      // 用户主动断开（菜单/overlay「返回连接页」/Connect 页取消）：
+      // 销毁镜像 shell 回到连接页。先开 Connect 再关 shell，
+      // 避免触发 window-all-closed 直接退出。
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        showRemoteConnectWindow();
+        mainWindow.close();
+      }
+    }
+    // auth-error(idle + lastError)与断线重连(connecting)时镜像 shell 保留,
+    // 由 shell renderer 的 remote overlay 呈现对应提示。
+  });
 }
 
 // -- macOS permission check window ------------------------------------
@@ -1027,19 +1154,35 @@ app.whenReady().then(async () => {
   shuttingDown = false;
 
   config = loadConfig();
-  installCli();
-  watcher.startWorker();
-  registerIpcHandlers(config);
-  registerIntegrationsIpc();
-  syncClaudeMdOnLaunch();
-  registerClaudeIpc();
-  registerClaudeEditsRpc();
-  setupUpdateIPC();
-  ipcMain.handle("permissions:check", () => checkPermissions());
-  ipcMain.handle("permissions:open-settings", (_event, kind: string) => {
-    openPermissionSettings(kind as PermissionKind);
+  if (isRemoteFlavor()) {
+    // remote(独立 Client)产物不做本地初始化：无本地 CLI/文件 watcher/
+    // Claude 集成/权限检查 —— 镜像会话的 fs/pty 全部经 relay 转发到 Host。
+    registerIpcHandlers(config);
+  } else {
+    installCli();
+    watcher.startWorker();
+    registerIpcHandlers(config);
+  }
+
+  // Synchronous flavor query for preload scripts (must be registered before
+  // any BrowserWindow is created; preloads run at window creation).
+  ipcMain.on("app:get-flavor", (event) => {
+    event.returnValue = getAppFlavor();
   });
-  ipcMain.on("permissions:close", closePermissionWindow);
+  if (!isRemoteFlavor()) {
+    registerIntegrationsIpc();
+    syncClaudeMdOnLaunch();
+    registerClaudeIpc();
+    registerClaudeEditsRpc();
+  }
+  setupUpdateIPC();
+  if (!isRemoteFlavor()) {
+    ipcMain.handle("permissions:check", () => checkPermissions());
+    ipcMain.handle("permissions:open-settings", (_event, kind: string) => {
+      openPermissionSettings(kind as PermissionKind);
+    });
+    ipcMain.on("permissions:close", closePermissionWindow);
+  }
   const autoCheckUpdates = getPref(config, "autoCheckUpdates") as
     | boolean
     | null;
@@ -1048,140 +1191,152 @@ app.whenReady().then(async () => {
     autoCheckEnabled: autoCheckUpdates ?? false,
   });
 
-  try {
-    await pty.ensureSidecar();
-  } catch (err) {
-    console.error("Sidecar failed to start:", err);
+  if (!isRemoteFlavor()) {
+    try {
+      await pty.ensureSidecar();
+    } catch (err) {
+      console.error("Sidecar failed to start:", err);
+    }
   }
 
   buildAppMenu();
-  createWindow();
-  registerToggleShortcuts(mainWindow!);
-  setTimeout(maybeCheckPermissionsOnLaunch, 1500);
+  if (isRemoteFlavor()) {
+    setupRemoteClientOrchestration();
+    showRemoteConnectWindow();
+  } else {
+    createWindow();
+    registerToggleShortcuts(mainWindow!);
+    setTimeout(maybeCheckPermissionsOnLaunch, 1500);
+  }
 
   // Register F1 as a global shortcut: bring app to front when in background,
   // dismiss the first notification when already focused.
-  const f1Registered = globalShortcut.register("F1", () => {
-    const win = mainWindow;
-    if (!win) return;
-    if (!win.isFocused()) {
-      win.show();
-      win.focus();
-      return;
-    }
-    sendShortcut("dismiss-notification");
-  });
-  if (!f1Registered) {
-    dialog.showMessageBox({
-      type: "warning",
-      title: "全局快捷键注册失败",
-      message:
-        "F1 全局快捷键注册失败，可能被其他应用占用或缺少辅助功能权限。\n\n请前往 系统设置 > 隐私与安全性 > 辅助功能 中授予 Collaborator 权限。",
-      buttons: ["确定"],
+  if (!isRemoteFlavor()) {
+    const f1Registered = globalShortcut.register("F1", () => {
+      const win = mainWindow;
+      if (!win) return;
+      if (!win.isFocused()) {
+        win.show();
+        win.focus();
+        return;
+      }
+      sendShortcut("dismiss-notification");
     });
+    if (!f1Registered) {
+      dialog.showMessageBox({
+        type: "warning",
+        title: "全局快捷键注册失败",
+        message:
+          "F1 全局快捷键注册失败，可能被其他应用占用或缺少辅助功能权限。\n\n请前往 系统设置 > 隐私与安全性 > 辅助功能 中授予 Collaborator 权限。",
+        buttons: ["确定"],
+      });
+    }
   }
 
   initMainAnalytics();
   trackEvent("app_launched");
 
-  mainWindow!.webContents.on("did-finish-load", () => {
-    sendLoadingDone();
-    if (pendingFilePath) {
-      mainWindow!.webContents.send(
-        "shell:forward",
-        "viewer",
-        "file-selected",
-        pendingFilePath,
-      );
-      pendingFilePath = null;
+  if (!isRemoteFlavor()) {
+    registerMethod("ping", () => ({ pong: true }), {
+      description: "Health check — returns {pong: true}",
+    });
+    registerMethod("workspace.getConfig", () => config, {
+      description: "Return the current app configuration",
+    });
+
+    registerDebugMouseRpc();
+
+    try {
+      await startJsonRpcServer();
+    } catch (err) {
+      console.error("Failed to start JSON-RPC server:", err);
     }
-  });
-
-  registerMethod("ping", () => ({ pong: true }), {
-    description: "Health check — returns {pong: true}",
-  });
-  registerMethod("workspace.getConfig", () => config, {
-    description: "Return the current app configuration",
-  });
-
-  registerDebugMouseRpc();
-
-  try {
-    await startJsonRpcServer();
-  } catch (err) {
-    console.error("Failed to start JSON-RPC server:", err);
   }
 
-  startRemoteHostIfConfigured(config);
-  startRemoteClientIfConfigured(config);
+  // Host/Client 入口按产物角色分流：full 只当被控端，remote 只当控制端。
+  if (!isRemoteFlavor()) {
+    startRemoteHostIfConfigured(config);
+  } else {
+    // 有上次成功连接存档（relayUrl + pairCode）时自动连接；
+    // 无存档时 Connect 窗口停留在表单态。
+    startRemoteClientIfConfigured(config);
+  }
 
   ipcMain.handle("remote:get-status", () => {
-    if (isRemoteActive()) return getRemoteClientStatus();
+    if (isRemoteFlavor()) return getRemoteClientStatus();
     return getRemoteHostStatus();
   });
 
-  ipcMain.handle(
-    "remote:host-set-enabled",
-    async (_event, enabled: boolean) => {
-      if (!enabled) {
-        // 用户显式断开 = 被控端关闭：持久化，下次启动不再自动连接
-        setPref(config, "remote.hostEnabled", false);
-        await stopRemoteHost();
+  if (!isRemoteFlavor()) {
+    ipcMain.handle(
+      "remote:host-set-enabled",
+      async (_event, enabled: boolean) => {
+        if (!enabled) {
+          // 用户显式断开 = 被控端关闭：持久化，下次启动不再自动连接
+          setPref(config, "remote.hostEnabled", false);
+          await stopRemoteHost();
+          return { ok: true };
+        }
+        // 注意：连接成功（auth-ok）后才把 remote.hostEnabled 置 true 并持久化，
+        // 此处不预写，避免连接失败/未完成时残留「已开启」。
+        const relayUrl = getPref(config, "remote.relayUrl") as string;
+        const deviceToken = getPref(config, "remote.deviceToken") as string;
+        if (!relayUrl || !deviceToken) {
+          return { ok: false, error: "Missing relay URL or device token" };
+        }
+        const deviceName = getPref(config, "remote.deviceName") as
+          | string
+          | undefined;
+        void startRemoteHost({
+          config,
+          relayUrl,
+          deviceToken,
+          ...(deviceName ? { deviceName } : {}),
+        });
         return { ok: true };
-      }
-      // 注意：连接成功（auth-ok）后才把 remote.hostEnabled 置 true 并持久化，
-      // 此处不预写，避免连接失败/未完成时残留「已开启」。
-      // 同实例 host/client 互斥（UI 层已互斥，此处兜底 env/自动化双开）
-      await stopRemoteClient();
-      const relayUrl = getPref(config, "remote.relayUrl") as string;
-      const deviceToken = getPref(config, "remote.deviceToken") as string;
-      if (!relayUrl || !deviceToken) {
-        return { ok: false, error: "Missing relay URL or device token" };
-      }
-      const deviceName = getPref(config, "remote.deviceName") as
-        | string
-        | undefined;
-      void startRemoteHost({
-        config,
-        relayUrl,
-        deviceToken,
-        ...(deviceName ? { deviceName } : {}),
-      });
+      },
+    );
+
+    ipcMain.handle(
+      "remote:host-test",
+      async (_event, opts: { relayUrl?: string; deviceToken?: string }) => {
+        if (!opts || !opts.relayUrl || !opts.deviceToken) {
+          return { ok: false, error: "Missing relay URL or device token" };
+        }
+        return testRemoteHostConnection(opts.relayUrl, opts.deviceToken);
+      },
+    );
+
+    // 配对码自动换新：周期修改热重排 + 立即刷新
+    ipcMain.handle("remote:host-apply-refresh", async () => {
+      applyPairRefreshSchedule();
       return { ok: true };
-    },
-  );
-
-  ipcMain.handle(
-    "remote:host-test",
-    async (_event, opts: { relayUrl?: string; deviceToken?: string }) => {
-      if (!opts || !opts.relayUrl || !opts.deviceToken) {
-        return { ok: false, error: "Missing relay URL or device token" };
-      }
-      return testRemoteHostConnection(opts.relayUrl, opts.deviceToken);
-    },
-  );
-
-  ipcMain.handle(
-    "remote:client-connect",
-    async (_event, opts: { relayUrl?: string; pairCode?: string }) => {
-      if (!opts || !opts.relayUrl || !opts.pairCode) {
-        return { ok: false, error: "Missing relay URL or pair code" };
-      }
-      // 同实例 host/client 互斥：切到控制端先停被控端
-      await stopRemoteHost();
-      await startRemoteClient({
-        config,
-        relayUrl: opts.relayUrl,
-        pairCode: opts.pairCode,
-      });
+    });
+    ipcMain.handle("remote:host-refresh-now", async () => {
+      refreshPairNow();
       return { ok: true };
-    },
-  );
+    });
+  } else {
+    ipcMain.handle(
+      "remote:client-connect",
+      async (_event, opts: { relayUrl?: string; pairCode?: string }) => {
+        if (!opts || !opts.relayUrl || !opts.pairCode) {
+          return { ok: false, error: "Missing relay URL or pair code" };
+        }
+        await startRemoteClient({
+          config,
+          relayUrl: opts.relayUrl,
+          pairCode: opts.pairCode,
+        });
+        return { ok: true };
+      },
+    );
 
-  ipcMain.handle("remote:client-disconnect", async () => {
-    await stopRemoteClient();
-    return { ok: true };
-  });
+    ipcMain.handle("remote:client-disconnect", async () => {
+      await stopRemoteClient("user");
+      return { ok: true };
+    });
+  }
 });
 
 const QUIT_CONFIRM_HTML = `<!doctype html>
@@ -1280,6 +1435,20 @@ ipcMain.on("quit-confirm:response", (_event, confirmed: boolean) => {
 });
 
 app.on("before-quit", async (event) => {
+  if (isRemoteFlavor()) {
+    // remote（独立 Client）窗口即会话：退出无需确认对话框；
+    // 镜像 canvas 权威在 Host，本地无需保存画布状态
+    quitConfirmed = true;
+    if (!shuttingDown) {
+      event.preventDefault();
+      shuttingDown = true;
+      await shutdownBackgroundServices();
+      await shutdownAnalytics();
+      app.quit();
+    }
+    return;
+  }
+
   if (!quitConfirmed) {
     event.preventDefault();
 

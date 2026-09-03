@@ -5,7 +5,7 @@
 // when disabled, all hooks are null and no data leaves this machine.
 
 import { WebSocket, type RawData } from "ws";
-import { app, shell, dialog, BrowserWindow } from "electron";
+import { app, screen, shell, dialog, BrowserWindow } from "electron";
 import { existsSync, realpathSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
@@ -30,6 +30,11 @@ import {
   forwardCanvasRpcRequest,
   setCanvasRpcResponseMirror,
 } from "./canvas-rpc";
+import {
+  setTileGeometrySink,
+  type TileGeometryPayload,
+} from "./ipc-canvas";
+import { randomUUID } from "node:crypto";
 import { setRemotePtyConsumers } from "./pty";
 import { forwardToWebview, setRemoteEventMirror } from "./ipc";
 import {
@@ -75,6 +80,8 @@ export interface RemoteHostStatus {
   peerConnected: boolean;
   peer?: { role: "host" | "client"; deviceId: string; displayName?: string };
   pairCode?: string;
+  /** 当前配对码过期时刻(ms)——UI 据此显示「有效至 HH:MM」，轮询 tick 据此刻跳过/换码 */
+  pairCodeExpiresAt?: number;
   lastError?: string;
 }
 
@@ -92,6 +99,8 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let retryDelayMs = 1000;
 let stopped = false;
 let pairCode: string | undefined;
+let pairCodeExpiresAt: number | undefined;
+let pairRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let deviceId: string | undefined;
 let peerConnected = false;
 let peerInfo: RemoteHostStatus["peer"];
@@ -114,8 +123,81 @@ function status(): RemoteHostStatus {
     peerConnected,
     ...(peerInfo ? { peer: peerInfo } : {}),
     ...(pairCode ? { pairCode } : {}),
+    ...(pairCodeExpiresAt ? { pairCodeExpiresAt } : {}),
     ...(lastError ? { lastError } : {}),
   };
+}
+
+const DEFAULT_PAIR_REFRESH_MINUTES = 10;
+const PAIR_REFRESH_MIN_MINUTES = 1;
+const PAIR_REFRESH_MAX_MINUTES = 1440;
+
+/** 自动换新周期（分钟）：pref remote.pairRefreshMinutes，非法回退默认 10 */
+function pairRefreshMinutes(): number {
+  const raw = opts
+    ? getPref(opts.config, "remote.pairRefreshMinutes")
+    : undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < PAIR_REFRESH_MIN_MINUTES) {
+    return DEFAULT_PAIR_REFRESH_MINUTES;
+  }
+  return Math.min(PAIR_REFRESH_MAX_MINUTES, Math.round(n));
+}
+
+function sendPairCreate(force: boolean): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(
+    JSON.stringify({
+      v: 1,
+      type: "pair-create",
+      ...(force ? { force: true } : {}),
+      ttlMinutes: pairRefreshMinutes(),
+    }),
+  );
+}
+
+function stopPairRefreshTimer(): void {
+  if (pairRefreshTimer) {
+    clearInterval(pairRefreshTimer);
+    pairRefreshTimer = null;
+  }
+}
+
+/**
+ * 轮询 tick：码未过期且有活跃 client → 跳过（不打断在途 client 断线续连）；
+ * 码未过期且无 client → force 换新；码已过期/无码 → 发新码。
+ */
+function tickPairRefresh(): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  if (pairCodeExpiresAt && pairCodeExpiresAt > Date.now()) {
+    if (!peerConnected) sendPairCreate(true);
+  } else {
+    sendPairCreate(false);
+  }
+}
+
+/** 按当前 pref 周期启动轮询（auth-ok 后调用；周期修改时热重排） */
+function schedulePairRefresh(): void {
+  stopPairRefreshTimer();
+  pairRefreshTimer = setInterval(
+    tickPairRefresh,
+    pairRefreshMinutes() * 60_000,
+  );
+}
+
+/**
+ * 热生效：UI 保存新换新周期后重排轮询定时器。Host 未激活时无 timer 可排，
+ * 连接成功后按当时 pref 取值排程，本调用仅作 no-op。
+ */
+export function applyPairRefreshSchedule(): void {
+  if (stopped || !opts) return;
+  schedulePairRefresh();
+}
+
+/** 立即刷新：force 换一个新配对码（配对码卡片随之更新） */
+export function refreshPairNow(): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  sendPairCreate(true);
 }
 
 function emitStatus(): void {
@@ -495,10 +577,45 @@ function registerRemoteMethods(config: AppConfig): MethodTable {
     ];
     return forwardCanvasRpcRequest(payload);
   });
+  // Client 端拖拽/缩放落定 → Host 应用几何。经 Host shell 的 canvas rpc
+  // 走与本地一致的管线（snap/重排/存档；终端 tile 随之 refit 收敛 pty）。
+  // 响应经 canvas:rpc-response 镜像回 Client，属无害冗余（Client 无对应 pending）。
+  t.register("canvas:update-tile-geometry", async (params) => {
+    const [p] = params as [TileGeometryPayload | undefined];
+    if (!p || typeof p.tileId !== "string") {
+      throw new Error("tileId required");
+    }
+    console.log(
+      `[remote] rpc canvas:update-tile-geometry ${JSON.stringify(p)}`,
+    );
+    return forwardCanvasRpcRequest({
+      requestId: randomUUID(),
+      method: "tileSetGeometry",
+      params: p,
+    });
+  });
 
   // ---- misc ----
   t.register("external-editor:list", () => detectEditors());
   t.register("app:commit-sha", () => __GIT_COMMIT_SHA__);
+
+  /**
+   * 只读窗口尺寸查询：应答 Host 主窗口 contentSize，供 Client 端等比缩放
+   * 适配计算使用（Client 仅据此做本地视图变换，Host 显示不受影响）。
+   * 主窗口不可用时回退主屏 workArea。
+   */
+  t.register("window-info", () => {
+    const hostWin = BrowserWindow.getAllWindows().find(
+      (w) => !w.isDestroyed() && w.webContents.getURL().includes("/shell/"),
+    );
+    if (hostWin) {
+      const [width, height] = hostWin.getContentSize();
+      if (width > 0 && height > 0) return { width, height };
+    }
+    const ws = screen.getPrimaryDisplay().workAreaSize;
+    return { width: ws.width, height: ws.height };
+  });
+
   t.register("dialog:open-folder", async () => {
     const win =
       BrowserWindow.getFocusedWindow() ??
@@ -611,12 +728,17 @@ function attachHooks(): void {
   setCanvasRpcResponseMirror((response) => {
     pushEvent("canvas:rpc-response", [response]);
   });
+  // Host 端本地 tile 几何提交 → 镜像给 Client（shell 收到后本地应用并 refit）
+  setTileGeometrySink((payload) => {
+    pushEvent("shell:forward", ["shell", "remote:tile-geometry", payload]);
+  });
 }
 
 function detachHooks(): void {
   setRemotePtyConsumers(null);
   setRemoteEventMirror(null);
   setCanvasRpcResponseMirror(null);
+  setTileGeometrySink(null);
 }
 
 function handleFrame(frame: { type: string; [key: string]: unknown }): void {
@@ -627,9 +749,10 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
       // 连接成功才算被控端「开启」：持久化，下次启动据此自动连接
       if (opts) setPref(opts.config, "remote.hostEnabled", true);
       emitStatus();
-      // Ask for a pairing code right away so the UI always shows a live one.
+      // 取配对码（TTL 跟随 remote.pairRefreshMinutes）并启动自动换新轮询
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ v: 1, type: "pair-create" }));
+        sendPairCreate(false);
+        schedulePairRefresh();
       }
       break;
     }
@@ -646,7 +769,12 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
     }
     case "pair-created": {
       pairCode = frame.code as string;
-      console.log(`[remote] pair-code: ${pairCode}`);
+      const ttlSec = Number(frame.ttlSec);
+      pairCodeExpiresAt =
+        Number.isFinite(ttlSec) && ttlSec > 0
+          ? Date.now() + ttlSec * 1000
+          : undefined;
+      console.log(`[remote] pair-code: ${pairCode} expiresIn=${ttlSec}s`);
       emitStatus();
       break;
     }
@@ -787,6 +915,8 @@ export async function startRemoteHost(o: HostOptions): Promise<void> {
   stopped = false;
   retryDelayMs = 1000;
   pairCode = undefined;
+  pairCodeExpiresAt = undefined;
+  stopPairRefreshTimer();
   peerConnected = false;
   peerInfo = undefined;
   lastError = undefined;
@@ -842,6 +972,8 @@ export async function stopRemoteHost(): Promise<void> {
     }
   }
   pairCode = undefined;
+  pairCodeExpiresAt = undefined;
+  stopPairRefreshTimer();
   peerConnected = false;
   peerInfo = undefined;
   detachHooks();

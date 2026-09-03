@@ -173,6 +173,7 @@ ipcRenderer.on("settings:open-pane", (_event: unknown, pane: string) => {
 contextBridge.exposeInMainWorld("api", {
   // Shared
   getPlatform: (): NodeJS.Platform => process.platform,
+  getAppFlavor: (): string => ipcRenderer.sendSync("app:get-flavor"),
   getConfig: () => ipcRenderer.invoke("config:get"),
   getAppVersion: () => ipcRenderer.invoke("app:version"),
   getDeviceId: () => ipcRenderer.invoke("analytics:get-device-id"),
@@ -191,6 +192,8 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.invoke("remote:host-set-enabled", enabled),
   testRemoteHost: (relayUrl: string, deviceToken: string) =>
     ipcRenderer.invoke("remote:host-test", { relayUrl, deviceToken }),
+  hostApplyPairRefresh: () => ipcRenderer.invoke("remote:host-apply-refresh"),
+  hostRefreshPairNow: () => ipcRenderer.invoke("remote:host-refresh-now"),
   connectRemoteClient: (relayUrl: string, pairCode: string) =>
     ipcRenderer.invoke("remote:client-connect", { relayUrl, pairCode }),
   disconnectRemoteClient: () => ipcRenderer.invoke("remote:client-disconnect"),

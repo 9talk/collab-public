@@ -49,6 +49,8 @@ export function createTileManager({
   onTerminalCwdChanged,
   onTerminalTileClosed,
   onTerminalTileResized,
+  /** 拖拽/缩放提交回调（几何落定并保存后），参数为发生几何变更的 tile */
+  onTileGeometryCommitted,
   onTileFocused,
   onTileDblClick,
   onTermContextMenu,
@@ -327,7 +329,7 @@ export function createTileManager({
     });
   }
 
-  function focusCanvasTile(id, mouseEvent) {
+  function focusCanvasTile(id, mouseEvent, opts = {}) {
     const tile = getTile(id);
     if (tile) {
       bringToFront(tile);
@@ -363,7 +365,7 @@ export function createTileManager({
         }
         onNoteSurfaceFocus("canvas-tile");
 
-        if (onPanToTile && tile) onPanToTile(tile);
+        if (opts.pan !== false && onPanToTile && tile) onPanToTile(tile);
 
         if (mouseEvent && mouseEvent.button === 0) {
           forwardClickToWebview(dom.webview, mouseEvent);
@@ -632,7 +634,12 @@ export function createTileManager({
         toggleTileSelection(id);
         syncSelectionVisuals();
       },
-      onFocus: (id, e) => focusCanvasTile(id, e),
+      // 拖拽路径不触发 pan 动画：350ms 的 pan 会经 panDX 补偿污染拖拽坐标
+      //（点 tile 居中只应发生在非拖拽聚焦时，双击 title-bar 仍可居中）。
+      onFocus: (id, e) => focusCanvasTile(id, e, { pan: false }),
+      onCommit: (movedTiles) => {
+        for (const t of movedTiles) onTileGeometryCommitted?.(t);
+      },
       isSpaceHeld,
       contentOverlay: dom.contentOverlay,
     });
@@ -647,6 +654,7 @@ export function createTileManager({
         if (t.type === "term" && onTerminalTileResized) {
           onTerminalTileResized(t.width, t.height);
         }
+        onTileGeometryCommitted?.(t);
       },
     );
 

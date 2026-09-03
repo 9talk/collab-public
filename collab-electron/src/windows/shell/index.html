@@ -152,6 +152,41 @@
 
     <div id="resize-overlay"></div>
 
+    <!-- Remote client 镜像态遮罩(remote flavor):断线重连 / 配对码失效 -->
+    <div id="remote-overlay">
+      <div id="remote-overlay-card">
+        <span id="remote-overlay-spinner" class="hidden"></span>
+        <svg
+          id="remote-overlay-warn"
+          class="hidden"
+          width="22"
+          height="22"
+          viewBox="0 0 256 256"
+          fill="currentColor"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,168a12,12,0,1,1,12-12A12,12,0,0,1,128,192Zm8-48a8,8,0,0,1-16,0V88a8,8,0,0,1,16,0Z"
+          />
+        </svg>
+        <p id="remote-overlay-title"></p>
+        <p id="remote-overlay-sub"></p>
+        <div id="remote-overlay-actions">
+          <button type="button" id="remote-overlay-back">Back to Connect</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Remote 指示器菜单(remote flavor):断开连接等操作 -->
+    <div id="remote-menu" class="hidden">
+      <button type="button" id="remote-menu-fit" disabled>
+        Reset Fit View
+      </button>
+      <button type="button" id="remote-menu-disconnect">
+        Disconnect
+      </button>
+    </div>
+
     <div id="loading-overlay">
       <div id="loading-spinner"></div>
       <div id="loading-status">Initializing&#x2026;</div>

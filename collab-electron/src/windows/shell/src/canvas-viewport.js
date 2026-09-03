@@ -28,8 +28,10 @@ export function gridBufferSizeMismatch(gridCanvas, clientW, clientH, dpr) {
   );
 }
 
-export function createViewport(canvasEl, gridCanvas, tilesRef) {
+export function createViewport(canvasEl, gridCanvas, tilesRef, onManualView) {
   const gridCtx = gridCanvas.getContext("2d");
+  const notifyManualView =
+    typeof onManualView === "function" ? onManualView : () => {};
   let state = null;
   let onUpdate = null;
   let zoomSnapTimer = null;
@@ -186,6 +188,7 @@ export function createViewport(canvasEl, gridCanvas, tilesRef) {
   }
 
   function applyZoom(deltaY, focalX, focalY) {
+    notifyManualView();
     if (zoomSnapRaf) {
       cancelAnimationFrame(zoomSnapRaf);
       zoomSnapRaf = null;
@@ -230,6 +233,7 @@ export function createViewport(canvasEl, gridCanvas, tilesRef) {
     "wheel",
     (e) => {
       e.preventDefault();
+      notifyManualView();
 
       if (shouldZoom(e)) {
         const rect = canvasEl.getBoundingClientRect();

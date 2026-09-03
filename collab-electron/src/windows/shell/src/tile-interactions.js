@@ -25,6 +25,8 @@ const CLICK_THRESHOLD = 3;
  * @param {() => Array<{webview: HTMLElement}>} opts.getAllWebviews
  * @param {() => null | Array<{tile: object, container: HTMLElement, startX: number, startY: number}>} opts.getGroupDragContext
  * @param {(tileId: string) => void} opts.onShiftClick
+ * @param {(tiles: Array<import('./canvas-state.js').Tile>) => void} [opts.onCommit]
+ *   drag 真正发生移动并落定（snap 后）回调，参数为几何变动的 tile 列表（组拖为整组）
  * @param {() => boolean} [opts.isSpaceHeld] - when true, suppress drag (canvas is panning)
  * @param {HTMLElement} [opts.contentOverlay] - secondary drag surface over tile content
  */
@@ -40,6 +42,7 @@ export function attachDrag(
     getGroupDragContext,
     onShiftClick,
     onFocus,
+    onCommit,
     isSpaceHeld,
     contentOverlay,
   },
@@ -141,6 +144,10 @@ export function attachDrag(
         snapToGrid(tile);
       }
       onUpdate();
+      // 纯点击（无位移，如失焦/选中）不构成几何提交
+      if (moved && onCommit) {
+        onCommit(isGroupDrag ? groupCtx.map((e) => e.tile) : [tile]);
+      }
     }
 
     document.addEventListener("mousemove", onMove);
@@ -332,7 +339,11 @@ export function attachResize(
         wv.webview.style.pointerEvents = "none";
       }
 
+      // 纯点击（无移动）不产生几何变更，提交回调仅在真实缩放后触发
+      let changed = false;
+
       function onMove(e) {
+        changed = true;
         const panDX = viewport.panX - startPanX;
         const panDY = viewport.panY - startPanY;
         const dx = (e.clientX - startMX - panDX) / viewport.zoom;
@@ -372,7 +383,7 @@ export function attachResize(
         }
         snapToGrid(tile);
         onUpdate();
-        if (onResizeEnd) onResizeEnd(tile);
+        if (changed && onResizeEnd) onResizeEnd(tile);
         if (onFocus) onFocus();
       }
 

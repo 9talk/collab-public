@@ -41,6 +41,8 @@ ipcRenderer.on("shell:forward", (_event, target, channel, ...args) => {
 contextBridge.exposeInMainWorld("shellApi", {
   getPlatform: (): NodeJS.Platform => process.platform,
 
+  getAppFlavor: (): string => ipcRenderer.sendSync("app:get-flavor"),
+
   getViewConfig: (): Promise<AllViewConfigs> =>
     ipcRenderer.invoke("shell:get-view-config"),
 
@@ -56,6 +58,15 @@ contextBridge.exposeInMainWorld("shellApi", {
     ipcRenderer.on("remote-status", handler);
     return () => ipcRenderer.removeListener("remote-status", handler);
   },
+  disconnectRemoteClient: (): Promise<unknown> =>
+    ipcRenderer.invoke("remote:client-disconnect"),
+  updateTileGeometry: (payload: unknown): Promise<unknown> =>
+    ipcRenderer.invoke("canvas:update-tile-geometry", payload),
+  // Host 配对码自动换新（热生效/立即刷新），仅 full 版主进程有处理器
+  hostApplyPairRefresh: (): Promise<unknown> =>
+    ipcRenderer.invoke("remote:host-apply-refresh"),
+  hostRefreshPairNow: (): Promise<unknown> =>
+    ipcRenderer.invoke("remote:host-refresh-now"),
 
   onForwardToWebview: (
     cb: (target: string, channel: string, ...args: unknown[]) => void,

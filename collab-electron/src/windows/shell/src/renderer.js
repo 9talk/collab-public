@@ -14,12 +14,14 @@ import {
   findNearestAdjacentTile,
   findNearestTerminalTile,
   computeTerminalLayout,
+  snapToGrid,
   TERM_GAP,
 } from "./canvas-state.js";
 import { attachMarquee } from "./tile-interactions.js";
 import { initDarkMode, applyCanvasOpacity } from "./dark-mode.js";
 import { createWebview, isFocusSearchShortcut } from "./webview-factory.js";
 import { createViewport } from "./canvas-viewport.js";
+import { computeFitZoom } from "./fit-zoom.js";
 import { createEdgeIndicators } from "./edge-indicators.js";
 import { createMinimap } from "./canvas-minimap.js";
 import { createPanel } from "./panel-manager.js";
@@ -33,6 +35,15 @@ const CANVAS_DBLCLICK_SUPPRESS_MS = 500;
 const IS_WINDOWS = window.shellApi.getPlatform() === "win32";
 
 const viewportState = { panX: 0, panY: 0, zoom: 1 };
+
+// 适配视图模式（remote 镜像）：fitActive 时窗口 resize 自动重算等比 zoom；
+// 用户手动 zoom/pan 即退出，指示器菜单可重新进入。
+let fitActive = false;
+let fitHost = null; // { w, h, centerX, centerY, hostZoom }
+
+function viewportManualChanged() {
+  if (fitActive) fitActive = false;
+}
 
 const canvasEl = document.getElementById("panel-viewer");
 const gridCanvas = document.getElementById("grid-canvas");
@@ -98,7 +109,12 @@ window.shellApi.onPrefChanged((key, value) => {
 
 // -- Viewport --
 
-const viewport = createViewport(canvasEl, gridCanvas, tiles);
+const viewport = createViewport(
+  canvasEl,
+  gridCanvas,
+  tiles,
+  viewportManualChanged,
+);
 
 /** Convert in-memory panX/panY state to a center-point for persistence. */
 function toCenterPointState(state) {
@@ -462,6 +478,45 @@ async function init() {
     }
   }
 
+  // -- Tile geometry sync (remote 镜像, 双向) --
+  //
+  // 拖拽/缩放落定后把单 tile 几何上报主进程：
+  //   - Full 版(Host)：主进程在 Host 激活时镜像给控制端 Client
+  //   - Remote 版(Client)：经转发层走 Host rpc canvas:update-tile-geometry，
+  //     由 Host 应用并保存（会话权威在 Host）
+  // 上报只发自用户交互提交点；应用对端几何不经过提交点 → 无回声。
+
+  /** @param {import("./canvas-state.js").Tile} tile */
+  function reportTileGeometry(tile) {
+    window.shellApi
+      .updateTileGeometry({
+        tileId: tile.id,
+        x: tile.x,
+        y: tile.y,
+        width: tile.width,
+        height: tile.height,
+      })
+      .catch((err) => {
+        console.log("[tile-geometry] report failed:", err?.message ?? err);
+      });
+  }
+
+  /**
+   * 应用对端提交的几何（Host 主进程 mirror 推送）。网格与对端一致，
+   * snap 幂等；不触发上报、不本地存档（对端应用时已存档）。
+   * @param {import("./canvas-state.js").Tile} tile
+   */
+  function applyRemoteTileGeometry(tile, payload) {
+    const { x, y, width, height } = payload;
+    if (![x, y, width, height].every(Number.isFinite)) return;
+    tile.x = x;
+    tile.y = y;
+    tile.width = width;
+    tile.height = height;
+    snapToGrid(tile);
+    tileManager.repositionAllTiles();
+  }
+
   // -- Tile manager --
 
   let minimapRef = null;
@@ -498,6 +553,9 @@ async function init() {
       setLastTerminalCwd(cwd);
     },
     onTerminalTileResized() {},
+    onTileGeometryCommitted(tile) {
+      reportTileGeometry(tile);
+    },
     onLocate(cwd) {
       if (panelManager.getMode() !== "files") {
         panelManager.setMode("files");
@@ -1188,12 +1246,80 @@ async function init() {
 
   window.shellApi.onForwardToWebview((target, channel, ...args) => {
     if (target === "shell") {
+      if (channel === "remote:resynced") {
+        // 连接/重连全量同步后：重读视觉类 pref 与 Host 对齐。
+        // theme 已由主进程同步到 nativeTheme（prefers-color-scheme 自动随动）。
+        window.shellApi
+          .getPref("canvasOpacity")
+          .then((v) => {
+            if (v != null) {
+              lastCanvasOpacity = v;
+              applyCanvasOpacity(v);
+              broadcastCanvasOpacity();
+            }
+          })
+          .catch(() => {});
+        window.shellApi
+          .getPref("tileSize")
+          .then((v) => {
+            if (v && typeof v === "object") {
+              const val = /** @type {{width?:number;height?:number}} */ (v);
+              if (typeof val.width === "number") filesNavTileSize = val;
+            } else {
+              filesNavTileSize = null;
+            }
+          })
+          .catch(() => {});
+        return;
+      }
       if (channel === "canvas:remote-state") {
         // Remote mode (client side): replay the host's canvas snapshot。
         // 全量对齐：先清空本地 tile（不 kill A 端 session），再重放 ——
-        // A 端是 B 端的持久化权威。
+        // A 端是 B 端的持久化权威。载荷含 hostWindow 时进入适配视图
+        // （Client 本地等比缩放，Host 显示不受影响）。
+        const payload = args[0];
+        const canvasState =
+          payload && typeof payload === "object" && payload.canvasState
+            ? payload.canvasState
+            : payload;
+        const hostWindow =
+          payload && typeof payload === "object" ? payload.hostWindow : null;
         tileManager.clearCanvasKeepSessions();
-        void applyCanvasState(args[0]);
+        void applyCanvasState(canvasState).then(() => {
+          if (
+            IS_REMOTE_APP &&
+            hostWindow &&
+            hostWindow.width &&
+            hostWindow.height
+          ) {
+            const vp = canvasState?.viewport ?? {};
+            const centerX =
+              vp.centerX != null ? vp.centerX : canvasEl.clientWidth / 2;
+            const centerY =
+              vp.centerY != null ? vp.centerY : canvasEl.clientHeight / 2;
+            fitHost = {
+              w: hostWindow.width,
+              h: hostWindow.height,
+              centerX,
+              centerY,
+              hostZoom: vp.zoom ?? 1,
+            };
+            fitActive = true;
+            const fitMenuBtn = document.getElementById("remote-menu-fit");
+            if (fitMenuBtn) fitMenuBtn.disabled = false;
+            applyFitNow();
+          }
+        });
+        return;
+      }
+      if (channel === "remote:tile-geometry") {
+        // 对端用户拖拽/缩放落定后的几何镜像 → 本地静默应用并 refit。
+        // 应用路径不经过用户交互提交点，不会把随动当作新提交回推（回声抑制）。
+        const payload = args[0];
+        if (!payload || typeof payload.tileId !== "string") return;
+        const tile = tileManager.getTile(payload.tileId);
+        if (!tile) return;
+        applyRemoteTileGeometry(tile, payload);
         return;
       }
       if (channel === "remote:pty-opened") {
@@ -1461,19 +1587,176 @@ async function init() {
 
   // -- Remote control button + status badge --
 
+  const APP_FLAVOR = window.shellApi.getAppFlavor();
+  const IS_REMOTE_APP = APP_FLAVOR === "remote";
+
   const remoteBtn = document.getElementById("remote-btn");
   const remoteIndicator = document.getElementById("remote-indicator");
   const remoteStatusDot = document.getElementById("remote-status-dot");
   const remoteStatusText = document.getElementById("remote-status-text");
+  const remoteMenu = document.getElementById("remote-menu");
+  const remoteMenuDisconnect = document.getElementById(
+    "remote-menu-disconnect",
+  );
+  const remoteMenuFit = document.getElementById("remote-menu-fit");
 
-  remoteBtn.addEventListener("click", () => {
-    window.shellApi.openSettingsPane("remote");
+  const REMOTE_STRINGS = {
+    en: {
+      disconnectedTitle: "Connection lost",
+      disconnectedSub: "Reconnecting automatically…",
+      authTitle: "Pairing code expired",
+      authSub:
+        "The pairing code is no longer valid. Return to the connect screen to pair again.",
+      back: "Back to Connect",
+      disconnect: "Disconnect",
+      resetFit: "Reset Fit View",
+    },
+    zh: {
+      disconnectedTitle: "连接已断开",
+      disconnectedSub: "正在自动重新连接…",
+      authTitle: "配对码已失效",
+      authSub: "配对码已过期，返回连接页重新配对即可。",
+      back: "返回连接页",
+      disconnect: "断开连接",
+      resetFit: "重置为适配视图",
+    },
+  };
+  let remoteStrings = REMOTE_STRINGS.en;
+  window.shellApi.getPref("locale").then((v) => {
+    if (v === "zh") remoteStrings = REMOTE_STRINGS.zh;
+    else remoteStrings = REMOTE_STRINGS.en;
+    renderRemoteOverlay(currentRemoteStatus);
+  });
+
+  const remoteOverlay = document.getElementById("remote-overlay");
+  const remoteOverlayTitle = document.getElementById("remote-overlay-title");
+  const remoteOverlaySub = document.getElementById("remote-overlay-sub");
+  const remoteOverlayActions = document.getElementById("remote-overlay-actions");
+  const remoteOverlayBack = document.getElementById("remote-overlay-back");
+  const remoteOverlaySpinner = document.getElementById("remote-overlay-spinner");
+  const remoteOverlayWarn = document.getElementById("remote-overlay-warn");
+
+  /** 镜像 shell 只在连接成功后创建；连接态被打破时依状态展示 overlay */
+  let currentRemoteStatus = null;
+  function renderRemoteOverlay(status) {
+    if (!IS_REMOTE_APP) return;
+    currentRemoteStatus = status;
+    const showSpinner = status?.state === "connecting";
+    const authFailed = status?.state === "idle" && !!status?.lastError;
+    const visible = showSpinner || authFailed;
+    if (visible) {
+      remoteOverlaySpinner.classList.toggle("hidden", !showSpinner);
+      remoteOverlayWarn.classList.toggle("hidden", showSpinner);
+      remoteOverlayTitle.textContent = showSpinner
+        ? remoteStrings.disconnectedTitle
+        : remoteStrings.authTitle;
+      remoteOverlaySub.textContent = showSpinner
+        ? remoteStrings.disconnectedSub
+        : remoteStrings.authSub;
+      remoteOverlayBack.textContent = remoteStrings.back;
+      remoteOverlayActions.style.display = showSpinner ? "none" : "flex";
+      remoteOverlay.classList.add("visible");
+    } else {
+      remoteOverlay.classList.remove("visible");
+    }
+  }
+
+  remoteOverlayBack.addEventListener("click", () => {
+    // 主动断开：主进程销毁镜像 shell 并回到连接页
+    window.shellApi.disconnectRemoteClient?.();
+  });
+
+  remoteMenuDisconnect.textContent = remoteStrings.disconnect;
+  remoteMenuFit.textContent = remoteStrings.resetFit;
+  if (!fitHost) remoteMenuFit.disabled = true;
+
+  // 适配视图计算(Client 本地):等比缩放使 Host 画布完整填充本端视口,
+  // 中心沿用 Host 视口中心。仅本地视图变换,不回写 Host。
+  function applyFitNow() {
+    if (!fitHost) return;
+    const w = canvasEl.clientWidth;
+    const h = canvasEl.clientHeight;
+    if (!w || !h) return;
+    const fit = computeFitZoom({
+      hostW: fitHost.w,
+      hostH: fitHost.h,
+      hostZoom: fitHost.hostZoom,
+      clientW: w,
+      clientH: h,
+    });
+    if (!fit) return;
+    viewportState.zoom = fit.zoom;
+    viewportState.panX = w / 2 - fitHost.centerX * fit.zoom;
+    viewportState.panY = h / 2 - fitHost.centerY * fit.zoom;
+    viewport.updateCanvas();
+    minimap.update();
+  }
+
+  // 适配模式下窗口尺寸变化(防抖 200ms)自动重算保持完整展示
+  if (IS_REMOTE_APP) {
+    let fitResizeTimer = null;
+    new ResizeObserver(() => {
+      if (!fitActive) return;
+      clearTimeout(fitResizeTimer);
+      fitResizeTimer = setTimeout(() => {
+        fitResizeTimer = null;
+        if (fitActive) applyFitNow();
+      }, 200);
+    }).observe(canvasEl);
+  }
+
+  function positionRemoteMenu() {
+    const rect = remoteBtn.getBoundingClientRect();
+    remoteMenu.style.left = `${Math.max(8, rect.left)}px`;
+    remoteMenu.style.top = `${rect.bottom + 6}px`;
+  }
+
+  function toggleRemoteMenu() {
+    if (remoteMenu.classList.contains("hidden")) {
+      positionRemoteMenu();
+      remoteMenu.classList.remove("hidden");
+    } else {
+      remoteMenu.classList.add("hidden");
+    }
+  }
+
+  remoteBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!IS_REMOTE_APP) {
+      window.shellApi.openSettingsPane("remote");
+      return;
+    }
+    toggleRemoteMenu();
+  });
+
+  window.addEventListener("mousedown", (e) => {
+    if (
+      !remoteMenu.classList.contains("hidden") &&
+      !remoteMenu.contains(e.target) &&
+      e.target !== remoteBtn
+    ) {
+      remoteMenu.classList.add("hidden");
+    }
+  });
+
+  remoteMenuDisconnect.addEventListener("click", () => {
+    remoteMenu.classList.add("hidden");
+    window.shellApi.disconnectRemoteClient?.();
+  });
+
+  remoteMenuFit.addEventListener("click", () => {
+    remoteMenu.classList.add("hidden");
+    if (!fitHost) return;
+    fitActive = true;
+    applyFitNow();
   });
 
   function renderRemoteBadge(status) {
+    currentRemoteStatus = status;
     if (!status || typeof status.state !== "string") return;
     if (status.state === "idle") {
       remoteIndicator.style.display = "none";
+      renderRemoteOverlay(status);
       return;
     }
     remoteIndicator.style.display = "flex";
@@ -1494,6 +1777,7 @@ async function init() {
       remoteStatusText.textContent = "";
       remoteIndicator.title = "Remote: off";
     }
+    renderRemoteOverlay(status);
   }
 
   window.shellApi

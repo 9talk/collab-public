@@ -492,7 +492,13 @@ async function spawnSidecar(): Promise<void> {
       detached: true,
       stdio: ["ignore", "ignore", "pipe"],
       windowsHide: true,
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: "1",
+        // Pin the data dir: the sidecar has no resourcesPath/app, so it must
+        // inherit the main process's resolved COLLAB_DIR verbatim.
+        COLLAB_DIR,
+      },
     },
   );
   child.stderr?.on("data", (chunk: Buffer) => {

@@ -1,0 +1,138 @@
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.connect-root {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-family: var(--font-sans);
+  color: var(--foreground);
+  background: var(--background);
+}
+
+.connect-card {
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.connect-card h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.subtitle {
+  margin: -8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.field input {
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--background-secondary, var(--background));
+  color: var(--foreground);
+  outline: none;
+}
+
+.field input:focus {
+  border-color: var(--accent);
+}
+
+.field input:disabled {
+  opacity: 0.55;
+}
+
+.error-banner {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--destructive, #dc2626);
+  background: color-mix(in srgb, var(--destructive, #dc2626) 10%, transparent);
+}
+
+.connecting-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--foreground) 20%, transparent);
+  border-top-color: var(--foreground);
+  animation: connect-spin 0.8s linear infinite;
+}
+
+@keyframes connect-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.primary-btn {
+  padding: 9px 0;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #fff;
+  background: var(--accent);
+}
+
+.primary-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.link-btn {
+  margin-left: auto;
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--muted-foreground);
+  text-decoration: underline;
+}
+
+.help {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
