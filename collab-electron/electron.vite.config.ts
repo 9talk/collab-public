@@ -20,6 +20,7 @@ export default defineConfig({
     resolve: {
       alias: {
         "@collab/shared": resolve(__dirname, "packages/shared/src"),
+        "@collab/relay": resolve(__dirname, "../collab-relay"),
       },
     },
     build: {

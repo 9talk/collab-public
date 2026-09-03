@@ -4,6 +4,7 @@
     "paths": {
       "@collab/shared": ["packages/shared/src"],
       "@collab/shared/*": ["packages/shared/src/*"],
+      "@collab/relay/*": ["../collab-relay/*"],
       "@collab/components": ["packages/components/src"],
       "@collab/components/*": ["packages/components/src/*"],
       "@collab/theme": ["packages/theme/src"],
