@@ -29,6 +29,7 @@ import {
   type WindowState,
   type TerminalTarget,
 } from "./config";
+import { menuLabels } from "./menu-labels";
 import { registerIpcHandlers, setMainWindow, rebuildFileFilter } from "./ipc";
 import { registerCanvasRpc } from "./canvas-rpc";
 import {
@@ -279,16 +280,18 @@ function registerToggleShortcuts(win: BrowserWindow): void {
   attachShortcutListener(win.webContents);
 
   win.webContents.on("did-attach-webview", (_event, wc) => {
+    attachShortcutListener(wc);
+
     wc.once("did-finish-load", () => {
       // Transparent compositor surface so terminal tiles can
       // show through to the canvas/vibrancy background.
       wc.insertCSS("html, body { background: transparent !important; }");
-
-      attachShortcutListener(wc);
-      if (globalZoomLevel !== 0) {
-        wc.setZoomLevel(globalZoomLevel);
-      }
     });
+
+    // 覆盖 Chromium 按 URL 记忆的缩放:file:// 页面可能从
+    // Preferences 的 per_host_zoom_levels 恢复旧 zoom,必须
+    // 在每次加载后统一回应用设定的 globalZoomLevel。
+    enforceZoom(wc);
   });
 }
 
@@ -299,9 +302,21 @@ function applyZoomToAll(level: number): void {
   }
 }
 
+function enforceZoom(wc: WebContents): void {
+  wc.on("did-finish-load", () => {
+    if (!wc.isDestroyed()) wc.setZoomLevel(globalZoomLevel);
+  });
+}
+
+function currentMenuLocale(): "en" | "zh" {
+  return getPref(config, "locale") === "zh" ? "zh" : "en";
+}
+
 function buildAppMenu(): void {
   const isMac = process.platform === "darwin";
   const fullScreenAccelerator = isMac ? "Ctrl+Cmd+F" : "F11";
+  const L = menuLabels[currentMenuLocale()];
+  const appLabel = (s: string): string => s.replace("{app}", app.name);
 
   app.setAboutPanelOptions({
     applicationName: app.name,
@@ -316,44 +331,44 @@ function buildAppMenu(): void {
           {
             label: app.name,
             submenu: [
-              { role: "about" as const },
+              { role: "about" as const, label: appLabel(L.about) },
               { type: "separator" as const },
               {
-                label: "Settings\u2026",
+                label: L.settings,
                 accelerator: "CommandOrControl+,",
                 registerAccelerator: false,
                 click: () => sendShortcut("toggle-settings"),
               } as Electron.MenuItemConstructorOptions,
               { type: "separator" as const },
-              { role: "services" as const },
+              { role: "services" as const, label: L.services },
               { type: "separator" as const },
-              { role: "hide" as const },
-              { role: "hideOthers" as const },
-              { role: "unhide" as const },
+              { role: "hide" as const, label: appLabel(L.hide) },
+              { role: "hideOthers" as const, label: L.hideOthers },
+              { role: "unhide" as const, label: L.unhide },
               { type: "separator" as const },
-              { role: "quit" as const },
+              { role: "quit" as const, label: appLabel(L.quit) },
             ],
           },
         ]
       : []),
     {
-      label: "File",
+      label: L.file,
       submenu: [
         {
-          label: "New Tile",
+          label: L.newTile,
           accelerator: "CommandOrControl+N",
           registerAccelerator: false,
           click: () => sendShortcut("new-tile"),
         },
         {
-          label: "Close Tile",
+          label: L.closeTile,
           accelerator: "CommandOrControl+W",
           registerAccelerator: false,
           click: () => sendShortcut("close-tile"),
         },
         { type: "separator" },
         {
-          label: "Open Workspace\u2026",
+          label: L.openWorkspace,
           accelerator: "CommandOrControl+Shift+O",
           registerAccelerator: false,
           click: () => sendShortcut("add-workspace"),
@@ -361,18 +376,18 @@ function buildAppMenu(): void {
       ],
     },
     {
-      label: "Edit",
+      label: L.edit,
       submenu: [
-        { role: "undo" },
-        { role: "redo" },
+        { role: "undo", label: L.undo },
+        { role: "redo", label: L.redo },
         { type: "separator" },
-        { role: "cut" },
-        { role: "copy" },
-        { role: "paste" },
-        { role: "selectAll" },
+        { role: "cut", label: L.cut },
+        { role: "copy", label: L.copy },
+        { role: "paste", label: L.paste },
+        { role: "selectAll", label: L.selectAll },
         { type: "separator" },
         {
-          label: "Find",
+          label: L.find,
           accelerator: "CommandOrControl+K",
           registerAccelerator: false,
           click: () => sendShortcut("focus-file-search"),
@@ -380,60 +395,63 @@ function buildAppMenu(): void {
       ],
     },
     {
-      label: "View",
+      label: L.view,
       submenu: [
         {
-          label: "Toggle Files",
+          label: L.toggleFiles,
           accelerator: "CommandOrControl+B",
           registerAccelerator: false,
           click: () => sendShortcut("sidebar-files"),
         },
         { type: "separator" },
         {
-          label: "Zoom In",
+          label: L.zoomIn,
           accelerator: "CommandOrControl+=",
           click: () => applyZoomToAll(globalZoomLevel + 0.25),
         },
         {
-          label: "Zoom Out",
+          label: L.zoomOut,
           accelerator: "CommandOrControl+-",
           click: () => applyZoomToAll(globalZoomLevel - 0.25),
         },
         {
-          label: "Actual Size",
+          label: L.actualSize,
           accelerator: "CommandOrControl+0",
           click: () => applyZoomToAll(0),
         },
         { type: "separator" },
         {
-          label: "Navigate Back",
+          label: L.navigateBack,
           accelerator: "Alt+Cmd+Left",
           registerAccelerator: false,
           click: () => sendShortcut("nav-history-back"),
         },
         {
-          label: "Navigate Forward",
+          label: L.navigateForward,
           accelerator: "Alt+Cmd+Right",
           registerAccelerator: false,
           click: () => sendShortcut("nav-history-forward"),
         },
         { type: "separator" },
-        { role: "toggleDevTools" },
+        { role: "toggleDevTools", label: L.toggleDevTools },
         {
-          label: "Toggle Full Screen",
+          label: L.toggleFullScreen,
           accelerator: fullScreenAccelerator,
           click: (_, win) => win?.setFullScreen(!win.isFullScreen()),
         },
       ],
     },
     {
-      label: "Window",
+      label: L.windowMenu,
       submenu: [
-        { role: "minimize" },
-        { role: "zoom" },
+        { role: "minimize", label: L.minimize },
+        { role: "zoom", label: L.windowZoom },
         ...(isMac
-          ? [{ type: "separator" as const }, { role: "front" as const }]
-          : [{ role: "close" as const }]),
+          ? [
+              { type: "separator" as const },
+              { role: "front" as const, label: L.bringAllToFront },
+            ]
+          : [{ role: "close" as const, label: L.closeWindow }]),
       ],
     },
   ];
@@ -493,6 +511,7 @@ function createWindow(): void {
   }
 
   mainWindow = new BrowserWindow(windowOptions);
+  enforceZoom(mainWindow.webContents);
 
   if (state.isMaximized) {
     mainWindow.maximize();
@@ -548,6 +567,7 @@ function showPermissionWindow(): void {
     permissionWindow.setWindowButtonVisibility?.(false);
   }
   permissionWindow.setMenuBarVisibility(false);
+  enforceZoom(permissionWindow.webContents);
   permissionWindow.loadURL(getRendererURL("permission-check"));
   permissionWindow.on("closed", () => {
     permissionWindow = null;
@@ -605,6 +625,9 @@ ipcMain.on("pref:get-sync", (event, key: string) => {
 
 ipcMain.handle("pref:set", (_event, key: string, value: unknown) => {
   setPref(config, key, value);
+  if (key === "locale") {
+    buildAppMenu();
+  }
   if (key === "autoCheckUpdates" && typeof value === "boolean") {
     updateManager.setAutoCheckEnabled(value);
   }
