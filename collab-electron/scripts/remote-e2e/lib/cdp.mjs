@@ -168,3 +168,153 @@ export async function cdpTerminalInput(port, text, timeoutMs = 15_000) {
     c.close();
   }
 }
+
+/** 等待 shell 画布出现第 index 个 tile（默认第 0 个），返回其屏幕 rect。 */
+export async function cdpTileRect(port, index = 0, timeoutMs = 30_000) {
+  const wsUrl = await cdpWaitTarget(port, "/shell/", timeoutMs);
+  if (!wsUrl) throw new Error(`CDP 未找到 shell (port=${port})`);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const v = await cdpEval(
+      wsUrl,
+      `(() => {
+        const el = document.querySelectorAll(".canvas-tile")[${index}];
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return {
+          left: Math.round(r.left),
+          top: Math.round(r.top),
+          width: Math.round(r.width),
+          height: Math.round(r.height),
+        };
+      })()`,
+    );
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error(`canvas tile#${index} 超时 (port=${port})`);
+}
+
+/** 点击第 index 个 tile 的解锁按钮（tile 默认 locked，需解锁才能拖/缩放）。 */
+export async function cdpUnlockTile(port, index = 0) {
+  const wsUrl = await cdpWaitTarget(port, "/shell/", 15_000);
+  if (!wsUrl) throw new Error(`CDP 未找到 shell (port=${port})`);
+  const res = await cdpEval(
+    wsUrl,
+    `(() => {
+      const btn = document.querySelectorAll(".canvas-tile")[${index}]?.querySelector(".tile-lock-btn");
+      if (!btn) return "no-btn";
+      btn.click();
+      return "ok";
+    })()`,
+  );
+  if (res !== "ok") throw new Error(`tile#${index} 解锁失败: ${res}`);
+}
+
+/**
+ * 真实鼠标拖拽第 index 个 tile 的标题栏（dx/dy 为屏幕像素位移）。
+ * 起点取 title-bar 与视口的交集中心（防止 tile 中心在视口外时事件越界），
+ * 经 attachDrag 的 mousedown/mousemove/mouseup 完整路径落定并 snap。
+ */
+export async function cdpDragTileBy(port, dx, dy, index = 0) {
+  const wsUrl = await cdpWaitTarget(port, "/shell/", 15_000);
+  if (!wsUrl) throw new Error(`CDP 未找到 shell (port=${port})`);
+  const pt = await cdpEval(
+    wsUrl,
+    `(() => {
+      const el = document.querySelectorAll(".canvas-tile")[${index}]?.querySelector(".tile-title-bar");
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+      const cx = clamp(r.left + r.width / 2, r.left + 8, Math.min(r.right - 8, vw - 8));
+      const cy = clamp(r.top + r.height / 2, r.top + 8, Math.min(r.bottom - 8, vh - 8));
+      return {
+        x: Math.round(cx),
+        y: Math.round(cy),
+        vw,
+        vh,
+      };
+    })()`,
+  );
+  if (!pt) throw new Error(`tile#${index} 标题栏不存在`);
+  console.log(
+    `  [cdp] drag tile#${index} 起点 (${pt.x},${pt.y}) 视口 ${pt.vw}x${pt.vh}.`,
+  );
+  const c = await cdpConnect(wsUrl);
+  try {
+    const steps = 12;
+    await c.send("Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      x: pt.x,
+      y: pt.y,
+      button: "left",
+      buttons: 1,
+      clickCount: 1,
+    });
+    for (let i = 1; i <= steps; i++) {
+      await new Promise((r) => setTimeout(r, 14));
+      await c.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: Math.round(pt.x + (dx * i) / steps),
+        y: Math.round(pt.y + (dy * i) / steps),
+        button: "left",
+        buttons: 1,
+      });
+    }
+    await new Promise((r) => setTimeout(r, 40));
+    await c.send("Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      x: pt.x + dx,
+      y: pt.y + dy,
+      button: "left",
+      buttons: 0,
+      clickCount: 1,
+    });
+  } finally {
+    c.close();
+  }
+  // 等 snap + onUpdate + commit 上报落定
+  await new Promise((r) => setTimeout(r, 600));
+}
+
+/** 在 shell 页面执行 JS（带超时等待 target），返回 JSON 值。 */
+export async function cdpEvalShell(port, expression, timeoutMs = 15_000) {
+  const wsUrl = await cdpWaitTarget(port, "/shell/", timeoutMs);
+  if (!wsUrl) throw new Error(`CDP 未找到 shell (port=${port})`);
+  return cdpEval(wsUrl, expression);
+}
+
+/**
+ * 调整窗口尺寸触发 shell 画布 resize（M4 fit 重算入口）。
+ * Electron 未实现 CDP Browser.setWindowBounds，改用页面 window.resizeTo
+ * （Electron 渲染进程可调整所属 BrowserWindow），并校验真实生效。
+ */
+export async function cdpResizeWindow(port, width, height) {
+  const wsUrl = await cdpWaitTarget(port, "/shell/", 15_000);
+  if (!wsUrl) throw new Error(`CDP 未找到 shell (port=${port})`);
+  const res = await cdpEval(
+    wsUrl,
+    `(() => {
+      const before = [window.innerWidth, window.innerHeight];
+      window.resizeTo(${Math.round(width)}, ${Math.round(height)});
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            before,
+            after: [window.innerWidth, window.innerHeight],
+            outer: [window.outerWidth, window.outerHeight],
+          });
+        }, 800);
+      });
+    })()`,
+  );
+  if (!res?.after) throw new Error(`resizeTo 未生效: ${JSON.stringify(res)}`);
+  const [w0, h0] = res.before;
+  const [w1, h1] = res.after;
+  if (w1 === w0 && h1 === h0) {
+    throw new Error(`resizeTo 后窗口尺寸未变: ${JSON.stringify(res)}`);
+  }
+  return res;
+}

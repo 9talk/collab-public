@@ -37,9 +37,14 @@ const CDP_PORT_B = 9224;
 // 回归截图目录（桌面 collab 文件夹）
 const SHOT_DIR = join(homedir(), "Desktop", "collab");
 
-function collabDir(root) {
+function collabDir(root, flavor = "full") {
   const hash = createHash("sha256").update(root).digest("hex").slice(0, 12);
-  return join(homedir(), ".collab", "dev", `worktree-${hash}`);
+  return join(
+    homedir(),
+    ".collab",
+    "dev",
+    `worktree-${hash}${flavor === "remote" ? "-remote" : ""}`,
+  );
 }
 
 function setupWorkspaceA() {
@@ -87,7 +92,7 @@ function cleanup() {
     rmSync(WORK_A, { recursive: true, force: true });
     rmSync(WORK_B, { recursive: true, force: true });
     rmSync(collabDir(WORK_A), { recursive: true, force: true });
-    rmSync(collabDir(WORK_B), { recursive: true, force: true });
+    rmSync(collabDir(WORK_B, "remote"), { recursive: true, force: true });
   } catch {
     // best effort
   }
@@ -106,6 +111,9 @@ const ctx = {
   relayRef: null,
   aRef: null,
   bRef: null,
+  get aStateFile() {
+    return join(collabDir(WORK_A), "canvas-state.json");
+  },
   get relayLog() {
     return join(LOG_DIR, "relay.log");
   },
@@ -177,7 +185,7 @@ try {
   ctx.bRef = spawnLog(
     "b",
     "bun",
-    ["run", "scripts/dev.mjs"],
+    ["run", "scripts/dev.mjs", "--flavor", "remote"],
     {
       COLLAB_DEV_WORKTREE_ROOT: WORK_B,
       REMOTE_RELAY_URL: `ws://127.0.0.1:${RELAY_PORT}`,
