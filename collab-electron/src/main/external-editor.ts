@@ -49,6 +49,11 @@ const KNOWN_EDITORS: ExternalEditor[] = [
     name: "Sublime Text",
     appPath: "/Applications/Sublime Text.app",
   },
+  {
+    id: "fleet",
+    name: "Fleet",
+    appPath: "/Applications/Fleet.app",
+  },
 ];
 
 /** Always-available virtual editors (not detected from disk). */
@@ -118,6 +123,17 @@ export function openFileInEditor(
       "/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl";
     const args = sublimeArgs(workspacePath, filePath);
     spawnEditor(sublBin, args);
+  } else if (editorId === "fleet") {
+    const bin = "/Applications/Fleet.app/Contents/MacOS/Fleet";
+    if (line && Number.isFinite(line)) {
+      // Fleet 定位语法:fleet <workspace> --goto=<file>:<line>
+      const args = workspacePath ? [workspacePath] : [];
+      args.push(`--goto=${filePath}:${line}`);
+      spawnEditor(bin, args);
+    } else {
+      // 无行号时只传文件路径,避免 fleet 将 workspace 与 file 视为两个目标
+      spawnEditor(bin, [filePath]);
+    }
   }
 }
 
@@ -173,5 +189,9 @@ export function openWorkspaceInEditor(
     const sublBin =
       "/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl";
     spawnEditor(sublBin, sublimeArgs(workspacePath));
+  } else if (editorId === "fleet") {
+    spawnEditor("/Applications/Fleet.app/Contents/MacOS/Fleet", [
+      workspacePath,
+    ]);
   }
 }
