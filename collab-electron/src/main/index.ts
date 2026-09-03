@@ -91,11 +91,7 @@ import {
   resyncMirror,
 } from "./remote-client";
 import { bindIpc, markForward } from "./ipc-registry";
-import {
-  ensureFlavorEnv,
-  getAppFlavor,
-  isRemoteFlavor,
-} from "./app-flavor";
+import { ensureFlavorEnv, getAppFlavor, isRemoteFlavor } from "./app-flavor";
 import {
   checkPermissions,
   openPermissionSettings,

@@ -30,10 +30,7 @@ import {
   forwardCanvasRpcRequest,
   setCanvasRpcResponseMirror,
 } from "./canvas-rpc";
-import {
-  setTileGeometrySink,
-  type TileGeometryPayload,
-} from "./ipc-canvas";
+import { setTileGeometrySink, type TileGeometryPayload } from "./ipc-canvas";
 import { randomUUID } from "node:crypto";
 import { setRemotePtyConsumers } from "./pty";
 import { forwardToWebview, setRemoteEventMirror } from "./ipc";

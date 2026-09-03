@@ -1,4 +1,10 @@
-import { spawnLog, readLog, tailLog, waitForLog, killTree9 } from "../lib/process.mjs";
+import {
+  spawnLog,
+  readLog,
+  tailLog,
+  waitForLog,
+  killTree9,
+} from "../lib/process.mjs";
 import { summary } from "../lib/assert.mjs";
 import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -72,9 +78,7 @@ async function s02(ctx) {
   if (pairLine) {
     console.log(`  [info] 02/pair — relay 应答 TTL = ${pairLine[1]}s`);
     if (pairLine[1] !== "600") {
-      console.log(
-        `  [warn] 02/pair — TTL 非默认 600s（若未改 pref 则异常）`,
-      );
+      console.log(`  [warn] 02/pair — TTL 非默认 600s（若未改 pref 则异常）`);
     }
   }
 }
@@ -274,9 +278,7 @@ async function s11(ctx) {
       };
     })()`,
   );
-  console.log(
-    `  [info] 11/geometry-a2b — A 端调查 ${JSON.stringify(aCtx)}`,
-  );
+  console.log(`  [info] 11/geometry-a2b — A 端调查 ${JSON.stringify(aCtx)}`);
   console.log(
     `  [info] 11/geometry-a2b — A state tile0 x=${aTilePre?.x} y=${aTilePre?.y} w=${aTilePre?.width} h=${aTilePre?.height}; A DOM rect ${JSON.stringify(aRectPre)}; B rect ${JSON.stringify(b0)}`,
   );
@@ -329,8 +331,7 @@ async function s12(ctx) {
   );
   const hostW = aw.w;
   const hostH = aw.h;
-  const z0 =
-    Math.min(d0.cw / hostW, d0.ch / hostH) || 0;
+  const z0 = Math.min(d0.cw / hostW, d0.ch / hostH) || 0;
   if (!z0) throw new Error("B 端画布尺寸读取失败");
   console.log(
     `  [info] 12/fit-resize — B 画布 ${d0.cw}x${d0.ch}, host ${hostW}x${hostH}, zoom0=${z0.toFixed(4)}`,
@@ -350,7 +351,9 @@ async function s12(ctx) {
     `  [info] 12/fit-resize — B 画布 ${d1.cw}x${d1.ch}, zoom1=${z1.toFixed(4)}; tile 宽度比 ${wRatio.toFixed(3)} (期望 ≈${expectW.toFixed(3)})`,
   );
   if (Math.abs(wRatio - expectW) > 0.06) {
-    throw new Error(`适配视图未生效: tile 宽度比 ${wRatio} ≠ ~${expectW.toFixed(3)}`);
+    throw new Error(
+      `适配视图未生效: tile 宽度比 ${wRatio} ≠ ~${expectW.toFixed(3)}`,
+    );
   }
   await shot(
     ctx,
@@ -564,13 +567,21 @@ async function s13(ctx) {
     /pair-created code=(\d{6}) .* force/,
   );
   if (!forceLog || forceLog[1] !== newCode) {
-    throw new Error(`relay 未见 force 新码 ${newCode}: ${forceLog?.[1] ?? "无"}`);
+    throw new Error(
+      `relay 未见 force 新码 ${newCode}: ${forceLog?.[1] ?? "无"}`,
+    );
   }
   ctx.pairCode = newCode;
   console.log(
     `  [info] 13/settings-ui — 立即刷新换码 ${cur} → ${newCode} (relay force 确认)`,
   );
-  await shot(ctx, "13/settings-ui", ctx.cdpPortA, "/settings/", "s13-settings-pair.png");
+  await shot(
+    ctx,
+    "13/settings-ui",
+    ctx.cdpPortA,
+    "/settings/",
+    "s13-settings-pair.png",
+  );
 }
 
 export const scenarios = [

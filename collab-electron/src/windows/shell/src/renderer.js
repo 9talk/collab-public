@@ -1631,9 +1631,13 @@ async function init() {
   const remoteOverlay = document.getElementById("remote-overlay");
   const remoteOverlayTitle = document.getElementById("remote-overlay-title");
   const remoteOverlaySub = document.getElementById("remote-overlay-sub");
-  const remoteOverlayActions = document.getElementById("remote-overlay-actions");
+  const remoteOverlayActions = document.getElementById(
+    "remote-overlay-actions",
+  );
   const remoteOverlayBack = document.getElementById("remote-overlay-back");
-  const remoteOverlaySpinner = document.getElementById("remote-overlay-spinner");
+  const remoteOverlaySpinner = document.getElementById(
+    "remote-overlay-spinner",
+  );
   const remoteOverlayWarn = document.getElementById("remote-overlay-warn");
 
   /** 镜像 shell 只在连接成功后创建；连接态被打破时依状态展示 overlay */

@@ -99,7 +99,9 @@ export function isRemoteActive(): boolean {
 
 function rpcInvoke(channel: string, args: unknown[]): Promise<unknown> {
   if (channel === "canvas:update-tile-geometry") {
-    console.log(`[remote] client rpc-out ${channel} ${JSON.stringify(args[0])}`);
+    console.log(
+      `[remote] client rpc-out ${channel} ${JSON.stringify(args[0])}`,
+    );
   }
   return new Promise((resolve, reject) => {
     if (!ws || ws.readyState !== WebSocket.OPEN) {

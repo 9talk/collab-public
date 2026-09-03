@@ -1,4 +1,9 @@
-import { ipcMain, webContents, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
+import {
+  ipcMain,
+  webContents,
+  type IpcMainEvent,
+  type IpcMainInvokeEvent,
+} from "electron";
 
 /**
  * 集中式 IPC 通道注册表。所有「远程模式可转发」的通道一律经 bindIpc

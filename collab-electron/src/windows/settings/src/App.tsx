@@ -349,7 +349,9 @@ function AppearancePane({ t }: { t: (key: TranslationKey) => string }) {
       {APP_FLAVOR !== "remote" && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">{t("appearance.canvasOpacity")}</p>
+            <p className="text-sm font-medium">
+              {t("appearance.canvasOpacity")}
+            </p>
             <span className="text-xs tabular-nums text-muted-foreground">
               {canvasOpacity}%
             </span>
@@ -2065,9 +2067,7 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
   /** 保存换新周期（clamp 1~1440）并热重排 Host 轮询定时器 */
   async function saveRefreshMinutes(v: string) {
     const n = Math.round(Number(v));
-    const clamped = Number.isFinite(n)
-      ? Math.min(1440, Math.max(1, n))
-      : 10;
+    const clamped = Number.isFinite(n) ? Math.min(1440, Math.max(1, n)) : 10;
     setRefreshMinutes(clamped);
     setRefreshSaving(true);
     try {
@@ -2360,15 +2360,11 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
             </label>
             <button
               type="button"
-              disabled={
-                refreshSaving || hostStatus?.state !== "connected"
-              }
+              disabled={refreshSaving || hostStatus?.state !== "connected"}
               onClick={() => void refreshNow()}
               className="rounded-md border border-border/50 px-3 py-1.5 text-sm disabled:opacity-40"
             >
-              {refreshSaving
-                ? t("remote.refreshing")
-                : t("remote.refreshNow")}
+              {refreshSaving ? t("remote.refreshing") : t("remote.refreshNow")}
             </button>
           </div>
 
@@ -2395,8 +2391,7 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>
-                    {t("remote.pairValidUntil")}{" "}
-                    {pairExpiresLabel || "-"}
+                    {t("remote.pairValidUntil")} {pairExpiresLabel || "-"}
                   </span>
                   <span>
                     {t("remote.pairRotatesEvery")} {refreshMinutes}{" "}
