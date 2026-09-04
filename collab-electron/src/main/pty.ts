@@ -764,13 +764,24 @@ export async function reconnectSession(
     sidecarPowerShellSessionIds.add(sessionId);
   }
 
+  // 回放 ring buffer 尾部:attach 数据通道的推式快照发生在 guest 页面
+  // 订阅 ptyData 之前(webview 加载窗口外),会直接丢失;历史内容只能
+  // 经 scrollback 字段由 guest 主动拉取后 term.write。失败回退空串,
+  // 不阻断重连本身。
+  let scrollback = "";
+  try {
+    scrollback = await client.captureSession(sessionId, 500);
+  } catch {
+    // 快照失败时按无历史处理
+  }
+
   return withOptionalFields(
     {
       sessionId,
       shell,
       displayName,
       meta,
-      scrollback: "",
+      scrollback,
     },
     {
       target: meta?.target,

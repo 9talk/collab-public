@@ -367,6 +367,18 @@ function TerminalTab({
       term.write(scrollbackData);
     }
 
+    // 首帧渲染完成 → 通知 shell 解除 webview 隐藏(spawnTerminalWebview 的
+    // term:ready 处理)。恢复/重建场景下 scrollback 回放发生在挂载后,
+    // 若在回放前显示会出现"空白/错位 → 内容跳变"的过渡帧(聚焦切换时
+    // 表现为内容放大再缩小)。
+    // webview 本体处于 visibility:hidden 时 Chromium 可能暂停 rAF(未显示
+    // 文档节流),double-rAF 会永不触发导致 ready 丢失;用 setTimeout 兜底。
+    const notifyTermReady = () => {
+      window.api.sendToHost("term:ready", sessionId);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(notifyTermReady));
+    setTimeout(notifyTermReady, 300);
+
     // Force a fresh prompt to absorb zsh PROMPT_SP % marker
     // that may appear during shell initialization.
     if (!restored) {

@@ -30,7 +30,11 @@ import {
   forwardCanvasRpcRequest,
   setCanvasRpcResponseMirror,
 } from "./canvas-rpc";
-import { setTileGeometrySink, type TileGeometryPayload } from "./ipc-canvas";
+import {
+  setTileFocusSink,
+  setTileGeometrySink,
+  type TileGeometryPayload,
+} from "./ipc-canvas";
 import { randomUUID } from "node:crypto";
 import { setRemotePtyConsumers } from "./pty";
 import {
@@ -633,6 +637,29 @@ function registerRemoteMethods(config: AppConfig): MethodTable {
       params: { tileIds: [tileId] },
     });
   });
+  // Client Cmd+R 对称委托 → Host 端执行与本地 Cmd+R 一致的
+  // refresh+relayout+focus(结果经 geometry/focus/pty 事件镜像回 Client)。
+  t.register("canvas:refresh-tile", (params) => {
+    const [tileId] = params as [string | undefined];
+    if (typeof tileId !== "string") {
+      throw new Error("tileId required");
+    }
+    console.log(`[remote] rpc canvas:refresh-tile ${tileId}`);
+    return forwardCanvasRpcRequest({
+      requestId: randomUUID(),
+      method: "refreshTile",
+      params: { tileId },
+    });
+  });
+  // Client 端 relayout 按钮对称委托 → Host 端重排并广播几何。
+  t.register("canvas:relayout-tiles", () => {
+    console.log("[remote] rpc canvas:relayout-tiles");
+    return forwardCanvasRpcRequest({
+      requestId: randomUUID(),
+      method: "relayoutTiles",
+      params: {},
+    });
+  });
 
   // ---- misc ----
   t.register("external-editor:list", () => detectEditors());
@@ -772,6 +799,10 @@ function attachHooks(): void {
   setTileGeometrySink((payload) => {
     pushEvent("shell:forward", ["shell", "remote:tile-geometry", payload]);
   });
+  // Host 端本地聚焦 → 镜像给 Client（shell 视觉跟随聚焦，不回推）
+  setTileFocusSink((tileId) => {
+    pushEvent("shell:forward", ["shell", "remote:tile-focused", tileId]);
+  });
 }
 
 function detachHooks(): void {
@@ -779,6 +810,7 @@ function detachHooks(): void {
   setRemoteEventMirror(null);
   setCanvasRpcResponseMirror(null);
   setTileGeometrySink(null);
+  setTileFocusSink(null);
 }
 
 function handleFrame(frame: { type: string; [key: string]: unknown }): void {

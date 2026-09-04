@@ -565,9 +565,14 @@ async function init() {
       tileListWebview?.send("tile-list:focus", tile?.id || null);
       if (tile) notifications.dismissByTileId(tile.id);
       // Client(镜像 shell)端聚焦 → Host 端镜像 tile 跟随聚焦/置顶/pan。
-      // Host(full)本地聚焦不上报,避免 A→B 镜像回环。
+      // Client 对镜像回显聚焦(remote:tile-focused)走静默应用路径,不触发
+      // 本回调 → 无 A→B 回推,环在镜像端终止。
       if (IS_REMOTE_APP && tile) {
         window.shellApi.focusRemoteTile(tile.id);
+      } else if (tile) {
+        // Host 本地聚焦 → 主进程 sink → 镜像给控制端 Client(视觉跟随,
+        // Client 静默应用不触发回推,环在此终止)。
+        window.shellApi.reportTileFocus(tile.id);
       }
     },
     onTileUserInput(tileId) {
@@ -705,6 +710,7 @@ async function init() {
     viewport,
     edgeIndicators,
     notifications,
+    relayoutTerminalTiles,
   });
 
   // -- Wire viewport updates --
@@ -1148,8 +1154,10 @@ async function init() {
           canvasEl.focus();
           noteSurfaceFocus("canvas");
           minimap.update();
-          // 关闭后重新排列剩余终端,保持布局紧凑
-          relayoutTerminalTiles();
+          // 关闭后重新排列剩余终端,保持布局紧凑。
+          // 镜像(Client)端不本地重排:close 落点在 Host,由 Host 重排并
+          // 广播几何后随动,本地重排会与 Host 布局分叉。
+          if (!IS_REMOTE_APP) relayoutTerminalTiles();
           // 聚焦被关闭 tile 最近处的 terminal tile
           if (nearestBeforeClose?.id) {
             const target = tileManager.getTile(nearestBeforeClose.id);
@@ -1159,6 +1167,17 @@ async function init() {
           }
         });
     } else if (action === "refresh-terminal") {
+      if (IS_REMOTE_APP) {
+        // 镜像端无会话/布局权威:Cmd+R 委托 Host 执行同款
+        // refresh+relayout+focus,结果(几何/聚焦/会话)经事件通道镜像回来。
+        const focusedId = tileManager.getFocusedTileId();
+        if (focusedId) {
+          window.shellApi.refreshRemoteTile(focusedId).catch((err) => {
+            console.log("[remote] refresh-tile failed:", err?.message ?? err);
+          });
+        }
+        return;
+      }
       console.log("[refresh-terminal] shortcut triggered");
       const focusedId = tileManager.getFocusedTileId();
       if (focusedId) {
@@ -1294,6 +1313,17 @@ async function init() {
         const tile = tileManager.getTile(payload.tileId);
         if (!tile) return;
         applyRemoteTileGeometry(tile, payload);
+        return;
+      }
+      if (channel === "remote:tile-focused") {
+        // Host 聚焦镜像 → 本地静默聚焦(bringToFront/focus ring/键盘焦点)。
+        // 不经 focusCanvasTile/onTileFocused → 不触发 focusRemoteTile 回推。
+        const tileId = args[0];
+        if (typeof tileId !== "string") return;
+        const tile = tileManager.getTile(tileId);
+        if (!tile) return;
+        tileManager.applyRemoteTileFocus(tileId);
+        tileListWebview?.send("tile-list:focus", tileId);
         return;
       }
       if (channel === "remote:pty-opened") {
@@ -1742,15 +1772,29 @@ async function init() {
     for (const [id, x, y] of positions) {
       const tile = getTile(id);
       if (!tile) continue;
-      tile.x = x;
-      tile.y = y;
+      if (tile.x !== x || tile.y !== y) {
+        tile.x = x;
+        tile.y = y;
+        // 程序性几何变化与拖拽落定走同一上报通道,镜像端(Client)才能跟随
+        // 重排,否则 Host 重排后两端排版永久分叉。
+        reportTileGeometry(tile);
+      }
     }
     tileManager.repositionAllTiles();
     tileManager.saveCanvasImmediate();
     minimap.update();
   }
 
-  relayoutBtn.addEventListener("click", relayoutTerminalTiles);
+  relayoutBtn.addEventListener("click", () => {
+    if (IS_REMOTE_APP) {
+      // 镜像端重排无本地语义:委托 Host 重排,几何广播回来自然跟随。
+      window.shellApi.relayoutRemoteTiles().catch((err) => {
+        console.log("[remote] relayout-tiles failed:", err?.message ?? err);
+      });
+      return;
+    }
+    relayoutTerminalTiles();
+  });
 
   // -- Loading --
 
@@ -1907,18 +1951,22 @@ async function init() {
 
   panelManager.applyVisibility();
 
-  // Auto-relayout terminals on app open — same as clicking the relayout button
-  const relayoutPositions = computeTerminalLayout();
-  if (relayoutPositions.length > 0) {
-    for (const [id, x, y] of relayoutPositions) {
-      const tile = getTile(id);
-      if (!tile) continue;
-      tile.x = x;
-      tile.y = y;
+  // Auto-relayout terminals on app open — same as clicking the relayout button.
+  // 镜像(Client)端跳过:布局以 Host 为权威(经 remote-state 全量同步),
+  // 本地重排会覆盖镜像布局造成分叉。
+  if (!IS_REMOTE_APP) {
+    const relayoutPositions = computeTerminalLayout();
+    if (relayoutPositions.length > 0) {
+      for (const [id, x, y] of relayoutPositions) {
+        const tile = getTile(id);
+        if (!tile) continue;
+        tile.x = x;
+        tile.y = y;
+      }
+      tileManager.repositionAllTiles();
+      tileManager.saveCanvasImmediate();
+      minimap.update();
     }
-    tileManager.repositionAllTiles();
-    tileManager.saveCanvasImmediate();
-    minimap.update();
   }
 }
 

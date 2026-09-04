@@ -48,6 +48,7 @@ export function createCanvasRpc({
   viewport,
   edgeIndicators,
   notifications,
+  relayoutTerminalTiles,
 }) {
   function respond(requestId, result) {
     window.shellApi.canvasRpcResponse({ requestId, result });
@@ -287,6 +288,30 @@ export function createCanvasRpc({
           // Set focus on the first tile (like keyboard shortcuts do)
           tileManager.focusCanvasTile(focusTiles[0].id, null);
           edgeIndicators.panToTiles(focusTiles);
+          result = {};
+          break;
+        }
+        case "refreshTile": {
+          // Client Cmd+R 对称委托落点：与 Host 本地 Cmd+R 一致 ——
+          // 刷新会话 + 终端重排(几何经上报广播回 Client) + 聚焦(镜像回 Client)。
+          const tile = requireTile(requestId, params.tileId);
+          if (!tile) return;
+          if (tile.type !== "term") {
+            respondError(requestId, 4, "Tile is not a terminal");
+            return;
+          }
+          tileManager.refreshTerminalTile(tile.id);
+          relayoutTerminalTiles?.();
+          tileManager.focusCanvasTile(tile.id);
+          result = {};
+          break;
+        }
+        case "relayoutTiles": {
+          if (typeof relayoutTerminalTiles !== "function") {
+            respondError(requestId, -32601, "relayout not available");
+            return;
+          }
+          relayoutTerminalTiles();
           result = {};
           break;
         }

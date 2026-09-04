@@ -65,6 +65,15 @@ contextBridge.exposeInMainWorld("shellApi", {
   // Client 端聚焦(tile 点击/Cmd+方向键)→ Host 镜像跟随
   focusRemoteTile: (tileId: string): Promise<unknown> =>
     ipcRenderer.invoke("canvas:focus-tile", tileId),
+  // Host 本地聚焦 → 主进程 sink 镜像给控制端 Client（仅 full 版有效）
+  reportTileFocus: (tileId: string): Promise<unknown> =>
+    ipcRenderer.invoke("canvas:focus-local", tileId),
+  // Client Cmd+R 对称委托 → Host 执行 refresh+relayout+focus（仅 remote 版有效）
+  refreshRemoteTile: (tileId: string): Promise<unknown> =>
+    ipcRenderer.invoke("canvas:refresh-tile", tileId),
+  // Client relayout 按钮对称委托 → Host 重排并广播几何（仅 remote 版有效）
+  relayoutRemoteTiles: (): Promise<unknown> =>
+    ipcRenderer.invoke("canvas:relayout-tiles"),
   // Host 配对码自动换新（热生效/立即刷新），仅 full 版主进程有处理器
   hostApplyPairRefresh: (): Promise<unknown> =>
     ipcRenderer.invoke("remote:host-apply-refresh"),

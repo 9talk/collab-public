@@ -378,6 +378,40 @@ export function createTileManager({
     }
   }
 
+  /**
+   * 对端(Host)聚焦的镜像应用：bringToFront + focus ring + webview 键盘焦点，
+   * 不经 focusCanvasTile —— 不触发 onTileFocused/navigationPush/pan，避免把
+   * 镜像聚焦当本地聚焦回推（回声环）。pan 对齐由调用方（镜像端）决定。
+   * @param {string} id
+   */
+  function applyRemoteTileFocus(id) {
+    const tile = getTile(id);
+    if (tile) {
+      bringToFront(tile);
+      repositionAllTiles();
+    }
+    const dom = tileDOMs.get(id);
+    if (dom) {
+      if (focusedTileId && focusedTileId !== id) {
+        blurCanvasTileGuest(focusedTileId);
+      }
+      focusedTileId = id;
+      clearTileFocusRing();
+      dom.container.classList.add("tile-focused");
+      if (dom.webview) {
+        try {
+          dom.webview.focus();
+        } catch {
+          /* not attached yet */
+        }
+      }
+      onNoteSurfaceFocus("canvas-tile");
+    }
+    if (tile?.type === "term") {
+      trackTerminalFocus(id);
+    }
+  }
+
   // -- Webview spawning --
 
   /**
@@ -433,9 +467,19 @@ export function createTileManager({
     wv.style.width = "100%";
     wv.style.height = "100%";
     wv.style.border = "none";
-    // Hide until the terminal has fitted to its container size, so the
-    // first visible frame is already correctly sized (no visual jump).
+    // Hide until the terminal has rendered its first frame, so the first
+    // visible frame already shows the replayed scrollback (no visual jump).
     wv.style.visibility = "hidden";
+    // 显示条件:guest 首帧渲染完成(term:ready)或兜底超时,避免恢复场景
+    // 的"空白 → 内容跳变"过渡帧(聚焦切换表现为内容放大再缩小)。
+    let revealed = false;
+    let revealTimer = 0;
+    const reveal = () => {
+      if (revealed) return;
+      revealed = true;
+      if (revealTimer) clearTimeout(revealTimer);
+      wv.style.visibility = "";
+    };
 
     dom.contentArea.appendChild(wv);
     dom.webview = wv;
@@ -453,12 +497,9 @@ export function createTileManager({
         dom.container.classList.add("tile-focused");
         onNoteSurfaceFocus("canvas-tile");
       }
-      // Double-rAF to let xterm FitAddon finish sizing before revealing
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          wv.style.visibility = "";
-        });
-      });
+      // 显示时机交由 guest 的 term:ready(首帧渲染完成)信号,5s 兜底防信号丢失
+      if (revealTimer) clearTimeout(revealTimer);
+      revealTimer = setTimeout(reveal, 5000);
       wv.addEventListener("before-input-event", (event) => {
         if (
           event.input.type === "keyDown" &&
@@ -513,6 +554,10 @@ export function createTileManager({
       if (event.channel === "term:refreshed") {
         clearRefreshMask(tileDOMs.get(tile.id), tile);
         focusCanvasTile(tile.id);
+      }
+      if (event.channel === "term:ready") {
+        // guest 首帧渲染完成 → 解除隐藏显示
+        reveal();
       }
       if (event.channel === "term:user-input") {
         const sessionId = event.args[0];
@@ -869,6 +914,7 @@ export function createTileManager({
     closeCanvasTile,
     clearCanvasKeepSessions,
     focusCanvasTile,
+    applyRemoteTileFocus,
     blurCanvasTileGuest,
     clearTileFocusRing,
     repositionAllTiles,

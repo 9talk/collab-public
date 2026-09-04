@@ -30,6 +30,14 @@ export function setTileGeometrySink(
   tileGeometrySink = fn;
 }
 
+// Host 本地聚焦上报 sink：Host shell 聚焦变化 → 主进程 → 镜像给控制端
+// Client（视觉跟随，不回推）。由 remote-server attachHooks 注入。
+let tileFocusSink: ((tileId: string) => void) | null = null;
+
+export function setTileFocusSink(fn: ((tileId: string) => void) | null): void {
+  tileFocusSink = fn;
+}
+
 export function registerCanvasHandlers(ctx: IpcContext): void {
   let pendingDragPaths: string[] = [];
 
@@ -73,6 +81,26 @@ export function registerCanvasHandlers(ctx: IpcContext): void {
     return true;
   });
 
+  // Host 本地聚焦 → 镜像给控制端 Client。Client(remote)端此 handler 为
+  // no-op(sink 未注入),不会被当作本地动作转发。
+  bindIpc("canvas:focus-local", "handle", (_event, tileId) => {
+    console.log(`[canvas] focus-local ${String(tileId)}`);
+    tileFocusSink?.(String(tileId));
+    return true;
+  });
+
+  // Client Cmd+R / relayout 按钮对称委托 → Host rpc 执行 refresh+relayout+
+  // focus(落点 canvas-rpc refreshTile / relayoutTiles)。Host 本地不 invoke,
+  // 占位注册仅为 remote 模式激活时 ipc-registry 整体转发所需。
+  bindIpc("canvas:refresh-tile", "handle", (_event, tileId) => {
+    console.log(`[canvas] refresh-tile ${String(tileId)}`);
+    return true;
+  });
+  bindIpc("canvas:relayout-tiles", "handle", () => {
+    console.log("[canvas] relayout-tiles");
+    return true;
+  });
+
   // Canvas pinch forwarding
   ipcMain.on("canvas:forward-pinch", (_event, deltaY: number) => {
     ctx.mainWindow()?.webContents.send("canvas:pinch", deltaY);
@@ -103,6 +131,8 @@ export function registerCanvasHandlers(ctx: IpcContext): void {
     "canvas:get-state-for-save",
     "canvas:update-tile-geometry",
     "canvas:focus-tile",
+    "canvas:refresh-tile",
+    "canvas:relayout-tiles",
   ]) {
     markForward(channel);
   }
