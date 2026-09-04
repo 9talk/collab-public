@@ -32,10 +32,14 @@ const fileFilterRef: { current: FileFilter | null } = {
   current: null,
 };
 
+export type RemoteEventOrigin = "host" | "client";
+
 export interface RemoteEventMirrorEvent {
   target: string;
   channel: string;
   args: unknown[];
+  /** 事件源进程:host=被控端本地操作/生命周期;client=控制端经 rpc 引发的广播 */
+  origin: RemoteEventOrigin;
 }
 
 // Mirrors every forwardToWebview call to the remote-control module (host
@@ -53,8 +57,21 @@ function forwardToWebview(
   channel: string,
   ...args: unknown[]
 ): void {
+  forwardToWebviewOrigin("host", target, channel, ...args);
+}
+
+/**
+ * 带事件源标注的广播:remote rpc 处理器内使用(rpc 由控制端发起,
+ * origin="client");控制端据此丢弃自身操作的回声帧(防回环)。
+ */
+export function forwardToWebviewOrigin(
+  origin: RemoteEventOrigin,
+  target: string,
+  channel: string,
+  ...args: unknown[]
+): void {
   mainWindow?.webContents.send("shell:forward", target, channel, ...args);
-  remoteEventMirror?.({ target, channel, args });
+  remoteEventMirror?.({ target, channel, args, origin });
 }
 
 export { forwardToWebview };

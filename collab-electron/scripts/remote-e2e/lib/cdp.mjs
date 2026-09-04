@@ -1,8 +1,6 @@
 import WebSocket from "ws";
 import { execFileSync } from "node:child_process";
 
-const SCRIPT_ORIGIN = "https://localhost";
-
 /**
  * 查找 Chromium 调试目标的 websocket URL（electron-vite --remoteDebuggingPort）。
  * target 过滤：url 或 title 包含关键字的 page/webview（terminal-tile 等子窗口是 webview 类型）。
@@ -23,7 +21,9 @@ export function cdpTarget(port, keyword) {
 }
 
 async function cdpConnect(wsUrl) {
-  const ws = new WebSocket(wsUrl, { origin: SCRIPT_ORIGIN });
+  // 注意:不传 Origin 头(带任何跨源 Origin 都会被 Electron/Chromium 的
+  // remote-debugging 服务以 403 拒绝;无 Origin 视为非浏览器客户端放行)。
+  const ws = new WebSocket(wsUrl);
   await new Promise((resolve, reject) => {
     ws.on("open", resolve);
     ws.on("error", reject);
@@ -277,6 +277,90 @@ export async function cdpDragTileBy(port, dx, dy, index = 0) {
   }
   // 等 snap + onUpdate + commit 上报落定
   await new Promise((r) => setTimeout(r, 600));
+}
+
+/**
+ * 真实鼠标单击第 index 个 tile 的标题栏中心(mousedown/mouseup 完整路径,
+ * 经 attachDrag onFocus → focusCanvasTile 聚焦)。起点 clamp 与拖拽一致。
+ */
+export async function cdpClickTile(port, index = 0) {
+  const wsUrl = await cdpWaitTarget(port, "/shell/", 15_000);
+  if (!wsUrl) throw new Error(`CDP 未找到 shell (port=${port})`);
+  const pt = await cdpEval(
+    wsUrl,
+    `(() => {
+      const el = document.querySelectorAll(".canvas-tile")[${index}]?.querySelector(".tile-title-bar");
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+      const cx = clamp(r.left + r.width / 2, r.left + 8, Math.min(r.right - 8, vw - 8));
+      const cy = clamp(r.top + r.height / 2, r.top + 8, Math.min(r.bottom - 8, vh - 8));
+      return { x: Math.round(cx), y: Math.round(cy) };
+    })()`,
+  );
+  if (!pt) throw new Error(`tile#${index} 标题栏不存在`);
+  const c = await cdpConnect(wsUrl);
+  try {
+    await c.send("Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      x: pt.x,
+      y: pt.y,
+      button: "left",
+      buttons: 1,
+      clickCount: 1,
+    });
+    await new Promise((r) => setTimeout(r, 30));
+    await c.send("Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      x: pt.x,
+      y: pt.y,
+      button: "left",
+      buttons: 0,
+      clickCount: 1,
+    });
+  } finally {
+    c.close();
+  }
+  await new Promise((r) => setTimeout(r, 400));
+}
+
+/**
+ * 真实键盘事件(CDP Input.dispatchKeyEvent,带 keyCode 走 Chromium 输入管线,
+ * 可驱动 Electron before-input-event 层快捷键)。
+ */
+export async function cdpKeyEvent(
+  port,
+  { key, code, keyCode, meta = false, ctrl = false },
+  holdMs = 120,
+) {
+  const wsUrl = await cdpWaitTarget(port, "/shell/", 15_000);
+  if (!wsUrl) throw new Error(`CDP 未找到 shell (port=${port})`);
+  const modifiers = (meta ? 4 : 0) | (ctrl ? 2 : 0);
+  const c = await cdpConnect(wsUrl);
+  try {
+    await c.send("Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key,
+      code,
+      windowsVirtualKeyCode: keyCode,
+      nativeVirtualKeyCode: keyCode,
+      modifiers,
+    });
+    await new Promise((r) => setTimeout(r, holdMs));
+    await c.send("Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key,
+      code,
+      windowsVirtualKeyCode: keyCode,
+      nativeVirtualKeyCode: keyCode,
+      modifiers,
+    });
+  } finally {
+    c.close();
+  }
+  await new Promise((r) => setTimeout(r, 300));
 }
 
 /** 在 shell 页面执行 JS（带超时等待 target），返回 JSON 值。 */

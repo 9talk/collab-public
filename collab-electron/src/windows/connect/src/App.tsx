@@ -106,7 +106,8 @@ export default function App() {
     return api.onRemoteStatus(applyStatus);
   }, []);
 
-  const t = STRINGS[locale];
+  const t = (key: keyof (typeof STRINGS)["en"]): string =>
+    STRINGS[locale][key] ?? key;
   const connecting = status?.state === "connecting";
 
   async function handleConnect() {

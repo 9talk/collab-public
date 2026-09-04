@@ -62,6 +62,9 @@ contextBridge.exposeInMainWorld("shellApi", {
     ipcRenderer.invoke("remote:client-disconnect"),
   updateTileGeometry: (payload: unknown): Promise<unknown> =>
     ipcRenderer.invoke("canvas:update-tile-geometry", payload),
+  // Client 端聚焦(tile 点击/Cmd+方向键)→ Host 镜像跟随
+  focusRemoteTile: (tileId: string): Promise<unknown> =>
+    ipcRenderer.invoke("canvas:focus-tile", tileId),
   // Host 配对码自动换新（热生效/立即刷新），仅 full 版主进程有处理器
   hostApplyPairRefresh: (): Promise<unknown> =>
     ipcRenderer.invoke("remote:host-apply-refresh"),

@@ -33,6 +33,10 @@ import { updateTileTitle, getTileLabel } from "./tile-renderer.js";
 
 const CANVAS_DBLCLICK_SUPPRESS_MS = 500;
 const IS_WINDOWS = window.shellApi.getPlatform() === "win32";
+// 模块顶层尽早声明:initialize 流程中途有 await,连接同步等事件可能在
+// IS_REMOTE_APP 初始化前到达并触发 onSave 等回调(TDZ ReferenceError)。
+const APP_FLAVOR = window.shellApi.getAppFlavor();
+const IS_REMOTE_APP = APP_FLAVOR === "remote";
 
 const viewportState = { panX: 0, panY: 0, zoom: 1 };
 
@@ -531,11 +535,17 @@ async function init() {
       minimapRef?.update();
     },
     onSaveDebounced(state) {
-      window.shellApi.canvasSaveState(toCenterPointState(state));
+      // 镜像(Client)端不落盘:画布以 Host 为持久化权威,保存会经转发
+      // rpc 把本地(可能重复/分叉的)状态写进 Host 磁盘。
+      if (!IS_REMOTE_APP) {
+        window.shellApi.canvasSaveState(toCenterPointState(state));
+      }
       syncTileList();
     },
     onSaveImmediate(state) {
-      window.shellApi.canvasSaveState(toCenterPointState(state));
+      if (!IS_REMOTE_APP) {
+        window.shellApi.canvasSaveState(toCenterPointState(state));
+      }
       syncTileList();
     },
     onNoteSurfaceFocus: noteSurfaceFocus,
@@ -569,6 +579,11 @@ async function init() {
     onTileFocused(tile) {
       tileListWebview?.send("tile-list:focus", tile?.id || null);
       if (tile) notifications.dismissByTileId(tile.id);
+      // Client(镜像 shell)端聚焦 → Host 端镜像 tile 跟随聚焦/置顶/pan。
+      // Host(full)本地聚焦不上报,避免 A→B 镜像回环。
+      if (IS_REMOTE_APP && tile) {
+        window.shellApi.focusRemoteTile(tile.id);
+      }
     },
     onTileUserInput(tileId) {
       notifications.dismissByTileId(tileId);
@@ -1327,7 +1342,22 @@ async function init() {
         // B 端自身也会收到该事件（forwardToWebview 的 mirror），按 tileId 幂等忽略。
         const payload = args[0];
         if (!payload?.tileId || !payload?.sessionId) return;
-        if (tileManager.getTile(payload.tileId)) return;
+        const existing = tileManager.getTile(payload.tileId);
+        if (existing) {
+          // 同 tileId 的 session 重建（死 session 自愈/镜像重连）→ 同步指向，
+          // 不能直接丢弃：镜像端若不跟随，下次 spawn 会去连已不存在的
+          // 旧 session，触发又一次重建造成孤儿 session 与双端分裂。
+          if (existing.ptySessionId !== payload.sessionId) {
+            existing.ptySessionId = payload.sessionId;
+            if (payload.cwd) existing.cwd = payload.cwd;
+            if (payload.displayName) existing.autoTitle = payload.displayName;
+            tileManager.saveCanvasImmediate();
+            console.log(
+              `[remote] pty-opened 同 tile 更新 session 指向 ${existing.id} -> ${payload.sessionId}`,
+            );
+          }
+          return;
+        }
         const layout = payload.layout;
         const tile = tileManager.createCanvasTile(
           "term",
@@ -1586,9 +1616,6 @@ async function init() {
   });
 
   // -- Remote control button + status badge --
-
-  const APP_FLAVOR = window.shellApi.getAppFlavor();
-  const IS_REMOTE_APP = APP_FLAVOR === "remote";
 
   const remoteBtn = document.getElementById("remote-btn");
   const remoteIndicator = document.getElementById("remote-indicator");
@@ -1981,6 +2008,9 @@ async function init() {
 }
 
 async function checkFirstLaunchDialog() {
+  // canvas-skill 安装弹窗是 Host 本地功能(依赖 Host 的 integrations rpc),
+  // 镜像(Client)端跳过,避免无 handler 的 rpc 报错。
+  if (IS_REMOTE_APP) return;
   const offered = await window.shellApi.hasOfferedPlugin();
   if (offered) return;
 

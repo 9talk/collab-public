@@ -66,6 +66,13 @@ export function registerCanvasHandlers(ctx: IpcContext): void {
     return true;
   });
 
+  // Client 端聚焦 → Host 镜像跟随。full(full) 本地无镜像视图可跟,仅占位
+  // 注册以保证 remote 模式激活时 ipc-registry 能整体转发为 Host rpc。
+  bindIpc("canvas:focus-tile", "handle", (_event, tileId) => {
+    console.log(`[canvas] focus-tile ${String(tileId)}`);
+    return true;
+  });
+
   // Canvas pinch forwarding
   ipcMain.on("canvas:forward-pinch", (_event, deltaY: number) => {
     ctx.mainWindow()?.webContents.send("canvas:pinch", deltaY);
@@ -89,11 +96,13 @@ export function registerCanvasHandlers(ctx: IpcContext): void {
   });
 
   // ---- remote forwarding whitelist ----
+  // 注:canvas:save-state 不转发——镜像(Client)端保存 no-op(renderer 已
+  // gate),画布持久化以 Host 为唯一权威;转发会把 Client 本地状态写坏 Host 盘。
   for (const channel of [
     "canvas:load-state",
-    "canvas:save-state",
     "canvas:get-state-for-save",
     "canvas:update-tile-geometry",
+    "canvas:focus-tile",
   ]) {
     markForward(channel);
   }

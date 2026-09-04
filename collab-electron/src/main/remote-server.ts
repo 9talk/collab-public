@@ -33,7 +33,12 @@ import {
 import { setTileGeometrySink, type TileGeometryPayload } from "./ipc-canvas";
 import { randomUUID } from "node:crypto";
 import { setRemotePtyConsumers } from "./pty";
-import { forwardToWebview, setRemoteEventMirror } from "./ipc";
+import {
+  forwardToWebview,
+  forwardToWebviewOrigin,
+  setRemoteEventMirror,
+  type RemoteEventOrigin,
+} from "./ipc";
 import {
   getWsConfig,
   readTreeRecursive,
@@ -223,9 +228,13 @@ export function getRemoteHostStatus(): RemoteHostStatus {
   return status();
 }
 
-function pushEvent(channel: string, args: unknown[]): void {
+function pushEvent(
+  channel: string,
+  args: unknown[],
+  origin: RemoteEventOrigin = "host",
+): void {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  ws.send(JSON.stringify({ v: 1, type: "event", channel, args }));
+  ws.send(JSON.stringify({ v: 1, type: "event", channel, args, origin }));
 }
 
 function pushPtyData(sessionId: string, data: string): void {
@@ -478,9 +487,10 @@ function registerRemoteMethods(config: AppConfig): MethodTable {
       p?.tileId,
     );
     // 通知 A 端 shell 创建镜像 tile（B 端新建的终端在 A 端同屏显示）。
-    // 经 forwardToWebview 同步镜像到 B 端，B 端按 tileId 幂等忽略。
+    // 广播标注 origin=client：B 端据 origin 丢弃自身回声(本地已建 tile)，
+    // 不再依赖 tileId 幂等去重；A 端本地分发照常建镜像。
     if (result?.sessionId) {
-      forwardToWebview("shell", "remote:pty-opened", {
+      forwardToWebviewOrigin("client", "shell", "remote:pty-opened", {
         tileId: p?.tileId,
         sessionId: result.sessionId,
         cwd: result.cwdHostPath ?? p?.cwd,
@@ -589,6 +599,20 @@ function registerRemoteMethods(config: AppConfig): MethodTable {
       requestId: randomUUID(),
       method: "tileSetGeometry",
       params: p,
+    });
+  });
+  // Client 端聚焦(tile 点击/Cmd+方向键)→ Host 镜像跟随。落点 tileFocus
+  // 与本地快捷键一致:聚焦 + bringToFront + pan 到可视区。
+  t.register("canvas:focus-tile", (params) => {
+    const [tileId] = params as [string | undefined];
+    if (typeof tileId !== "string") {
+      throw new Error("tileId required");
+    }
+    console.log(`[remote] rpc canvas:focus-tile ${tileId}`);
+    return forwardCanvasRpcRequest({
+      requestId: randomUUID(),
+      method: "tileFocus",
+      params: { tileIds: [tileId] },
     });
   });
 
@@ -720,7 +744,7 @@ function attachHooks(): void {
   setRemoteEventMirror((ev) => {
     // settings 面板属于本地 UI（远程 pane 的状态卡），不外推给控制端
     if (ev.target === "settings") return;
-    pushEvent("shell:forward", [ev.target, ev.channel, ...ev.args]);
+    pushEvent("shell:forward", [ev.target, ev.channel, ...ev.args], ev.origin);
   });
   setCanvasRpcResponseMirror((response) => {
     pushEvent("canvas:rpc-response", [response]);

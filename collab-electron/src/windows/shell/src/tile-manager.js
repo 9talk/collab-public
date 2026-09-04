@@ -786,6 +786,10 @@ export function createTileManager({
   // -- Canvas state restore --
 
   function restoreCanvasState(savedTiles) {
+    // 幂等:任何一次恢复都是全量替换语义——先清掉现有 tile(含 DOM,
+    // 不 kill PTY session),再重放。连接同步可能触发多次 remote-state
+    // 重放,不清空会让同 id tile 重复叠加(曾致镜像端画布膨胀错乱)。
+    clearCanvasKeepSessions();
     for (const saved of savedTiles) {
       let cx = saved.x;
       let cy = saved.y;

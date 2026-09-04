@@ -142,7 +142,14 @@ function sendToOwner(
   wc.send(channel, ...args);
 }
 
-function handleRemoteEvent(channel: string, args: unknown[]): void {
+function handleRemoteEvent(
+  channel: string,
+  args: unknown[],
+  origin: "host" | "client" = "host",
+): void {
+  // 自身 rpc 引发的广播回声(origin=client,如经 host 执行的 pty:create 再
+  // 广播回来的 remote:pty-opened):本地发起时已就地处理,直接丢弃防回环。
+  if (origin === "client") return;
   if (channel === "shell:forward") {
     const [target, evChannel, ...evArgs] = args as [
       string,
@@ -275,6 +282,7 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
       handleRemoteEvent(
         frame.channel as string,
         (frame.args as unknown[] | undefined) ?? [],
+        frame.origin as "host" | "client" | undefined,
       );
       break;
     }

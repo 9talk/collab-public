@@ -30,7 +30,12 @@ import {
   type TerminalTarget,
 } from "./config";
 import { menuLabels } from "./menu-labels";
-import { registerIpcHandlers, setMainWindow, rebuildFileFilter } from "./ipc";
+import {
+  registerIpcHandlers,
+  setMainWindow,
+  rebuildFileFilter,
+  forwardToWebview,
+} from "./ipc";
 import { registerCanvasRpc } from "./canvas-rpc";
 import {
   registerIntegrationsIpc,
@@ -806,7 +811,7 @@ ipcMain.handle("theme:set", (_event, mode: string) => {
 bindIpc(
   "pty:create",
   "handle",
-  (
+  async (
     event,
     params?: {
       cwd?: string;
@@ -814,16 +819,32 @@ bindIpc(
       rows?: number;
       tileId?: string;
       target?: TerminalTarget;
+      layout?: { x: number; y: number; width: number; height: number };
     },
-  ) =>
-    pty.createSession(
+  ) => {
+    const result = await pty.createSession(
       params?.cwd,
       event.sender.id,
       params?.cols,
       params?.rows,
       params?.target,
       params?.tileId,
-    ),
+    );
+    // Host 本地新建终端(tile webview 发起,带 tileId)→ 镜像给控制端
+    // (与远端 rpc 版 pty:create 的 remote:pty-opened 广播一致;本地 Host
+    // shell 幂等跳过已建 tile,经 origin=host 帧控制端建镜像)。
+    if (result?.sessionId && params?.tileId) {
+      forwardToWebview("shell", "remote:pty-opened", {
+        tileId: params.tileId,
+        sessionId: result.sessionId,
+        cwd: result.cwdHostPath ?? params.cwd,
+        layout: params.layout,
+        displayName: result.displayName,
+        shell: result.shell,
+      });
+    }
+    return result;
+  },
 );
 
 function handlePtyWrite(sessionId: string, data: string): void {

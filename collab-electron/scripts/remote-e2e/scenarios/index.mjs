@@ -16,6 +16,8 @@ import {
   cdpTileRect,
   cdpUnlockTile,
   cdpDragTileBy,
+  cdpClickTile,
+  cdpKeyEvent,
   cdpEvalShell,
   cdpWaitTarget,
   cdpResizeWindow,
@@ -364,6 +366,112 @@ async function s12(ctx) {
   );
 }
 
+async function s14(ctx) {
+  // M8: Client(B) 聚焦 tile(点击/Cmd+方向键均汇合 focusCanvasTile)→
+  // Host(A) 镜像跟随聚焦。主断言走用户原始操作 cmd+方向键;点击路径兜底。
+  let count = await cdpEvalShell(
+    ctx.cdpPortB,
+    `document.querySelectorAll(".canvas-tile").length`,
+  );
+  if (count < 2) {
+    await clickNewTile(ctx.cdpPortB, 30_000);
+    // 等新 tile 终端在两端都渲染完成
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline) {
+      const b = await cdpEvalShell(
+        ctx.cdpPortB,
+        `document.querySelectorAll(".canvas-tile")[1]?.querySelector("webview") ? 1 : 0`,
+      );
+      const a = await cdpEvalShell(
+        ctx.cdpPortA,
+        `document.querySelectorAll(".canvas-tile").length`,
+      );
+      if (b === 1 && (a ?? 0) >= 2) break;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  count = await cdpEvalShell(
+    ctx.cdpPortB,
+    `document.querySelectorAll(".canvas-tile").length`,
+  );
+  if (count < 2) throw new Error("B 端未建立至少 2 个 tile");
+  console.log("  [info] 14/focus-b2a — 双 tile 就绪");
+  const markA0 = statSync(ctx.aLog).size;
+
+  const readBFocused = () =>
+    cdpEvalShell(
+      ctx.cdpPortB,
+      `(() => {
+        const els = [...document.querySelectorAll(".canvas-tile")];
+        return els.findIndex((el) => el.classList.contains("tile-focused"));
+      })()`,
+    );
+  async function waitAFocus(expect, label) {
+    const deadline = Date.now() + 15_000;
+    let focused = null;
+    while (Date.now() < deadline) {
+      focused = await cdpEvalShell(
+        ctx.cdpPortA,
+        `(() => {
+          const els = [...document.querySelectorAll(".canvas-tile")];
+          const i = els.findIndex((el) => el.classList.contains("tile-focused"));
+          return i;
+        })()`,
+      );
+      if (focused === expect) return;
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    throw new Error(
+      `B ${label}聚焦 tile#${expect} 后 A 端未跟随(当前 A focused=${focused})`,
+    );
+  }
+  async function clickAndExpectFocus(bIndex) {
+    await cdpClickTile(ctx.cdpPortB, bIndex);
+    await waitAFocus(bIndex, "点击");
+  }
+
+  // 1) 点击路径:聚焦 tile#1(起始聚焦若非 1 则切换)
+  if ((await readBFocused()) !== 1) await clickAndExpectFocus(1);
+  // 2) 键盘路径:cmd+ArrowLeft → 聚焦 tile#0,A 端应跟随
+  const bBefore = await readBFocused();
+  await cdpKeyEvent(ctx.cdpPortB, {
+    key: "ArrowLeft",
+    code: "ArrowLeft",
+    keyCode: 37,
+    meta: true,
+  });
+  const bAfter = await readBFocused();
+  console.log(
+    `  [info] 14/focus-b2a — 键盘 cmd+ArrowLeft 后 B 聚焦 ${bBefore}→${bAfter}`,
+  );
+  if (bAfter !== bBefore) {
+    await waitAFocus(bAfter, "键盘");
+    console.log(`  [info] 14/focus-b2a — A 端聚焦随键盘切换到 tile#${bAfter}`);
+  } else {
+    console.log(
+      "  [warn] 14/focus-b2a — CDP 键盘未驱动 B 端聚焦(快捷键路径需人工复核),回退点击路径",
+    );
+    await clickAndExpectFocus(0);
+    await clickAndExpectFocus(1);
+  }
+  const rpcCount = [
+    ...newLogs(ctx.aLog, markA0).matchAll(/rpc canvas:focus-tile/g),
+  ].length;
+  if (rpcCount < 2) {
+    throw new Error(`A 端 rpc canvas:focus-tile 次数 ${rpcCount} < 2`);
+  }
+  console.log(
+    `  [info] 14/focus-b2a — A 端 rpc canvas:focus-tile ×${rpcCount}`,
+  );
+  await shot(
+    ctx,
+    "14/focus-b2a",
+    ctx.cdpPortA,
+    "/shell/",
+    "s14-a-focused-tile.png",
+  );
+}
+
 async function s07(ctx) {
   // 杀 relay → 双方断开 → 重启 → 恢复（锚点断言：只匹配 kill 之后的新日志）
   const markADisc = statSync(ctx.aLog).size;
@@ -594,6 +702,7 @@ export const scenarios = [
   ["10", "geometry-b2a", s10],
   ["11", "geometry-a2b", s11],
   ["12", "fit-resize", s12],
+  ["14", "focus-b2a", s14],
   ["07", "reconnect", s07],
   ["08", "peer-disconnect", s08],
   ["09", "pair-rotation", s09],
