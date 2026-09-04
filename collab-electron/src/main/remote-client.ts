@@ -176,6 +176,17 @@ function handleRemoteEvent(
     sendToOwner(payload.sessionId, "pty:status-changed", payload);
     return;
   }
+  if (channel === "pty:resized") {
+    // Host 端权威 resize 落定 → 拥有该会话的镜像终端实时跟随。
+    // owner 未 attach(镜像 tile 尚未拉起)时丢弃,镜像端定时对账兜底。
+    const payload = args[0] as {
+      sessionId: string;
+      cols: number;
+      rows: number;
+    };
+    sendToOwner(payload.sessionId, "pty:resized", payload);
+    return;
+  }
   if (channel === "canvas:rpc-response") {
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) {
@@ -321,16 +332,10 @@ export async function resyncMirror(): Promise<void> {
     } catch {
       // 主题同步失败不阻断画布同步，重连时会再对齐
     }
-    const [state, winInfo] = await Promise.all([
-      rpcInvoke("canvas:get-state-for-save", []),
-      rpcInvoke("window-info", []).catch(() => null),
-    ]);
+    const state = await rpcInvoke("canvas:get-state-for-save", []);
     if (state != null) {
-      // hostWindow 为 Client 端等比缩放适配的输入（Host 主窗口尺寸），
-      // 不可用时（旧 Host 无 window-info rpc）照常重放画布但不做适配
       forwardToWebview("shell", "canvas:remote-state", {
         canvasState: state,
-        hostWindow: winInfo,
       });
     }
     // 会话列表缓存（B 端 shell 拉起 terminal tile 时会据此 reconnect）

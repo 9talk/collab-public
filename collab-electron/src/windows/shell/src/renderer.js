@@ -21,7 +21,6 @@ import { attachMarquee } from "./tile-interactions.js";
 import { initDarkMode, applyCanvasOpacity } from "./dark-mode.js";
 import { createWebview, isFocusSearchShortcut } from "./webview-factory.js";
 import { createViewport } from "./canvas-viewport.js";
-import { computeFitZoom } from "./fit-zoom.js";
 import { createEdgeIndicators } from "./edge-indicators.js";
 import { createMinimap } from "./canvas-minimap.js";
 import { createPanel } from "./panel-manager.js";
@@ -39,15 +38,6 @@ const APP_FLAVOR = window.shellApi.getAppFlavor();
 const IS_REMOTE_APP = APP_FLAVOR === "remote";
 
 const viewportState = { panX: 0, panY: 0, zoom: 1 };
-
-// 适配视图模式（remote 镜像）：fitActive 时窗口 resize 自动重算等比 zoom；
-// 用户手动 zoom/pan 即退出，指示器菜单可重新进入。
-let fitActive = false;
-let fitHost = null; // { w, h, centerX, centerY, hostZoom }
-
-function viewportManualChanged() {
-  if (fitActive) fitActive = false;
-}
 
 const canvasEl = document.getElementById("panel-viewer");
 const gridCanvas = document.getElementById("grid-canvas");
@@ -113,12 +103,7 @@ window.shellApi.onPrefChanged((key, value) => {
 
 // -- Viewport --
 
-const viewport = createViewport(
-  canvasEl,
-  gridCanvas,
-  tiles,
-  viewportManualChanged,
-);
+const viewport = createViewport(canvasEl, gridCanvas, tiles);
 
 /** Convert in-memory panX/panY state to a center-point for persistence. */
 function toCenterPointState(state) {
@@ -1290,41 +1275,15 @@ async function init() {
       if (channel === "canvas:remote-state") {
         // Remote mode (client side): replay the host's canvas snapshot。
         // 全量对齐：先清空本地 tile（不 kill A 端 session），再重放 ——
-        // A 端是 B 端的持久化权威。载荷含 hostWindow 时进入适配视图
-        // （Client 本地等比缩放，Host 显示不受影响）。
+        // A 端是 B 端的持久化权威。applyCanvasState 直接应用 Host 视口
+        // center/zoom，Client 端 1:1 镜像，不做本地适配缩放。
         const payload = args[0];
         const canvasState =
           payload && typeof payload === "object" && payload.canvasState
             ? payload.canvasState
             : payload;
-        const hostWindow =
-          payload && typeof payload === "object" ? payload.hostWindow : null;
         tileManager.clearCanvasKeepSessions();
-        void applyCanvasState(canvasState).then(() => {
-          if (
-            IS_REMOTE_APP &&
-            hostWindow &&
-            hostWindow.width &&
-            hostWindow.height
-          ) {
-            const vp = canvasState?.viewport ?? {};
-            const centerX =
-              vp.centerX != null ? vp.centerX : canvasEl.clientWidth / 2;
-            const centerY =
-              vp.centerY != null ? vp.centerY : canvasEl.clientHeight / 2;
-            fitHost = {
-              w: hostWindow.width,
-              h: hostWindow.height,
-              centerX,
-              centerY,
-              hostZoom: vp.zoom ?? 1,
-            };
-            fitActive = true;
-            const fitMenuBtn = document.getElementById("remote-menu-fit");
-            if (fitMenuBtn) fitMenuBtn.disabled = false;
-            applyFitNow();
-          }
-        });
+        void applyCanvasState(canvasState);
         return;
       }
       if (channel === "remote:tile-geometry") {
@@ -1355,6 +1314,9 @@ async function init() {
             console.log(
               `[remote] pty-opened 同 tile 更新 session 指向 ${existing.id} -> ${payload.sessionId}`,
             );
+            // 旧 webview 的 URL 携带过期 sessionId,仍连旧会话(或镜像端
+            // 自建的错误会话):重建 webview 指向新会话
+            tileManager.respawnTerminalWebview(payload.tileId);
           }
           return;
         }
@@ -1625,7 +1587,6 @@ async function init() {
   const remoteMenuDisconnect = document.getElementById(
     "remote-menu-disconnect",
   );
-  const remoteMenuFit = document.getElementById("remote-menu-fit");
 
   const REMOTE_STRINGS = {
     en: {
@@ -1636,7 +1597,6 @@ async function init() {
         "The pairing code is no longer valid. Return to the connect screen to pair again.",
       back: "Back to Connect",
       disconnect: "Disconnect",
-      resetFit: "Reset Fit View",
     },
     zh: {
       disconnectedTitle: "连接已断开",
@@ -1645,7 +1605,6 @@ async function init() {
       authSub: "配对码已过期，返回连接页重新配对即可。",
       back: "返回连接页",
       disconnect: "断开连接",
-      resetFit: "重置为适配视图",
     },
   };
   let remoteStrings = REMOTE_STRINGS.en;
@@ -1698,43 +1657,6 @@ async function init() {
   });
 
   remoteMenuDisconnect.textContent = remoteStrings.disconnect;
-  remoteMenuFit.textContent = remoteStrings.resetFit;
-  if (!fitHost) remoteMenuFit.disabled = true;
-
-  // 适配视图计算(Client 本地):等比缩放使 Host 画布完整填充本端视口,
-  // 中心沿用 Host 视口中心。仅本地视图变换,不回写 Host。
-  function applyFitNow() {
-    if (!fitHost) return;
-    const w = canvasEl.clientWidth;
-    const h = canvasEl.clientHeight;
-    if (!w || !h) return;
-    const fit = computeFitZoom({
-      hostW: fitHost.w,
-      hostH: fitHost.h,
-      hostZoom: fitHost.hostZoom,
-      clientW: w,
-      clientH: h,
-    });
-    if (!fit) return;
-    viewportState.zoom = fit.zoom;
-    viewportState.panX = w / 2 - fitHost.centerX * fit.zoom;
-    viewportState.panY = h / 2 - fitHost.centerY * fit.zoom;
-    viewport.updateCanvas();
-    minimap.update();
-  }
-
-  // 适配模式下窗口尺寸变化(防抖 200ms)自动重算保持完整展示
-  if (IS_REMOTE_APP) {
-    let fitResizeTimer = null;
-    new ResizeObserver(() => {
-      if (!fitActive) return;
-      clearTimeout(fitResizeTimer);
-      fitResizeTimer = setTimeout(() => {
-        fitResizeTimer = null;
-        if (fitActive) applyFitNow();
-      }, 200);
-    }).observe(canvasEl);
-  }
 
   function positionRemoteMenu() {
     const rect = remoteBtn.getBoundingClientRect();
@@ -1773,13 +1695,6 @@ async function init() {
   remoteMenuDisconnect.addEventListener("click", () => {
     remoteMenu.classList.add("hidden");
     window.shellApi.disconnectRemoteClient?.();
-  });
-
-  remoteMenuFit.addEventListener("click", () => {
-    remoteMenu.classList.add("hidden");
-    if (!fitHost) return;
-    fitActive = true;
-    applyFitNow();
   });
 
   function renderRemoteBadge(status) {

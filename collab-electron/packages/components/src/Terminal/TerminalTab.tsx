@@ -78,6 +78,12 @@ interface TerminalTabProps {
   visible: boolean;
   restored?: boolean;
   scrollbackData?: string | null;
+  /**
+   * 镜像端(Remote Client)渲染模式:PTY winsize 由 Host 端决定,本端
+   * xterm 以会话 winsize 为网格基准、字符尺寸自适应容器铺满,且不再
+   * 把本地 fit 的尺寸回写会话(避免 winsize 随镜像端视口漂移)。
+   */
+  mirror?: boolean;
 }
 
 function TerminalTab({
@@ -85,7 +91,14 @@ function TerminalTab({
   visible,
   restored,
   scrollbackData,
+  mirror = false,
 }: TerminalTabProps) {
+  const mirrorRef = useRef(mirror);
+  mirrorRef.current = mirror;
+  // Host 端 PTY winsize 的唯一 settle 回写通道(300ms 去抖,只写最终值);
+  // 由挂载 effect 定义,尺寸对账 effect(挂载补推/3s reconcile)复用同一
+  // 通道,确保任何路径都不把动画中间尺寸/估值直写进 PTY。
+  const pushResizeRef = useRef<(() => void) | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -811,9 +824,28 @@ function TerminalTab({
     };
     window.api.onPtyData(sessionId, handleData);
 
-    term.onResize(({ cols, rows }) => {
-      window.api.ptyResize(sessionId, cols, rows);
+    // PTY 回写收敛化:onResize 在动画/连续变化中逐帧触发,若每帧都 push,
+    // PTY winsize 会承载整段"收敛过程"(中间值),镜像对账采样到哪个中间值
+    // 就渲染哪个 —— 看起来来回跳。settle 300ms:连续变化停止后才把最终值
+    // 一次写入 PTY(动画中 PTY 保持稳定,镜像不跳;动画结束一次到位)。
+    // 回调时取实时网格:settle 窗口内的任何变化都以最后状态为准,挂载补推
+    // 等调用方无需预知最终值。
+    let resizePushTimer: ReturnType<typeof setTimeout> | null = null;
+    const pushResizeSettled = () => {
+      if (resizePushTimer) clearTimeout(resizePushTimer);
+      resizePushTimer = window.setTimeout(() => {
+        resizePushTimer = null;
+        const t = termRef.current;
+        if (!t) return;
+        window.api.ptyResize(sessionId, t.cols, t.rows).catch(() => {});
+      }, 300);
+    };
+    term.onResize(() => {
+      // 镜像端不回写会话尺寸:PTY winsize 以 Host 端为权威
+      if (mirrorRef.current) return;
+      pushResizeSettled();
     });
+    pushResizeRef.current = pushResizeSettled;
 
     const handleCopy = (event: ClipboardEvent) => {
       const selection = term.getSelection();
@@ -927,6 +959,11 @@ function TerminalTab({
     mediaQuery.addEventListener("change", onThemeChange);
 
     return () => {
+      if (resizePushTimer) {
+        clearTimeout(resizePushTimer);
+        resizePushTimer = null;
+      }
+      pushResizeRef.current = null;
       if (flushTimerRef.current !== undefined) {
         clearTimeout(flushTimerRef.current);
         flushData();
@@ -989,6 +1026,126 @@ function TerminalTab({
     });
     return unsub;
   }, [sessionId]);
+
+  // 尺寸对账与镜像渲染跟随:
+  //  - 镜像端网格固定为会话权威 winsize、字符尺寸自适应容器;Host 端
+  //    settle 回写后经 pty:resized 事件直达最终值,本地容器变化(RO)只按
+  //    最近一次权威 winsize 重算字符尺寸,不再 discover 采样 host 端动画/
+  //    抖动的瞬态尺寸(来回跳的采样根源)。
+  //  - Host 端唯一写者 = settle 回写(pushResizeRef);挂载补推与 3s
+  //    reconcile 复用同一通道,PTY winsize 不再出现估值/中间值直写。
+  useEffect(() => {
+    const container = containerRef.current;
+    const term = termRef.current;
+    if (!container || !term) return;
+
+    // 镜像端最近一次得知的会话权威 winsize(事件/poll/discover 写入)。
+    let winsize: { cols: number; rows: number } | null = null;
+
+    const applyMirrorWinsize = (cols: number, rows: number) => {
+      if (cols <= 0 || rows <= 0) return;
+      winsize = { cols, rows };
+      const base = 12;
+      const charW = 0.5833 * base; // Menlo@12 实测 ≈ 7.0px(与 App.tsx CHAR_WIDTH 一致)
+      const lineH = 1.1667 * base; // 实测 ≈ 14px,旧值 17 会把镜像缩放算小导致留白
+      const cw = container.clientWidth;
+      const ch = container.clientHeight;
+      if (cw <= 0 || ch <= 0) return;
+      const scale = Math.min(cw / (cols * charW), ch / (rows * lineH), 3);
+      // fs 向下取整到 0.5:向上取整会让行高 × rows 超出容器(如 50 行时
+      // 11.84→12,672px > 663px),最后一行被裁掉,镜像画面底部残缺
+      const fs = Math.min(48, Math.max(6, Math.floor(base * scale * 2) / 2));
+      if (term.options.fontSize !== fs) term.options.fontSize = fs;
+      if (term.cols !== cols || term.rows !== rows) term.resize(cols, rows);
+    };
+
+    let offResized: (() => void) | null = null;
+
+    if (mirror) {
+      // Host 端 settle resize 后的事件直达:只应用最终值,不采样瞬态
+      offResized = window.api.onPtyResized(sessionId, (payload) => {
+        applyMirrorWinsize(payload.cols, payload.rows);
+      });
+
+      // 挂载首帧尚无事件缓存 → discover 会话现行 winsize 初始化网格
+      window.api
+        .ptyDiscover()
+        .then(
+          (
+            list: {
+              sessionId: string;
+              cols?: number;
+              rows?: number;
+            }[],
+          ) => {
+            const s = list.find((e) => e.sessionId === sessionId);
+            if (s?.cols && s?.rows) applyMirrorWinsize(s.cols, s.rows);
+          },
+        )
+        .catch(() => {});
+    } else {
+      // 挂载后补推一次 settle:覆盖 fit 未触发 onResize(尺寸未变)但 PTY
+      // 与网格不符(恢复/估算残留)的场景;动画中会被后续 onResize 顺延。
+      pushResizeRef.current?.();
+    }
+
+    // 定时对账(双端 fallback):事件链丢失时兜底自愈
+    let winsyncTimer: ReturnType<typeof setInterval> | undefined;
+    winsyncTimer = window.setInterval(() => {
+      window.api
+        .ptyDiscover()
+        .then((list) => {
+          const s = list.find((e) => e.sessionId === sessionId);
+          if (!s?.cols || !s?.rows) return;
+          if (mirrorRef.current) {
+            if (s.cols !== term.cols || s.rows !== term.rows) {
+              applyMirrorWinsize(s.cols, s.rows);
+            }
+          } else if (s.cols !== term.cols || s.rows !== term.rows) {
+            pushResizeRef.current?.();
+          }
+        })
+        .catch(() => {});
+    }, 3000);
+
+    let raf = 0;
+    let winSyncTimer = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const t = termRef.current;
+        if (!t) return;
+        if (mirrorRef.current) {
+          clearTimeout(winSyncTimer);
+          winSyncTimer = window.setTimeout(() => {
+            if (winsize) {
+              // 用缓存权威值重算字符尺寸(网格不变时仅 fontSize 适配)
+              applyMirrorWinsize(winsize.cols, winsize.rows);
+            } else {
+              // 尚无任何权威尺寸(事件/poll 未到),回退 discover
+              window.api
+                .ptyDiscover()
+                .then((list) => {
+                  const s = list.find((e) => e.sessionId === sessionId);
+                  if (s?.cols && s?.rows) applyMirrorWinsize(s.cols, s.rows);
+                })
+                .catch(() => {});
+            }
+          }, 200);
+        } else {
+          fitRef.current?.fit();
+        }
+      });
+    });
+    ro.observe(container);
+    return () => {
+      offResized?.();
+      cancelAnimationFrame(raf);
+      clearTimeout(winSyncTimer);
+      if (winsyncTimer) clearInterval(winsyncTimer);
+      ro.disconnect();
+    };
+  }, [sessionId, mirror]);
 
   return (
     <div

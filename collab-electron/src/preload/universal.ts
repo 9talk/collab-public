@@ -16,10 +16,16 @@ type PtyExitCallback = (payload: {
   sessionId: string;
   exitCode: number;
 }) => void;
+type PtyResizedCallback = (payload: {
+  sessionId: string;
+  cols: number;
+  rows: number;
+}) => void;
 type CdToCallback = (path: string) => void;
 
 const dataListeners = new Map<string, Set<PtyDataCallback>>();
 const exitListeners = new Map<string, Set<PtyExitCallback>>();
+const resizedListeners = new Map<string, Set<PtyResizedCallback>>();
 type RunInTerminalCb = (command: string) => void;
 
 const MAX_BUFFERED_PTY_EVENTS = 32;
@@ -95,6 +101,12 @@ ipcRenderer.on("pty:exit", (_event, payload) => {
     bufferedPtyExit.set(payload.sessionId, payload);
   }
   for (const cb of exitListeners.get(payload.sessionId) ?? []) cb(payload);
+});
+
+// Host 端 settle resize 后的权威 winsize 直达(镜像端据此实时跟随,不再
+// 依赖轮询采样瞬态)。不缓冲:丢失由镜像端定时对账兜底。
+ipcRenderer.on("pty:resized", (_event, payload) => {
+  for (const cb of resizedListeners.get(payload.sessionId) ?? []) cb(payload);
 });
 
 ipcRenderer.on("cd-to", (_event, path: string) => {
@@ -317,6 +329,12 @@ contextBridge.exposeInMainWorld("api", {
   },
   offPtyExit: (sessionId: string, cb: PtyExitCallback) => {
     removeListener(exitListeners, sessionId, cb);
+  },
+  onPtyResized: (sessionId: string, cb: PtyResizedCallback) => {
+    getOrCreateListenerSet(resizedListeners, sessionId).add(cb);
+  },
+  offPtyResized: (sessionId: string, cb: PtyResizedCallback) => {
+    removeListener(resizedListeners, sessionId, cb);
   },
   notifyPtySessionId: (sessionId: string) =>
     ipcRenderer.sendToHost("pty-session-id", sessionId),

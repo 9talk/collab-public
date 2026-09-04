@@ -3,6 +3,9 @@
 # By default builds & installs BOTH flavors:
 #   Collaborator.app        (full — Host)
 #   Collaborator Remote.app (standalone Client)
+# The script first QUITS any running instances (otherwise the replaced apps
+# keep running old code and hold single-instance locks / debug ports), then
+# builds, replaces and re-launches both apps. No need to quit manually.
 # Usage:
 #   ./scripts/install-local.sh                         # auto-detect arch, removes old apps, cleans dists
 #   ./scripts/install-local.sh --keep                  # keeps old apps and dists
@@ -46,6 +49,31 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 BUILD_TIME="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 echo "Build time: $BUILD_TIME"
+
+# Step 0: 真实退出运行中的双应用。替换 app 包后仍在运行的旧进程会继续用
+# 旧代码(新版本无法生效),并持有单实例锁/调试端口 —— 必须先真正退出。
+# 优雅 quit 后等待数秒,未退出的强杀兜底。
+echo "Quitting running apps (Collaborator + Collaborator Remote)..."
+for APP_NAME in "Collaborator Remote" "Collaborator"; do
+  osascript -e "tell application \"${APP_NAME}\" to quit" >/dev/null 2>&1 || true
+done
+for _ in 1 2 3 4 5 6; do
+  if ! pgrep -f "/Applications/Collaborator" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+if pgrep -f "/Applications/Collaborator" >/dev/null 2>&1; then
+  echo "  Graceful quit timed out, force killing remaining processes..."
+  pkill -9 -f "/Applications/Collaborator.app/Contents/MacOS" 2>/dev/null || true
+  pkill -9 -f "/Applications/Collaborator Remote.app/Contents/MacOS" 2>/dev/null || true
+  sleep 1
+fi
+if pgrep -f "/Applications/Collaborator" >/dev/null 2>&1; then
+  echo "WARN: Some processes could not be killed; they may keep old code alive." >&2
+else
+  echo "  All app instances quit."
+fi
 
 # Step 1: Clean build artifacts to avoid stale files
 echo "Cleaning build artifacts..."

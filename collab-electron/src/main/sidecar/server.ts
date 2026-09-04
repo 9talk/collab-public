@@ -50,6 +50,15 @@ interface Session {
   hasAttachedClient: boolean;
   /** When non-null, PTY output is queued here instead of sent to client. */
   reconnectQueue: Array<string | Buffer> | null;
+  /**
+   * 进行中的重绘抖动(scheduleRepaintNudge)。非空期间:rows 可能处于
+   * +1 瞬态(抖动窗口),handleList 出口应返回 baseRows 让读取方稳定;
+   * 窗口内再次 attach 直接复用(单飞),不再叠加抖动。
+   */
+  nudge: {
+    baseRows: number;
+    until: number;
+  } | null;
   exited: boolean;
   terminating: boolean;
 }
@@ -417,6 +426,7 @@ export class SidecarServer {
         socketPath,
         hasAttachedClient: false,
         reconnectQueue: null,
+        nudge: null,
         exited: false,
         terminating: false,
       },
@@ -529,8 +539,11 @@ export class SidecarServer {
     // Start queuing PTY output
     session.reconnectQueue = [];
 
-    // Resize to match new client
-    session.pty.resize(params.cols, params.rows);
+    // 注意:刻意不按调用方 cols/rows resize PTY —— 会话 winsize 的唯一
+    // 权威写者是 Host 端 xterm fit 的 settle 回写(300ms 去抖,只写最终
+    // 值)。reconnect 携带的尺寸只是调用方对现行 winsize 的观测/估算,
+    // 按它 resize 会让镜像端把本地视口估值写进会话,顶小权威 winsize,
+    // 是历史上来回跳变与排版错乱的根源之一。
 
     // Close old data client if present
     if (session.dataClient && !session.dataClient.destroyed) {
@@ -564,26 +577,51 @@ export class SidecarServer {
    * 差分式整屏 TUI（ink/ncurses 等按自身模型只重写变更区）缺整帧基态时
    * 画面无法收敛。±1 行 resize 抖动产生 SIGWINCH，强制此类程序整帧重绘，
    * 使各 attach 方画面与输出流确定性一致（普通 shell 仅重绘提示行，无副作用）。
+   *
+   * 单飞合并：程序只需重绘一次即可让所有 attach 方收敛 —— 镜像端连续
+   * 挂载多个 tile 会在几百 ms 内多次 attach 同一会话，若每次各抖一次，
+   * 交错 +1 会停在中间行数（还原条件被彼此破坏），且多次瞬态会被镜像
+   * 对账采样成可见的网格跳变。窗口内重复调用直接复用，以首次为准。
+   *
+   * 基值在首次抖动时取自实时 PTY（reconnect 前 xterm fit 可能已把 PTY
+   * 收敛到真实视口，不能按闭包旧值还原，否则把刚收敛的 winsize 顶回
+   * 旧值而 Host 端无事件再修正）。还原容忍 +1/+2 残余（极端交叠残留）
+   * 一律归回基值。
    */
   private scheduleRepaintNudge(session: Session): void {
-    const { cols, rows } = session.pty;
-    const nudgeTo = (targetRows: number): void => {
-      if (
-        session.exited ||
-        session.terminating ||
-        !session.dataClient ||
-        session.dataClient.destroyed
-      ) {
-        return;
-      }
+    const dead = (): boolean =>
+      session.exited ||
+      session.terminating ||
+      !session.dataClient ||
+      session.dataClient.destroyed;
+    if (session.nudge && session.nudge.until > Date.now()) {
+      return; // 窗口内已有抖动在排,单飞合并
+    }
+    const baseRows = session.pty.rows;
+    session.nudge = { baseRows, until: Date.now() + 600 };
+    setTimeout(() => {
+      if (dead()) return;
+      const { cols, rows } = session.pty;
+      // 若外部(如 fit push)已把 rows 改到 base+1 以外,跳过 +1 防止叠加
+      if (rows !== baseRows) return;
       try {
-        session.pty.resize(cols, targetRows);
+        session.pty.resize(cols, rows + 1);
       } catch {
         // PTY already dead
       }
-    };
-    setTimeout(() => nudgeTo(rows + 1), 120);
-    setTimeout(() => nudgeTo(rows), 400);
+    }, 120);
+    setTimeout(() => {
+      if (dead()) return;
+      const { cols, rows } = session.pty;
+      if (rows > baseRows) {
+        try {
+          session.pty.resize(cols, baseRows);
+        } catch {
+          // PTY already dead
+        }
+      }
+      if (session.nudge?.baseRows === baseRows) session.nudge = null;
+    }, 400);
   }
 
   private handleKill(
@@ -610,6 +648,13 @@ export class SidecarServer {
             cwdHostPath: s.cwdHostPath,
             pid: s.pty.pid,
             createdAt: s.createdAt,
+            cols: s.pty.cols,
+            // nudge 窗口内 rows 处于 +1 瞬态:对读取方(镜像 3s 对账、
+            // 恢复回连)返回基值,避免把几百 ms 的抖动采样成可见跳变
+            rows:
+              s.nudge && s.nudge.until > Date.now()
+                ? s.nudge.baseRows
+                : s.pty.rows,
           },
           {
             cwdGuestPath: s.cwdGuestPath,

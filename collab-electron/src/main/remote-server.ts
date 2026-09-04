@@ -237,6 +237,24 @@ function pushEvent(
   ws.send(JSON.stringify({ v: 1, type: "event", channel, args, origin }));
 }
 
+/**
+ * Host 本地新建终端(tile webview 经 pty:create 创建,带 tileId)→ 广播给
+ * 控制端(origin=host):B 端 shell 据此把画布 tile 的 ptySessionId 指向新
+ * 会话并重建镜像 webview。画布恢复期 Host 端 fallback 重建会话(旧 session
+ * 已随上次退出消亡)全靠这一广播让 B 端镜像追平,否则 B 端持有过期指向,
+ * 镜像 tile 永远连不上(或错误走镜像侧自建会话)。
+ */
+export function broadcastRemotePtyOpened(payload: {
+  tileId: string;
+  sessionId: string;
+  cwd?: string;
+  layout?: unknown;
+  displayName?: string;
+  shell?: string;
+}): void {
+  pushEvent("remote:pty-opened", [payload], "host");
+}
+
 function pushPtyData(sessionId: string, data: string): void {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   ws.send(encodePtyBinary(sessionId, Buffer.from(data, "utf-8")));
@@ -740,6 +758,7 @@ function attachHooks(): void {
     onData: (sessionId, data) => pushPtyData(sessionId, data),
     onExit: (payload) => pushEvent("pty:exit", [payload]),
     onStatusChanged: (payload) => pushEvent("pty:status-changed", [payload]),
+    onResized: (payload) => pushEvent("pty:resized", [payload]),
   });
   setRemoteEventMirror((ev) => {
     // settings 面板属于本地 UI（远程 pane 的状态卡），不外推给控制端

@@ -28,10 +28,8 @@ export function gridBufferSizeMismatch(gridCanvas, clientW, clientH, dpr) {
   );
 }
 
-export function createViewport(canvasEl, gridCanvas, tilesRef, onManualView) {
+export function createViewport(canvasEl, gridCanvas, tilesRef) {
   const gridCtx = gridCanvas.getContext("2d");
-  const notifyManualView =
-    typeof onManualView === "function" ? onManualView : () => {};
   let state = null;
   let onUpdate = null;
   let zoomSnapTimer = null;

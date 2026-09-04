@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { TerminalTab } from "@collab/components/Terminal";
 
+// Remote Client 应用里的 terminal webview 都是 Host 会话的镜像视图:
+// 以会话 winsize 渲染(见 TerminalTab mirror prop),不参与会话尺寸仲裁。
+const IS_MIRROR = window.api.getAppFlavor() === "remote";
+
+const CHAR_WIDTH = 7.0; // 实测 xterm cell 宽(Menlo 12px on macOS,与 TerminalTab 渲染一致)
+const CELL_HEIGHT = 14; // 实测 xterm cell 高;旧值 17 使初始 winsize 行数比视口少约 7 行,全屏程序下方留白
+
 /** Approximate terminal dimensions from the viewport before xterm mounts. */
 function estimateTermSize(): { cols: number; rows: number } {
-  const CHAR_WIDTH = 7.22; // Menlo 12px on macOS
-  const CELL_HEIGHT = 17; // xterm line height at fontSize 12
   const w = document.documentElement.clientWidth;
   const h = document.documentElement.clientHeight;
   return {
@@ -50,7 +55,14 @@ function App() {
     }
 
     const createFreshSession = (target?: string, nextCwd?: string) => {
-      const est = estimateTermSize();
+      // 优先按 tile 目标布局尺寸估算(挂载前的 webview 是未布局的窗口
+      // 尺寸,会让初始 winsize 偏大,全屏程序随后错位)。
+      const est = layout
+        ? {
+            cols: Math.max(80, Math.floor(layout.width / CHAR_WIDTH)),
+            rows: Math.max(24, Math.floor(layout.height / CELL_HEIGHT)),
+          }
+        : estimateTermSize();
       window.api
         .ptyCreate(nextCwd ?? cwd, est.cols, est.rows, target, tileId, layout)
         .then((result) => {
@@ -69,13 +81,19 @@ function App() {
       window.api
         .ptyDiscover()
         .then((sessions) => {
-          const found = sessions.some(
-            (session) => session.sessionId === existingSessionId,
+          const session = sessions.find(
+            (s) => s.sessionId === existingSessionId,
           );
-          if (!found) {
+          if (!session) {
             throw new Error("Missing restored session");
           }
-          return window.api.ptyReconnect(existingSessionId, cols, rows);
+          // 镜像端必须以会话现行 winsize 回连:sidecar reconnect 会按传入
+          // 尺寸 resize PTY,若传本地视口尺寸(通常比 Host 小)会把权威
+          // winsize 改小,全屏程序(如 Claude Code)按缩小后的行数排布,
+          // 渲染在更大的可视区里下方留白。
+          const rcCols = IS_MIRROR && session.cols ? session.cols : cols;
+          const rcRows = IS_MIRROR && session.rows ? session.rows : rows;
+          return window.api.ptyReconnect(existingSessionId, rcCols, rcRows);
         })
         .then((result) => {
           if (result.scrollback) {
@@ -84,6 +102,41 @@ function App() {
           setSessionId(existingSessionId);
         })
         .catch(async () => {
+          if (IS_MIRROR) {
+            // 镜像端绝不在 Host 侧自建会话:reconnect 失败 = Host 端会话
+            // 尚未就绪(画布恢复中/会话重建中)。镜像 tile 存在的前提是
+            // Host 画布有它——Host 端 fallback 重建后会广播 pty-opened,
+            // B 端 shell 据此更新镜像 tile 指向并重建 webview;本循环仅
+            // 在旧指向仍有效期间轮询等待会话就位(webview 销毁自然停止)。
+            const retry = () => {
+              window.api
+                .ptyDiscover()
+                .then((sessions) => {
+                  const session = sessions.find(
+                    (s: { sessionId: string }) =>
+                      s.sessionId === existingSessionId,
+                  );
+                  if (!session) {
+                    setTimeout(retry, 2000);
+                    return;
+                  }
+                  const rcCols = session.cols ?? cols;
+                  const rcRows = session.rows ?? rows;
+                  window.api
+                    .ptyReconnect(existingSessionId, rcCols, rcRows)
+                    .then((result) => {
+                      if (result.scrollback) {
+                        setScrollbackData(result.scrollback);
+                      }
+                      setSessionId(existingSessionId);
+                    })
+                    .catch(() => setTimeout(retry, 2000));
+                })
+                .catch(() => setTimeout(retry, 2000));
+            };
+            retry();
+            return;
+          }
           setRestored(false);
           // Recover the original working directory from session
           // metadata so the fallback session opens in the right place.
@@ -91,7 +144,7 @@ function App() {
           let fallbackTarget: string | undefined;
           if (existingSessionId) {
             try {
-              const meta = await window.api.ptyReadMeta(existingSessionId);
+              const meta = window.api.ptyReadMeta(existingSessionId);
               if (!fallbackCwd && meta?.cwd) fallbackCwd = meta.cwd;
               if (meta?.target) fallbackTarget = meta.target;
             } catch {
@@ -193,6 +246,7 @@ function App() {
       visible={true}
       restored={restored}
       scrollbackData={scrollbackData}
+      mirror={IS_MIRROR}
     />
   );
 }

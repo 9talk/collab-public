@@ -8,8 +8,9 @@ import { getAppFlavor } from "./app-flavor";
 // would share the Host app's userData — and its single-instance lock (the
 // Remote quits instantly while the Host is running). Relocate Remote's
 // userData to its own directory before any consumer below (single-instance
-// lock in index.ts, COLLAB_DIR) reads it. Dev already keeps per-worktree
-// userData (index.ts), so it is left untouched here.
+// lock in index.ts, session storage) reads it. COLLAB_DIR itself does NOT
+// live under userData: packaged Remote uses ~/.collab_remote (REMOTE_BASE).
+// Dev already keeps per-worktree userData (index.ts), so it is untouched.
 function relocateRemoteUserData(): void {
   try {
     const { app } = require("electron") as typeof import("electron");
@@ -28,6 +29,8 @@ function relocateRemoteUserData(): void {
 relocateRemoteUserData();
 
 const BASE = join(homedir(), ".collab");
+// Packaged Remote(Client 版)数据目录与 full 版 ~/.collab 同层对称。
+const REMOTE_BASE = join(homedir(), ".collab_remote");
 
 function normalizeWindowsPath(path: string): string {
   if (process.platform !== "win32") return path;
@@ -56,19 +59,6 @@ export const DEV_WORKTREE_ID = import.meta.env?.DEV
   ? `worktree-${getDevWorktreeId()}`
   : null;
 
-function remoteUserDataCollabDir(): string {
-  // packaged remote: userData 已被上面 relocateRemoteUserData() 重定位到
-  // <Application Support>/Collaborator Remote,与 full 版彻底隔离。
-  try {
-    const { app } = require("electron") as typeof import("electron");
-    return join(app.getPath("userData"), "collab");
-  } catch {
-    // Non-electron child processes never reach here: their COLLAB_DIR is
-    // pinned by the COLLAB_DIR env override the parent injects on spawn.
-    return join(BASE, "remote");
-  }
-}
-
 // COLLAB_DIR env override keeps child processes (pty-sidecar) on the exact
 // same directory as the parent main process regardless of flavor resolution.
 export const COLLAB_DIR = process.env.COLLAB_DIR
@@ -80,5 +70,5 @@ export const COLLAB_DIR = process.env.COLLAB_DIR
         `${DEV_WORKTREE_ID ?? "worktree-unknown"}${getAppFlavor() === "remote" ? "-remote" : ""}`,
       )
     : getAppFlavor() === "remote"
-      ? remoteUserDataCollabDir()
+      ? REMOTE_BASE
       : BASE;

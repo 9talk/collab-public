@@ -86,6 +86,7 @@ import {
   testRemoteHostConnection,
   applyPairRefreshSchedule,
   refreshPairNow,
+  broadcastRemotePtyOpened,
 } from "./remote-server";
 import {
   startRemoteClient,
@@ -582,8 +583,13 @@ function createWindow(): void {
   setMainWindow(mainWindow);
   registerCanvasRpc(mainWindow);
 
-  mainWindow.webContents.once("did-finish-load", () => {
+  // 每次导航(含开发期 WebView reload)都关闭 loading overlay;
+  // done 信号丢失会让遮罩永驻。
+  mainWindow.webContents.on("did-finish-load", () => {
     sendLoadingDone();
+  });
+
+  mainWindow.webContents.once("did-finish-load", () => {
     if (isRemoteFlavor()) {
       // 镜像 shell 就绪后再全量同步,兜底首连时 connect 阶段丢掉的 canvas 状态
       void resyncMirror();
@@ -835,6 +841,16 @@ bindIpc(
     // shell 幂等跳过已建 tile,经 origin=host 帧控制端建镜像)。
     if (result?.sessionId && params?.tileId) {
       forwardToWebview("shell", "remote:pty-opened", {
+        tileId: params.tileId,
+        sessionId: result.sessionId,
+        cwd: result.cwdHostPath ?? params.cwd,
+        layout: params.layout,
+        displayName: result.displayName,
+        shell: result.shell,
+      });
+      // 经 relay 广播给已连接的控制端(origin=host),B 端据此更新镜像
+      // tile 的会话指向(画布恢复期会话重建时 B 端镜像全靠它追平)。
+      broadcastRemotePtyOpened({
         tileId: params.tileId,
         sessionId: result.sessionId,
         cwd: result.cwdHostPath ?? params.cwd,

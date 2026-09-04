@@ -99,6 +99,7 @@ export interface SessionCreateResult {
 // session.reconnect params/result
 export interface SessionReconnectParams {
   sessionId: string;
+  /** 兼容保留:sidecar 已忽略(会话 winsize 仅由 host 端 settle resize 写)。 */
   cols: number;
   rows: number;
 }
@@ -119,6 +120,9 @@ export interface SessionInfo {
   cwdGuestPath?: string;
   pid: number;
   createdAt: string;
+  /** 会话当前 winsize(镜像端据此以会话尺寸渲染,避免与视口错位) */
+  cols: number;
+  rows: number;
 }
 
 // sidecar.ping result

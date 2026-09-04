@@ -107,6 +107,12 @@ export interface PtyRemoteConsumers {
   onData: (sessionId: string, data: string) => void;
   onExit: (payload: { sessionId: string; exitCode: number }) => void;
   onStatusChanged: (payload: { sessionId: string; foreground: string }) => void;
+  /** Host 端权威 resize 落定(settle 回写)→ 推给镜像端实时跟随。 */
+  onResized: (payload: {
+    sessionId: string;
+    cols: number;
+    rows: number;
+  }) => void;
 }
 
 let remotePtyConsumers: PtyRemoteConsumers | null = null;
@@ -796,6 +802,10 @@ export async function resizeSession(
     await ensureSidecar();
     const client = getSidecarClient();
     await client.resizeSession(sessionId, cols, rows);
+    // Host 端权威 resize 落定 → 通知镜像端(remote-server 注册的 consumer
+    // 经 relay 推 pty:resized)。所有 resize 请求(本地 IPC / 远端 rpc)都
+    // 汇聚到此处,是唯一事件源;nudge 抖动在 sidecar 内部,不经此路径。
+    remotePtyConsumers?.onResized({ sessionId, cols, rows });
   } catch {
     // Restored renderer tabs can emit an initial resize before the
     // sidecar client is connected, or after the session is already gone.
@@ -884,6 +894,8 @@ export async function shutdownSidecarIfIdle(): Promise<void> {
 export interface DiscoveredSession {
   sessionId: string;
   meta: SessionMeta;
+  cols?: number;
+  rows?: number;
 }
 
 export async function discoverSessions(): Promise<DiscoveredSession[]> {
@@ -896,6 +908,8 @@ export async function discoverSessions(): Promise<DiscoveredSession[]> {
     result.push(
       ...list.map((s) => ({
         sessionId: s.sessionId,
+        cols: s.cols,
+        rows: s.rows,
         meta: withOptionalFields(
           {
             shell: s.shell,

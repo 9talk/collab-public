@@ -380,6 +380,26 @@ export function createTileManager({
 
   // -- Webview spawning --
 
+  /**
+   * 确保 tile 的 webview 指向 tile.ptySessionId 当前值。webview URL 在
+   * spawn 时携带当时的 sessionId,会话指向被更新(如远程 pty-opened 广播
+   * 指向新会话)后旧 webview 仍连旧会话,需销毁重建。幂等:已指向目标
+   * 会话则原样返回。
+   */
+  function respawnTerminalWebview(tileId) {
+    const dom = tileDOMs.get(tileId);
+    const tile = getTile(tileId);
+    if (!dom || !tile || tile.type !== "term") return;
+    if (dom.webview) {
+      const src = dom.webview.src || "";
+      const sid = new URLSearchParams(src.split("?")[1] ?? "").get("sessionId");
+      if (sid === tile.ptySessionId) return;
+      dom.contentArea.removeChild(dom.webview);
+      dom.webview = null;
+    }
+    spawnTerminalWebview(tile);
+  }
+
   function spawnTerminalWebview(tile, autoFocus = false) {
     const dom = tileDOMs.get(tile.id);
     if (!dom) return;
@@ -854,6 +874,7 @@ export function createTileManager({
     repositionAllTiles,
     syncSelectionVisuals,
     spawnTerminalWebview,
+    respawnTerminalWebview,
     clearCanvas,
     getCanvasStateForSave,
     restoreCanvasState,

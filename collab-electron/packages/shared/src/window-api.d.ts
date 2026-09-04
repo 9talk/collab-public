@@ -78,6 +78,11 @@ interface TerminalTargetOption {
 
 type PtyDataCb = (payload: { sessionId: string; data: Uint8Array }) => void;
 type PtyExitCb = (payload: { sessionId: string; exitCode: number }) => void;
+type PtyResizedCb = (payload: {
+  sessionId: string;
+  cols: number;
+  rows: number;
+}) => void;
 type CdToCb = (path: string) => void;
 type RunInTerminalCb = (command: string) => void;
 
@@ -234,6 +239,8 @@ export interface CollabApi {
   offPtyData: (sessionId: string, cb: PtyDataCb) => void;
   onPtyExit: (sessionId: string, cb: PtyExitCb) => void;
   offPtyExit: (sessionId: string, cb: PtyExitCb) => void;
+  onPtyResized: (sessionId: string, cb: PtyResizedCb) => void;
+  offPtyResized: (sessionId: string, cb: PtyResizedCb) => void;
   onCdTo: (cb: CdToCb) => void;
   offCdTo: (cb: CdToCb) => void;
 
