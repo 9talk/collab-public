@@ -6,7 +6,7 @@ appId: com.collaborator.remote
 directories:
   output: dist-remote
 extraResources:
-  - from: build/flavor.remote.json
+  - from: resources/flavor.remote.json
     to: flavor.json
   - from: resources/terminfo
     to: terminfo
