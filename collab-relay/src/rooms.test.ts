@@ -6,81 +6,125 @@ function makeRooms(): Rooms {
   return new Rooms({ maxClients: 1 });
 }
 
-describe("createPairCode", () => {
-  test("缺省幂等：同一 deviceId 复用活码", () => {
-    const rooms = makeRooms();
-    const first = rooms.createPairCode("dev-1");
-    const second = rooms.createPairCode("dev-1");
-    expect(second.code).toBe(first.code);
-    expect(second.ttlSec).toBeLessThanOrEqual(first.ttlSec);
-  });
+function openWs(): WebSocket {
+  // ws 库把 OPEN=1 同时暴露在类与实例上,代码按 ws.readyState === ws.OPEN 判活
+  return { readyState: 1, OPEN: 1, send: () => {} } as WebSocket;
+}
 
-  test("缺省 TTL 为 10 分钟（ttlSec = 600）", () => {
+describe("joinHost", () => {
+  test("host 在线且房间空 → 配对成功,双向 peerOf", () => {
     const rooms = makeRooms();
-    const { code, ttlSec } = rooms.createPairCode("dev-1");
-    expect(code).toMatch(/^[2-9]{6}$/);
-    expect(ttlSec).toBe(600);
-  });
-
-  test("force: true 作废活码并换新", () => {
-    const rooms = makeRooms();
-    const first = rooms.createPairCode("dev-1");
-    const forced = rooms.createPairCode("dev-1", { force: true });
-    expect(forced.code).not.toBe(first.code);
-    expect(forced.ttlSec).toBe(600);
-  });
-
-  test("force: true 但无活码时正常发新码", () => {
-    const rooms = makeRooms();
-    const { code, ttlSec } = rooms.createPairCode("dev-1", { force: true });
-    expect(code).toMatch(/^[2-9]{6}$/);
-    expect(ttlSec).toBe(600);
-  });
-
-  test("ttlMinutes 生效（ttlSec = 分钟 × 60）", () => {
-    const rooms = makeRooms();
-    expect(rooms.createPairCode("dev-1", { ttlMinutes: 3 }).ttlSec).toBe(180);
-    expect(rooms.createPairCode("dev-2", { ttlMinutes: 60 }).ttlSec).toBe(3600);
-  });
-
-  test("ttlMinutes clamp 到 1~1440", () => {
-    const rooms = makeRooms();
-    expect(rooms.createPairCode("dev-1", { ttlMinutes: 0 }).ttlSec).toBe(60);
-    expect(rooms.createPairCode("dev-2", { ttlMinutes: -5 }).ttlSec).toBe(60);
-    expect(rooms.createPairCode("dev-3", { ttlMinutes: 2000 }).ttlSec).toBe(
-      1440 * 60,
-    );
-  });
-
-  test("force 后的新码按新 ttl 过期（join 拒绝过期码）", () => {
-    const rooms = makeRooms();
-    rooms.createPairCode("dev-1", { ttlMinutes: 1 });
-    const second = rooms.createPairCode("dev-1", {
-      force: true,
-      ttlMinutes: 1440,
+    const hostWs = openWs();
+    rooms.registerHost({ ws: hostWs, deviceId: "host1", role: "host" });
+    const clientWs = openWs();
+    const res = rooms.joinHost("host1", {
+      ws: clientWs,
+      deviceId: "c1",
+      role: "client",
     });
-    // 模拟时间推进越过旧码 TTL（force 已作废旧码，此处验证新码 TTL 独立）
-    expect(second.ttlSec).toBe(1440 * 60);
+    expect(res.ok).toBe(true);
+    if (!res.ok) throw new Error("unreachable");
+    expect(res.host.ws).toBe(hostWs);
+    expect(rooms.peerOf(clientWs)).toBe(hostWs);
+    expect(rooms.peerOf(hostWs)).toBe(clientWs);
   });
 
-  test("不同 deviceId 的活码互不复用", () => {
+  test("host 离线 → host-unavailable(暂态,客户端应重试)", () => {
     const rooms = makeRooms();
-    const a = rooms.createPairCode("dev-a");
-    const b = rooms.createPairCode("dev-b");
-    expect(b.code).not.toBe(a.code);
+    const res = rooms.joinHost("ghost", {
+      ws: openWs(),
+      deviceId: "c1",
+      role: "client",
+    });
+    expect(res.ok).toBe(false);
+    if (res.ok) throw new Error("unreachable");
+    expect(res.code).toBe("host-unavailable");
+  });
+
+  test("房间被占用 → in-use", () => {
+    const rooms = makeRooms();
+    const hostWs = openWs();
+    rooms.registerHost({ ws: hostWs, deviceId: "host1", role: "host" });
+    const first = rooms.joinHost("host1", {
+      ws: openWs(),
+      deviceId: "c1",
+      role: "client",
+    });
+    expect(first.ok).toBe(true);
+    const res = rooms.joinHost("host1", {
+      ws: openWs(),
+      deviceId: "c2",
+      role: "client",
+    });
+    expect(res.ok).toBe(false);
+    if (res.ok) throw new Error("unreachable");
+    expect(res.code).toBe("in-use");
+  });
+
+  test("client 断线后房间释放,新 client 可加入", () => {
+    const rooms = makeRooms();
+    const hostWs = openWs();
+    rooms.registerHost({ ws: hostWs, deviceId: "host1", role: "host" });
+    const clientWs = openWs();
+    rooms.joinHost("host1", { ws: clientWs, deviceId: "c1", role: "client" });
+    // 旧 client 断线 → host 收到 peer-disconnected,房间置空
+    const sent: string[] = [];
+    hostWs.send = (d) => {
+      sent.push(String(d));
+    };
+    rooms.drop(clientWs, "peer-close");
+    expect(sent).toContain(
+      JSON.stringify({ v: 1, type: "peer-disconnected", reason: "peer-close" }),
+    );
+    const res = rooms.joinHost("host1", {
+      ws: openWs(),
+      deviceId: "c2",
+      role: "client",
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  test("host 断线后 client 收到 peer-disconnected;host 重连 → 自动恢复配对", () => {
+    const rooms = makeRooms();
+    const hostWs = openWs();
+    rooms.registerHost({ ws: hostWs, deviceId: "host1", role: "host" });
+    const clientWs = openWs();
+    rooms.joinHost("host1", { ws: clientWs, deviceId: "c1", role: "client" });
+    const seen: string[] = [];
+    clientWs.send = (d) => {
+      seen.push(String(d));
+    };
+    rooms.drop(hostWs, "timeout");
+    expect(seen).toContain(
+      JSON.stringify({ v: 1, type: "peer-disconnected", reason: "timeout" }),
+    );
+    // host 重连:client 仍在等待 → registerHost 主动重配对
+    const host2 = openWs();
+    rooms.registerHost({ ws: host2, deviceId: "host1", role: "host" });
+    expect(rooms.peerOf(clientWs)).toBe(host2);
+    expect(rooms.peerOf(host2)).toBe(clientWs);
   });
 });
 
-describe("join", () => {
-  test("码有效但 host 未注册 → host-unavailable（暂态，客户端应重试）", () => {
+describe("snapshot/restore", () => {
+  test("房间占用状态跨重启保留(hasClient→null 占位)", () => {
     const rooms = makeRooms();
-    const { code } = rooms.createPairCode("dev-1");
-    const client = {
-      ws: null as unknown as WebSocket,
-      deviceId: "client-1",
+    const hostWs = openWs();
+    rooms.registerHost({ ws: hostWs, deviceId: "host1", role: "host" });
+    rooms.joinHost("host1", { ws: openWs(), deviceId: "c1", role: "client" });
+    const snap = rooms.snapshot();
+    expect(snap.rooms).toEqual([{ deviceId: "host1", hasClient: true }]);
+
+    const rooms2 = makeRooms();
+    rooms2.restore(snap);
+    // 房间保留占位(null):host 不在线时 client 拨号仍判 host-unavailable
+    const res = rooms2.joinHost("host1", {
+      ws: openWs(),
+      deviceId: "c2",
       role: "client",
-    } as const;
-    const res = rooms.join(code, client);
-    expect(res).toEqual({ ok: false, code: "host-unavailable" });
+    });
+    expect(res.ok).toBe(false);
+    if (res.ok) throw new Error("unreachable");
+    expect(res.code).toBe("host-unavailable");
   });
 });
