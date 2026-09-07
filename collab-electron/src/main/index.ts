@@ -18,6 +18,7 @@ import {
   type WebContents,
 } from "electron";
 import { execFileSync } from "node:child_process";
+import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { fromCollabFileUrl } from "@collab/shared/collab-file-url";
@@ -84,6 +85,7 @@ import {
   stopRemoteHost,
   getRemoteHostStatus,
   testRemoteHostConnection,
+  issueNewCredential,
   broadcastRemotePtyOpened,
 } from "./remote-server";
 import {
@@ -1337,6 +1339,28 @@ app.whenReady().then(async () => {
         return testRemoteHostConnection(opts.relayUrl, opts.deviceToken);
       },
     );
+
+    // 签发新凭证(作废旧 client)。先弹保存对话框拿路径,确认后才签发——
+    // 取消保存不产生任何副作用(旧 client 不被踢)。文件含 client 私钥,
+    // 默认文件名 collaborator-credential.json
+    ipcMain.handle("remote:host-issue-credential", async () => {
+      const win =
+        BrowserWindow.getAllWindows().find((w) => !w.isDestroyed()) ?? null;
+      const picked = win
+        ? await dialog.showSaveDialog(win, {
+            title: "Save credential",
+            defaultPath: "collaborator-credential.json",
+            filters: [{ name: "Credential", extensions: ["json"] }],
+          })
+        : { canceled: true as const, filePath: "" };
+      if (picked.canceled || !picked.filePath) {
+        return { ok: false, error: "save canceled" };
+      }
+      const result = issueNewCredential();
+      if (!result.ok || !result.content) return result;
+      await writeFile(picked.filePath, result.content, { mode: 0o600 });
+      return { ok: true, clientFingerprint: result.clientFingerprint };
+    });
   } else {
     ipcMain.handle(
       "remote:client-connect",

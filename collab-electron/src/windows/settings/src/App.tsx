@@ -77,8 +77,7 @@ interface SettingsApi {
     relayUrl: string,
     deviceToken: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  hostApplyPairRefresh: () => Promise<{ ok?: boolean }>;
-  hostRefreshPairNow: () => Promise<{ ok?: boolean }>;
+  hostIssueCredential: () => Promise<{ ok?: boolean; error?: string }>;
   disconnectRemoteClient: () => Promise<{ ok?: boolean }>;
   onOpenPane: (cb: (pane: string) => void) => () => void;
   getAppFlavor: () => string;
@@ -1998,9 +1997,9 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
   // 关闭/被控二选一；初始按当前状态适配，用户手动切换后不再覆盖
   const [roleTab, setRoleTab] = useState<"off" | "host">("off");
   const [roleTouched, setRoleTouched] = useState(false);
-  // 配对码自动换新周期（分钟，1~1440），默认 10
-  const [refreshMinutes, setRefreshMinutes] = useState(10);
-  const [refreshSaving, setRefreshSaving] = useState(false);
+  // 凭证签发(保存对话框由主进程弹出):仅跟踪忙碌与错误
+  const [issueBusy, setIssueBusy] = useState(false);
+  const [issueError, setIssueError] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -2029,15 +2028,6 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
         if (s.role !== "client") setHostStatus(s);
       })
       .catch(() => {});
-    api
-      .getPref("remote.pairRefreshMinutes")
-      .then((v) => {
-        const n = Number(v);
-        if (Number.isFinite(n) && n >= 1) {
-          setRefreshMinutes(Math.min(1440, Math.round(n)));
-        }
-      })
-      .catch(() => {});
     const unsub = api.onRemoteStatus((s) => {
       console.log("[remote-ui] status-event", JSON.stringify(s));
       if (s.role !== "client") setHostStatus(s);
@@ -2064,26 +2054,21 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
     await api.setPref("remote.deviceToken", v);
   }
 
-  /** 保存换新周期（clamp 1~1440）并热重排 Host 轮询定时器 */
-  async function saveRefreshMinutes(v: string) {
-    const n = Math.round(Number(v));
-    const clamped = Number.isFinite(n) ? Math.min(1440, Math.max(1, n)) : 10;
-    setRefreshMinutes(clamped);
-    setRefreshSaving(true);
+  /** 签发新凭证:主进程弹保存框落盘;成功后指纹经 remote-status 推送自动刷新 */
+  async function issueCredential() {
+    setIssueBusy(true);
+    setIssueError(null);
     try {
-      await api.setPref("remote.pairRefreshMinutes", clamped);
-      await api.hostApplyPairRefresh();
+      const res = await api.hostIssueCredential();
+      if (res && res.ok === false && res.error) {
+        setIssueError(res.error);
+      } else if (res && res.ok !== true) {
+        setIssueError(t("remote.issueFailed"));
+      }
+    } catch (err) {
+      setIssueError(err instanceof Error ? err.message : String(err));
     } finally {
-      setRefreshSaving(false);
-    }
-  }
-
-  async function refreshNow() {
-    setRefreshSaving(true);
-    try {
-      await api.hostRefreshPairNow();
-    } finally {
-      setRefreshSaving(false);
+      setIssueBusy(false);
     }
   }
 
@@ -2197,17 +2182,9 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
   const hostPeer = hostStatus?.peer as
     | { role?: string; deviceId?: string; displayName?: string }
     | undefined;
-  const hostPairCode = hostStatus?.pairCode as string | undefined;
-  const pairCodeExpiresAtMs = hostStatus?.pairCodeExpiresAt as
-    | number
+  const hostFingerprint = hostStatus?.clientFingerprint as
+    | string
     | undefined;
-  const pairExpiresLabel =
-    pairCodeExpiresAtMs != null && Number.isFinite(pairCodeExpiresAtMs)
-      ? new Date(pairCodeExpiresAtMs).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-      : "";
 
   const segBtn = (active: boolean) =>
     `flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -2333,39 +2310,34 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
             </p>
           )}
 
-          {/* 配对码自动换新：周期(分钟) + 立即刷新 */}
-          <div className="flex items-end gap-2">
-            <label className="block min-w-0 flex-1">
-              <span className="text-sm text-muted-foreground">
-                {t("remote.pairRefreshLabel")}
+          {/* 连接凭证:签发新文件即作废旧 client */}
+          <div className="space-y-1 rounded-md border border-border/50 p-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">
+                {t("remote.credentialSection")}
               </span>
-              <input
-                type="number"
-                min={1}
-                max={1440}
-                step={1}
-                value={refreshMinutes}
-                disabled={refreshSaving}
-                onChange={(e) => setRefreshMinutes(Number(e.target.value))}
-                onBlur={(e) => void saveRefreshMinutes(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    (e.target as HTMLInputElement).blur();
-                  }
-                }}
-                className="mt-1 w-full rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-sm disabled:opacity-40"
-                spellCheck={false}
-              />
-            </label>
+              {hostFingerprint && (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {t("remote.credentialFingerprint")}: {hostFingerprint}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t("remote.credentialDesc")}
+            </p>
             <button
               type="button"
-              disabled={refreshSaving || hostStatus?.state !== "connected"}
-              onClick={() => void refreshNow()}
-              className="rounded-md border border-border/50 px-3 py-1.5 text-sm disabled:opacity-40"
+              disabled={busy || issueBusy || hostStatus?.state !== "connected"}
+              onClick={() => void issueCredential()}
+              className="mt-1 rounded-md border border-border/50 px-3 py-1.5 text-sm disabled:opacity-40"
             >
-              {refreshSaving ? t("remote.refreshing") : t("remote.refreshNow")}
+              {issueBusy ? t("remote.issuing") : t("remote.issueCredential")}
             </button>
+            {issueError && (
+              <p className="text-xs" style={{ color: "#ef4444" }}>
+                {issueError}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1 rounded-md border border-border/50 p-3 text-sm">
@@ -2379,27 +2351,6 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
               <span className="text-muted-foreground">{t("remote.host")}</span>
               <span>{hostStateLabel}</span>
             </div>
-            {hostPairCode && (
-              <div className="space-y-0.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">
-                    {t("remote.pairCode")}
-                  </span>
-                  <span className="font-mono tracking-widest">
-                    {hostPairCode}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>
-                    {t("remote.pairValidUntil")} {pairExpiresLabel || "-"}
-                  </span>
-                  <span>
-                    {t("remote.pairRotatesEvery")} {refreshMinutes}{" "}
-                    {t("remote.minutes")}
-                  </span>
-                </div>
-              </div>
-            )}
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">{t("remote.peer")}</span>
               <span>

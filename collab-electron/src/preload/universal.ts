@@ -207,8 +207,8 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.invoke("remote:host-set-enabled", enabled),
   testRemoteHost: (relayUrl: string, deviceToken: string) =>
     ipcRenderer.invoke("remote:host-test", { relayUrl, deviceToken }),
-  hostApplyPairRefresh: () => ipcRenderer.invoke("remote:host-apply-refresh"),
-  hostRefreshPairNow: () => ipcRenderer.invoke("remote:host-refresh-now"),
+  hostIssueCredential: () =>
+    ipcRenderer.invoke("remote:host-issue-credential"),
   connectRemoteClient: (relayUrl: string, pairCode: string) =>
     ipcRenderer.invoke("remote:client-connect", { relayUrl, pairCode }),
   disconnectRemoteClient: () => ipcRenderer.invoke("remote:client-disconnect"),

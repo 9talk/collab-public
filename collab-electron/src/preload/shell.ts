@@ -74,11 +74,9 @@ contextBridge.exposeInMainWorld("shellApi", {
   // Client relayout 按钮对称委托 → Host 重排并广播几何（仅 remote 版有效）
   relayoutRemoteTiles: (): Promise<unknown> =>
     ipcRenderer.invoke("canvas:relayout-tiles"),
-  // Host 配对码自动换新（热生效/立即刷新），仅 full 版主进程有处理器
-  hostApplyPairRefresh: (): Promise<unknown> =>
-    ipcRenderer.invoke("remote:host-apply-refresh"),
-  hostRefreshPairNow: (): Promise<unknown> =>
-    ipcRenderer.invoke("remote:host-refresh-now"),
+  // 签发新凭证(作废旧 client),仅 full 版主进程有处理器
+  hostIssueCredential: (): Promise<unknown> =>
+    ipcRenderer.invoke("remote:host-issue-credential"),
 
   onForwardToWebview: (
     cb: (target: string, channel: string, ...args: unknown[]) => void,
