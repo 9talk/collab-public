@@ -66,7 +66,14 @@ export function registerKnowledgeHandlers(ctx: IpcContext): void {
 
   ipcMain.on("nav:open-in-terminal", (_event, path: string) => {
     ctx.trackEvent("file_opened_in_terminal");
-    ctx.forwardToWebview("canvas", "open-terminal", path);
+    // 纯命令帧,仅本地 shell 执行,不能经 mirror 广播给控制端:控制端若
+    // 执行该命令会在本地建无 sessionId 的 tile,guest 反向 pty:create
+    // (rpc)回控端重复创建真实会话与镜像 tile(回环)。控制端镜像由
+    // pty:create 的 remote:pty-opened 广播(origin=host)同步,无需此帧。
+    const win = ctx.mainWindow();
+    if (win && !win.isDestroyed()) {
+      win.webContents.send("shell:forward", "canvas", "open-terminal", path);
+    }
   });
 
   bindIpc("nav:reveal-in-finder", "on", (_event, path: string) => {
