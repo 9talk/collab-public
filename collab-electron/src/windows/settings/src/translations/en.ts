@@ -206,7 +206,6 @@ export const en = {
   "remote.clientSection": "As Client (control another machine)",
   "remote.clientSectionDesc":
     "Connect to the relay and enter the host's pairing code to control it.",
-  "remote.pairCodeInput": "Pairing code",
   "remote.connect": "Connect",
   "remote.disconnect": "Disconnect",
   "remote.test": "Test",

@@ -1291,8 +1291,8 @@ app.whenReady().then(async () => {
   if (!isRemoteFlavor()) {
     startRemoteHostIfConfigured(config);
   } else {
-    // 有上次成功连接存档（relayUrl + pairCode）时自动连接；
-    // 无存档时 Connect 窗口停留在表单态。
+    // 数据目录有凭证副本(remote-credential.json)时自动连接;
+    // 无凭证时 Connect 窗口停留在表单态。
     startRemoteClientIfConfigured(config);
   }
 

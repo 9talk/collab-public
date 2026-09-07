@@ -1735,8 +1735,7 @@ async function init() {
         status.peer?.deviceId ??
         status.peer?.displayName ??
         "";
-      remoteStatusText.textContent =
-        status.pairCode ?? (peerId ? `→ ${peerId}` : "");
+      remoteStatusText.textContent = peerId ? `→ ${peerId}` : "";
       remoteIndicator.title = `Remote: connected${peerId ? ` (${peerId})` : ""}`;
     } else if (status.state === "connecting") {
       remoteStatusText.textContent = "";
