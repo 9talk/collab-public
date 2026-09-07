@@ -174,10 +174,13 @@ ipcRenderer.on("remote-status", (_event: unknown, s: unknown) => {
 // -- Settings pane navigation ---------------------------------------
 type OpenPaneCb = (pane: string) => void;
 const openPaneListeners = new Set<OpenPaneCb>();
+// shell 在 settings webview dom-ready 时即发送 open-pane,而页面侧订阅
+// (React useEffect)晚于 dom-ready —— 无监听者时先缓存,首个订阅者回放。
+let bufferedOpenPane: string | null = null;
 ipcRenderer.on("settings:open-pane", (_event: unknown, pane: string) => {
-  if (typeof pane === "string") {
-    for (const cb of openPaneListeners) cb(pane);
-  }
+  if (typeof pane !== "string") return;
+  if (openPaneListeners.size === 0) bufferedOpenPane = pane;
+  for (const cb of openPaneListeners) cb(pane);
 });
 
 // -- Unified API surface --------------------------------------------
@@ -211,6 +214,11 @@ contextBridge.exposeInMainWorld("api", {
   disconnectRemoteClient: () => ipcRenderer.invoke("remote:client-disconnect"),
   onOpenPane: (cb: OpenPaneCb) => {
     openPaneListeners.add(cb);
+    if (bufferedOpenPane !== null) {
+      const pane = bufferedOpenPane;
+      bufferedOpenPane = null;
+      cb(pane);
+    }
     return () => {
       openPaneListeners.delete(cb);
     };

@@ -1556,19 +1556,11 @@ async function init() {
       }
       blurNonModalSurfaces();
       if (pane) {
-        const wv = singletonWebviews.settings.webview;
-        const sendPane = () => {
-          try {
-            wv.send("settings:open-pane", pane);
-          } catch {
-            // webview already gone
-          }
-        };
-        if (wv.isLoading()) {
-          wv.addEventListener("dom-ready", sendPane, { once: true });
-        } else {
-          sendPane();
-        }
+        // createWebview 的 send 自带 dom-ready 前缓冲(webview-factory),
+        // 不依赖手写 isLoading/dom-ready 时序:guest 未 attach 时 isLoading()
+        // 会抛错、send() 会失败,首次打开面板的 open-pane 在此必然丢失。
+        // 送达 guest 后 universal 再缓冲至 React 订阅就绪(见 onOpenPane)。
+        singletonWebviews.settings.send("settings:open-pane", pane);
       }
     } else {
       singletonWebviews.settings?.webview.blur();
