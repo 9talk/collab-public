@@ -95,6 +95,7 @@ import {
   getRemoteClientStatus,
   onRemoteStateChanged,
   resyncMirror,
+  importCredentialFile,
 } from "./remote-client";
 import { bindIpc, markForward } from "./ipc-registry";
 import { ensureFlavorEnv, getAppFlavor, isRemoteFlavor } from "./app-flavor";
@@ -1364,18 +1365,43 @@ app.whenReady().then(async () => {
   } else {
     ipcMain.handle(
       "remote:client-connect",
-      async (_event, opts: { relayUrl?: string; pairCode?: string }) => {
-        if (!opts || !opts.relayUrl || !opts.pairCode) {
-          return { ok: false, error: "Missing relay URL or pair code" };
+      async (_event, o: { relayUrl?: string; credentialPath?: string }) => {
+        if (!o || !o.relayUrl || !o.credentialPath) {
+          return { ok: false, error: "Missing relay URL or credential file" };
         }
+        const imported = importCredentialFile(config, o.credentialPath);
+        if (!imported.ok) return { ok: false, error: imported.error };
         await startRemoteClient({
           config,
-          relayUrl: opts.relayUrl,
-          pairCode: opts.pairCode,
+          relayUrl: o.relayUrl,
+          credential: imported.credential,
         });
         return { ok: true };
       },
     );
+
+    // 选择凭证文件:校验后复制入数据目录,返回展示信息给连接窗口
+    ipcMain.handle("remote:credential-pick", async () => {
+      const win =
+        BrowserWindow.getAllWindows().find((w) => !w.isDestroyed()) ?? null;
+      if (!win) return { ok: false as const, error: "no window" };
+      const picked = await dialog.showOpenDialog(win, {
+        properties: ["openFile"],
+        filters: [{ name: "Credential", extensions: ["json"] }],
+      });
+      if (picked.canceled || picked.filePaths.length === 0) {
+        return { ok: false as const, error: "canceled" };
+      }
+      const imported = importCredentialFile(config, picked.filePaths[0]!);
+      if (!imported.ok) return { ok: false as const, error: imported.error };
+      const { relayUrl, hostId, hostDisplayName } = imported.credential;
+      return {
+        ok: true as const,
+        relayUrl,
+        hostId,
+        hostDisplayName: hostDisplayName ?? null,
+      };
+    });
 
     ipcMain.handle("remote:client-disconnect", async () => {
       await stopRemoteClient("user");

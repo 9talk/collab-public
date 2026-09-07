@@ -1,12 +1,23 @@
 // Client-side remote-control module. Connects outbound to the relay with a
-// pairing code, then switches this instance's IPC forwarding layer so every
-// forwarded channel reaches the remote host (A). Events pushed by A are
-// injected into the local webviews; PTY data is routed per-session to the
-// terminal tile that owns it.
+// host-issued credential file (imported once, long-lived), proves identity
+// via an ed25519 challenge-response, then switches this instance's IPC
+// forwarding layer so every forwarded channel reaches the remote host (A).
+// Events pushed by A are injected into the local webviews; PTY data is routed
+// per-session to the terminal tile that owns it. Forwarding activates only
+// after the two-way signature handshake succeeds (host verified us, we
+// verified the host) — the relay cannot impersonate either side.
 
 import { WebSocket, type RawData } from "ws";
 import { app, BrowserWindow, nativeTheme, webContents } from "electron";
 import { decodePtyBinary } from "@collab/relay/src/protocol";
+import {
+  existsSync,
+  readFileSync,
+  copyFileSync,
+  mkdirSync,
+  unlinkSync,
+} from "node:fs";
+import { join } from "node:path";
 import {
   activateRemoteForwarding,
   deactivateRemoteForwarding,
@@ -15,6 +26,16 @@ import {
 } from "./ipc-registry";
 import { forwardToWebview } from "./ipc";
 import { getPref, setPref, type AppConfig } from "./config";
+import { COLLAB_DIR } from "./paths";
+import {
+  decodeCredential,
+  signChallenge,
+  verifyChallenge,
+  newNonce,
+  CLIENT_AUTH_DOMAIN,
+  HOST_AUTH_DOMAIN,
+  type Credential,
+} from "./remote-auth";
 
 export type RemoteClientState = "idle" | "connecting" | "connected" | "error";
 
@@ -29,7 +50,7 @@ export interface RemoteClientStatus {
 interface ClientOptions {
   config: AppConfig;
   relayUrl: string;
-  pairCode: string;
+  credential: Credential; // 已解码校验的凭证
 }
 
 let ws: WebSocket | null = null;
@@ -39,6 +60,14 @@ let retryDelayMs = 1000;
 let stopped = false;
 let hostInfo: RemoteClientStatus["hostInfo"];
 let lastError: string | undefined;
+// 当前生效凭证:启动时由 opts 载入,unauthorized 后被清(文件与变量同时)
+let credential: Credential | null = null;
+// 双向签名验证通过前不激活转发/不同步
+let peerVerified = false;
+let authNonce: string | null = null; // 我们发往 host 的 clientNonce(ack 回执校验)
+let authTimer: ReturnType<typeof setTimeout> | null = null;
+
+const AUTH_WAIT_TIMEOUT_MS = 10_000;
 
 const statusListeners = new Set<(s: RemoteClientStatus) => void>();
 
@@ -211,44 +240,97 @@ function handlePtyBinary(data: RawData): void {
   });
 }
 
+const DEFAULT_CREDENTIAL_PATH = join(COLLAB_DIR, "remote-credential.json");
+
+/** 校验并读取凭证文件;文件缺失/损坏返回 null。 */
+export function loadCredentialFromFile(path: string): Credential | null {
+  try {
+    if (!existsSync(path)) return null;
+    const parsed = decodeCredential(readFileSync(path, "utf8"));
+    return parsed.ok ? parsed.credential : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 导入:校验文件 → 复制进数据目录(供下次自动连接),relayUrl 同步存档。 */
+export function importCredentialFile(
+  config: AppConfig,
+  sourcePath: string,
+): { ok: true; credential: Credential } | { ok: false; error: string } {
+  const parsed = loadCredentialFromFile(sourcePath);
+  if (!parsed) return { ok: false, error: "invalid credential file" };
+  mkdirSync(COLLAB_DIR, { recursive: true });
+  copyFileSync(sourcePath, DEFAULT_CREDENTIAL_PATH);
+  setPref(config, "remote.relayUrl", parsed.relayUrl);
+  return { ok: true, credential: parsed };
+}
+
+/** unauthorized 时清凭证文件(下次启动回到连接表单态,需重新导入)。 */
+function clearCredentialFile(): void {
+  peerVerified = false;
+  credential = null;
+  try {
+    if (existsSync(DEFAULT_CREDENTIAL_PATH)) {
+      unlinkSync(DEFAULT_CREDENTIAL_PATH);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function clearAuthTimer(): void {
+  if (authTimer) {
+    clearTimeout(authTimer);
+    authTimer = null;
+  }
+}
+
+/** 强制重连当前 socket(不置空引用:close handler 负责清理 + 调度重连)。 */
+function reconnectNow(): void {
+  const socket = ws;
+  try {
+    socket?.close();
+  } catch {
+    // already closed
+  }
+}
+
 function handleFrame(frame: { type: string; [key: string]: unknown }): void {
   switch (frame.type) {
     case "auth-ok": {
       lastError = undefined;
-      // 连接成功 → 存档 relayUrl + 配对码，供下次启动自动连接
-      //（配对码有 TTL，失效后 auth-error 会自然回到表单）
+      // 连接成功 → 存档 relayUrl 供下次启动自动连接
       if (opts) {
         try {
           setPref(opts.config, "remote.relayUrl", opts.relayUrl);
-          setPref(opts.config, "remote.pairCode", opts.pairCode);
         } catch {
           // 存档失败不阻断连接
         }
       }
       emitStatus();
-      onConnected();
+      // 等待 host 发起挑战(host 异常时靠超时强制重连回到重试)
+      clearAuthTimer();
+      authTimer = setTimeout(() => {
+        authTimer = null;
+        console.log("[remote] waiting host auth timed out");
+        reconnectNow();
+      }, AUTH_WAIT_TIMEOUT_MS);
       break;
     }
     case "auth-error": {
-      // 配对失败（码过期/错误）：回到 idle 由用户重新输入，不能让模块
-      // 停留在 active+connecting 死态——否则 isRemoteActive() 恒为 true，
-      // 会遮蔽 host 侧的状态上报与操作。
-      lastError = (frame.message as string) ?? "auth failed";
-      console.log(`[remote] auth error: ${lastError}`);
+      // Host 未注册(relay 刚重启/host 重连中)是暂态:不清凭证、不退出,
+      // relay 已关闭本 socket → close handler 会自动重试直到 host 上线
       if (frame.code === "host-unavailable") {
-        // Host 尚未注册（relay 刚重启/host 重连中）是暂态：不清码、不退出，
-        // relay 已关闭本 socket → close handler 会自动重试直到 host 上线
+        lastError = (frame.message as string) ?? "auth failed";
+        console.log(`[remote] auth error (transient): ${lastError}`);
         emitStatus();
         return;
       }
-      // 存档码已失效，清掉避免下次启动重复自动连接失败
-      if (opts) {
-        try {
-          setPref(opts.config, "remote.pairCode", null);
-        } catch {
-          // ignore
-        }
-      }
+      // 凭证失效/房间被占用/格式错:停止并提示重新导入
+      lastError = (frame.message as string) ?? "auth failed";
+      console.log(`[remote] auth error: ${lastError}`);
+      clearCredentialFile();
       void stopRemoteClient("auth-error");
       break;
     }
@@ -258,8 +340,67 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
       emitStatus();
       break;
     }
+    case "peer-auth-request": {
+      const nonce = frame.nonce as string; // host 挑战 nonce(签名用,即用即弃)
+      if (!credential || peerVerified || !nonce) break;
+      clearAuthTimer();
+      const clientNonce = newNonce();
+      authNonce = clientNonce; // ack 必须回执我们刚发的 clientNonce
+      const signature = signChallenge(
+        CLIENT_AUTH_DOMAIN,
+        nonce,
+        credential.clientPrivateKey,
+      );
+      ws?.send(
+        JSON.stringify({
+          v: 1,
+          type: "peer-auth-response",
+          nonce,
+          clientNonce,
+          signature,
+        }),
+      );
+      break;
+    }
+    case "peer-auth-ack": {
+      const nonce = frame.nonce as string;
+      const signature = frame.signature as string;
+      if (!credential || peerVerified) break;
+      if (!authNonce || nonce !== authNonce) break; // 必须应答我们刚发的 clientNonce
+      if (
+        !verifyChallenge(
+          HOST_AUTH_DOMAIN,
+          nonce,
+          credential.hostPublicKey,
+          signature,
+        )
+      ) {
+        console.log("[remote] host signature invalid");
+        clearCredentialFile();
+        void stopRemoteClient("auth-error");
+        break;
+      }
+      clearAuthTimer();
+      authNonce = null;
+      peerVerified = true;
+      lastError = undefined;
+      console.log("[remote] host verified, activating forwarding");
+      emitStatus();
+      onConnected();
+      break;
+    }
+    case "peer-auth-error": {
+      const code = frame.code as string;
+      console.log(`[remote] peer auth error: ${code}`);
+      lastError = (frame.message as string) ?? "not authorized";
+      clearCredentialFile();
+      void stopRemoteClient("auth-error");
+      break;
+    }
     case "peer-disconnected": {
       hostInfo = undefined;
+      peerVerified = false;
+      clearAuthTimer();
       console.log(
         `[remote] host disconnected reason=${frame.reason as string}`,
       );
@@ -379,12 +520,13 @@ function connectOnce(): void {
 
   socket.on("open", () => {
     if (!opts || ws !== socket) return; // 已被断开或替换，忽略陈旧连接
+    // hostId 来自凭证文件(decode 已校验非空)
     socket.send(
       JSON.stringify({
         v: 1,
         type: "auth",
         role: "client",
-        pairCode: opts.pairCode,
+        hostId: opts.credential.hostId,
         deviceName: app.getName(),
         appVersion: app.getVersion(),
       }),
@@ -416,6 +558,9 @@ function connectOnce(): void {
     if (ws !== socket) return; // 已被新连接替换，忽略旧连接的 close
     ws = null;
     hostInfo = undefined;
+    peerVerified = false;
+    clearAuthTimer();
+    authNonce = null;
     deactivateRemoteForwarding();
     for (const entry of rpcPending.values()) {
       entry.reject(new Error("remote connection closed"));
@@ -444,6 +589,10 @@ export async function startRemoteClient(o: ClientOptions): Promise<void> {
   retryDelayMs = 1000;
   hostInfo = undefined;
   lastError = undefined;
+  peerVerified = false;
+  clearAuthTimer();
+  authNonce = null;
+  credential = o.credential;
   ownerBySession.clear();
 
   setRemoteCallHandler(async (channel, kind, args, senderId) => {
@@ -474,20 +623,28 @@ export async function startRemoteClient(o: ClientOptions): Promise<void> {
 }
 
 /**
- * 启动入口：env REMOTE_PAIR_CODE（+ REMOTE_RELAY_URL）为自动化/测试入口，
- * 优先于 pref 存档。pref 存档来自上次连接成功(auth-ok)时写入的
- * remote.relayUrl + remote.pairCode —— 配对码有 TTL，失效后 auth-error
- * 会清掉存档并回到连接表单。
+ * 启动入口：env REMOTE_CREDENTIAL_PATH（+ REMOTE_RELAY_URL）为自动化/测试入口，
+ * 优先于数据目录副本 remote-credential.json。凭证导入时复制进数据目录，
+ * 故「导入一次 → 此后自动连接」。
  */
 export function startRemoteClientIfConfigured(config: AppConfig): void {
+  const envPath = process.env.REMOTE_CREDENTIAL_PATH;
   const relayUrl =
     process.env.REMOTE_RELAY_URL ??
     (getPref(config, "remote.relayUrl") as string);
-  const pairCode =
-    process.env.REMOTE_PAIR_CODE ??
-    (getPref(config, "remote.pairCode") as string);
-  if (!relayUrl || !pairCode) return;
-  void startRemoteClient({ config, relayUrl, pairCode });
+  const cred =
+    (envPath
+      ? loadCredentialFromFile(envPath)
+      : loadCredentialFromFile(DEFAULT_CREDENTIAL_PATH)) ?? null;
+  if (!cred) {
+    // 无凭证：Connect 窗口停留表单态（残留自动连接 pref 由 UI 侧清理）
+    return;
+  }
+  void startRemoteClient({
+    config,
+    relayUrl: cred.relayUrl || relayUrl,
+    credential: cred,
+  });
 }
 
 /**
@@ -502,6 +659,10 @@ export async function stopRemoteClient(
 ): Promise<void> {
   stopped = true;
   opts = null;
+  credential = null;
+  peerVerified = false;
+  clearAuthTimer();
+  authNonce = null;
   if (reason !== "auth-error") lastError = undefined;
   if (retryTimer) {
     clearTimeout(retryTimer);

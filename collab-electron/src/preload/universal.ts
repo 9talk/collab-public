@@ -209,8 +209,9 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.invoke("remote:host-test", { relayUrl, deviceToken }),
   hostIssueCredential: () =>
     ipcRenderer.invoke("remote:host-issue-credential"),
-  connectRemoteClient: (relayUrl: string, pairCode: string) =>
-    ipcRenderer.invoke("remote:client-connect", { relayUrl, pairCode }),
+  connectRemoteClient: (relayUrl: string, credentialPath: string) =>
+    ipcRenderer.invoke("remote:client-connect", { relayUrl, credentialPath }),
+  pickCredential: () => ipcRenderer.invoke("remote:credential-pick"),
   disconnectRemoteClient: () => ipcRenderer.invoke("remote:client-disconnect"),
   onOpenPane: (cb: OpenPaneCb) => {
     openPaneListeners.add(cb);
