@@ -76,6 +76,14 @@ export function forwardCanvasRpcRequest(payload: {
 export function registerCanvasRpc(win: BrowserWindow): void {
   shellWindow = win;
 
+  // 断线重连会重建 shell(createWindow → registerCanvasRpc 二次执行):
+  // ipcMain.handle 对同一 channel 二次注册会抛异常(异常穿透 ws 消息处理
+  // 中断接收循环,remote 连接从此失聪),on 二次注册则导致消息双触发
+  ipcMain.removeAllListeners("canvas:rpc-response");
+  ipcMain.removeAllListeners("navigation:push");
+  ipcMain.removeHandler("navigation:go-back");
+  ipcMain.removeHandler("navigation:go-forward");
+
   ipcMain.on(
     "canvas:rpc-response",
     (

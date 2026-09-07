@@ -187,7 +187,9 @@ export default function App() {
         {connecting ? (
           <div className="connecting-box">
             <span className="spinner" aria-hidden="true" />
-            <span>{autoConnecting ? t("connectingLast") : t("connecting")}</span>
+            <span>
+              {autoConnecting ? t("connectingLast") : t("connecting")}
+            </span>
             <button type="button" className="link-btn" onClick={handleCancel}>
               {t("cancel")}
             </button>
@@ -242,7 +244,7 @@ export default function App() {
               <button
                 type="button"
                 className="primary-btn"
-                disabled={!relayUrl.trim()}
+                disabled={!picked || !relayUrl.trim()}
                 onClick={() => void handleConnect()}
               >
                 {t("connect")}

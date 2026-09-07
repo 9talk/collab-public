@@ -70,7 +70,11 @@ export function forwardToWebviewOrigin(
   channel: string,
   ...args: unknown[]
 ): void {
-  mainWindow?.webContents.send("shell:forward", target, channel, ...args);
+  // mainWindow 关闭(Remote 断开回连接页)后引用仍残留,必须防 destroyed,
+  // 否则远程状态推送里任何一次 send 都会炸掉调用方(用户点击 IPC 静默失败)
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("shell:forward", target, channel, ...args);
+  }
   remoteEventMirror?.({ target, channel, args, origin });
 }
 

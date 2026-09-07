@@ -567,6 +567,11 @@ function createWindow(): void {
 
   mainWindow.on("move", debouncedSaveWindowState);
   mainWindow.on("resize", debouncedSaveWindowState);
+  mainWindow.on("closed", () => {
+    // 统一清引用:Remote 断线回连接页时 shell 被 close,残留引用会让
+    // forwardToWebview 等对已销毁窗口 send(用户点击 IPC 静默失败)
+    mainWindow = null;
+  });
   mainWindow.on("close", () => {
     if (saveTimeout) clearTimeout(saveTimeout);
     if (!mainWindow || mainWindow.isDestroyed()) return;

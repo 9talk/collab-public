@@ -110,8 +110,9 @@ body,
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  color: #fff;
-  background: var(--accent);
+  /* Theme.css 不提供 --accent(仅 settings 窗口补充),用前景/背景反转保证两主题可见 */
+  color: var(--background);
+  background: var(--foreground);
 }
 
 .primary-btn:disabled {
