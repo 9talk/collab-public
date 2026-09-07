@@ -9,7 +9,7 @@ export interface AuthFrame {
   type: "auth";
   role: "host" | "client";
   deviceToken?: string;
-  pairCode?: string;
+  hostId?: string;
   deviceName?: string;
   appVersion?: string;
 }
@@ -25,30 +25,37 @@ export interface AuthOkFrame {
 export interface AuthErrorFrame {
   v: 1;
   type: "auth-error";
-  code:
-    | "invalid-token"
-    | "invalid-pair-code"
-    | "pair-code-expired"
-    | "pair-code-in-use"
-    | "relay-full"
-    | "malformed";
+  code: "invalid-token" | "host-unavailable" | "in-use" | "relay-full" | "malformed";
   message: string;
 }
 
-export interface PairCreateFrame {
+// 握手透传帧:host/client 双向挑战应答,relay 零知识原样转发
+export interface PeerAuthRequestFrame {
   v: 1;
-  type: "pair-create";
-  /** true → 作废该 deviceId 现存活码并立即换新（Host 轮询/立即刷新用）；缺省复用活码 */
-  force?: boolean;
-  /** 新码有效分钟数，clamp 1~1440；缺省 10（旧 Host 不发此字段，行为不变） */
-  ttlMinutes?: number;
+  type: "peer-auth-request";
+  nonce: string;
 }
 
-export interface PairCreatedFrame {
+export interface PeerAuthResponseFrame {
   v: 1;
-  type: "pair-created";
-  code: string;
-  ttlSec: number;
+  type: "peer-auth-response";
+  nonce: string;
+  clientNonce: string;
+  signature: string;
+}
+
+export interface PeerAuthAckFrame {
+  v: 1;
+  type: "peer-auth-ack";
+  nonce: string;
+  signature: string;
+}
+
+export interface PeerAuthErrorFrame {
+  v: 1;
+  type: "peer-auth-error";
+  code: "unauthorized";
+  message: string;
 }
 
 export interface PeerConnectedFrame {
@@ -97,10 +104,12 @@ export type RelayFrame =
   | AuthFrame
   | AuthOkFrame
   | AuthErrorFrame
-  | PairCreateFrame
-  | PairCreatedFrame
   | PeerConnectedFrame
   | PeerDisconnectedFrame
+  | PeerAuthRequestFrame
+  | PeerAuthResponseFrame
+  | PeerAuthAckFrame
+  | PeerAuthErrorFrame
   | RpcFrame
   | RpcResultFrame
   | RpcErrorFrame
@@ -112,7 +121,11 @@ export type PassthroughFrame =
   | RpcFrame
   | RpcResultFrame
   | RpcErrorFrame
-  | EventFrame;
+  | EventFrame
+  | PeerAuthRequestFrame
+  | PeerAuthResponseFrame
+  | PeerAuthAckFrame
+  | PeerAuthErrorFrame;
 
 export function parseFrame(raw: string): RelayFrame | null {
   let obj: unknown;
@@ -133,19 +146,39 @@ export function parseFrame(raw: string): RelayFrame | null {
         role: rec.role === "client" ? "client" : "host",
         deviceToken:
           typeof rec.deviceToken === "string" ? rec.deviceToken : undefined,
-        pairCode: typeof rec.pairCode === "string" ? rec.pairCode : undefined,
+        hostId: typeof rec.hostId === "string" ? rec.hostId : undefined,
         deviceName:
           typeof rec.deviceName === "string" ? rec.deviceName : undefined,
         appVersion:
           typeof rec.appVersion === "string" ? rec.appVersion : undefined,
       };
-    case "pair-create":
+    case "peer-auth-request":
       return {
         v: 1,
-        type: "pair-create",
-        force: rec.force === true,
-        ttlMinutes:
-          typeof rec.ttlMinutes === "number" ? rec.ttlMinutes : undefined,
+        type: "peer-auth-request",
+        nonce: String(rec.nonce ?? ""),
+      };
+    case "peer-auth-response":
+      return {
+        v: 1,
+        type: "peer-auth-response",
+        nonce: String(rec.nonce ?? ""),
+        clientNonce: String(rec.clientNonce ?? ""),
+        signature: String(rec.signature ?? ""),
+      };
+    case "peer-auth-ack":
+      return {
+        v: 1,
+        type: "peer-auth-ack",
+        nonce: String(rec.nonce ?? ""),
+        signature: String(rec.signature ?? ""),
+      };
+    case "peer-auth-error":
+      return {
+        v: 1,
+        type: "peer-auth-error",
+        code: "unauthorized",
+        message: String(rec.message ?? ""),
       };
     case "rpc":
       return {
@@ -182,7 +215,11 @@ export function isPassthroughFrame(frame: RelayFrame): frame is PassthroughFrame
     frame.type === "rpc" ||
     frame.type === "rpc-result" ||
     frame.type === "rpc-error" ||
-    frame.type === "event"
+    frame.type === "event" ||
+    frame.type === "peer-auth-request" ||
+    frame.type === "peer-auth-response" ||
+    frame.type === "peer-auth-ack" ||
+    frame.type === "peer-auth-error"
   );
 }
 
