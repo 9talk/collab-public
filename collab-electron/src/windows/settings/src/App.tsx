@@ -2182,9 +2182,7 @@ function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
   const hostPeer = hostStatus?.peer as
     | { role?: string; deviceId?: string; displayName?: string }
     | undefined;
-  const hostFingerprint = hostStatus?.clientFingerprint as
-    | string
-    | undefined;
+  const hostFingerprint = hostStatus?.clientFingerprint as string | undefined;
 
   const segBtn = (active: boolean) =>
     `flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${

@@ -41,7 +41,10 @@ function toPublicPem(key: string): string {
   return `-----BEGIN PUBLIC KEY-----\n${key}\n-----END PUBLIC KEY-----`;
 }
 function stripBase64(pem: string): string {
-  return pem.replace(/-----BEGIN [^-]+-----/, "").replace(/-----END [^-]+-----/, "").replace(/\s+/g, "");
+  return pem
+    .replace(/-----BEGIN [^-]+-----/, "")
+    .replace(/-----END [^-]+-----/, "")
+    .replace(/\s+/g, "");
 }
 
 export function generateKeyPair(): {
@@ -50,7 +53,9 @@ export function generateKeyPair(): {
 } {
   const { privateKey, publicKey } = generateKeyPairSync("ed25519");
   return {
-    privateKey: stripBase64(privateKey.export({ type: "pkcs8", format: "pem" })),
+    privateKey: stripBase64(
+      privateKey.export({ type: "pkcs8", format: "pem" }),
+    ),
     publicKey: stripBase64(publicKey.export({ type: "spki", format: "pem" })),
   };
 }
