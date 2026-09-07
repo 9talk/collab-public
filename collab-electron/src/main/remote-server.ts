@@ -13,6 +13,7 @@ import { stat } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
 import { createMethodTable, type MethodTable } from "./json-rpc-server";
 import { encodePtyBinary } from "@collab/relay/src/protocol";
+import { extractOsc52 } from "./osc52";
 import {
   getPref,
   setPref,
@@ -208,10 +209,27 @@ export function broadcastRemotePtyOpened(payload: {
   pushEvent("remote:pty-opened", [payload], "host");
 }
 
+// ---- OSC 52 (clipboard write) interception ----
+// Claude Code 的 selection:copy 总会把复制文本以 OSC 52 序列写进 stdout:
+//   ESC ] 52 ; c ; <base64> (BEL | ESC \)
+// 本地会话里它额外跑 pbcopy 落到本机剪贴板, 但控制端机器的剪贴板拿不到。
+// 这里在转发给控制端前剥掉该序列, 解码后经事件帧把文本推给控制端, 由控制端
+// 写入它自己的系统剪贴板("在镜像上复制, 落在使用者机器上"的语义)。
+// OSC 52 可被任意 PTY chunk 切分, 需按 session 缓存半截前缀跨 chunk 重组。
+const osc52Pending = new Map<string, string>(); // sessionId -> 未闭合的 \x1b]52 前缀
+
 function pushPtyData(sessionId: string, data: string): void {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   if (!peerVerified) return; // 握手完成前不泄漏任何业务数据
-  ws.send(encodePtyBinary(sessionId, Buffer.from(data, "utf-8")));
+  const prev = osc52Pending.get(sessionId) ?? "";
+  const { rest, copies, pending } = extractOsc52(prev, data);
+  if (pending) osc52Pending.set(sessionId, pending);
+  else osc52Pending.delete(sessionId);
+  for (const text of copies) {
+    if (text.length > 0) pushEvent("clipboard:copy", [text], "host");
+  }
+  if (rest.length === 0) return;
+  ws.send(encodePtyBinary(sessionId, Buffer.from(rest, "utf-8")));
 }
 
 function registerRemoteMethods(config: AppConfig): MethodTable {

@@ -8,7 +8,7 @@
 // verified the host) — the relay cannot impersonate either side.
 
 import { WebSocket, type RawData } from "ws";
-import { app, BrowserWindow, nativeTheme, webContents } from "electron";
+import { app, BrowserWindow, clipboard, nativeTheme, webContents } from "electron";
 import { decodePtyBinary } from "@collab/relay/src/protocol";
 import {
   existsSync,
@@ -186,6 +186,16 @@ function handleRemoteEvent(
       ...unknown[],
     ];
     forwardToWebview(target, evChannel, ...evArgs);
+    return;
+  }
+  if (channel === "clipboard:copy") {
+    // Host 端剥离 OSC 52 后回传的复制文本(源:控制端在镜像里对 Claude Code
+    // 选区按 cmd+c, 由 Host 上 Claude Code 执行 selection:copy)。
+    // 落到本机(控制端)剪贴板, 与控制端本地操作复制语义一致。
+    const text = args[0];
+    if (typeof text === "string" && text.length > 0) {
+      clipboard.writeText(text);
+    }
     return;
   }
   if (channel === "pty:exit") {
