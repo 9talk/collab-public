@@ -8,7 +8,13 @@
 // verified the host) — the relay cannot impersonate either side.
 
 import { WebSocket, type RawData } from "ws";
-import { app, BrowserWindow, clipboard, nativeTheme, webContents } from "electron";
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  nativeTheme,
+  webContents,
+} from "electron";
 import { decodePtyBinary } from "@collab/relay/src/protocol";
 import {
   existsSync,

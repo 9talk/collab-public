@@ -50,7 +50,10 @@ describe("extractOsc52", () => {
     const cut = 7; // "\x1b]52;c;eH" — base64 padding 之前
     const first = extractOsc52("", seq.slice(0, cut));
     expect(first.pending).toBe(seq.slice(0, cut));
-    const second = extractOsc52(first.pending, `${seq.slice(cut)} and then some`);
+    const second = extractOsc52(
+      first.pending,
+      `${seq.slice(cut)} and then some`,
+    );
     expect(second.copies).toEqual(["xy"]);
     expect(second.rest).toBe(" and then some");
   });
@@ -71,7 +74,10 @@ describe("extractOsc52", () => {
   });
 
   test("非 52 的 OSC 序列(OSC 7/8)不受影响", () => {
-    const r = extractOsc52("", "\x1b]7;file:///tmp\x07\x1b]8;;http://x\x07normal");
+    const r = extractOsc52(
+      "",
+      "\x1b]7;file:///tmp\x07\x1b]8;;http://x\x07normal",
+    );
     expect(r.rest).toBe("\x1b]7;file:///tmp\x07\x1b]8;;http://x\x07normal");
     expect(r.copies).toEqual([]);
   });
