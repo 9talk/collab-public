@@ -1397,6 +1397,7 @@ app.whenReady().then(async () => {
       const { relayUrl, hostId, hostDisplayName } = imported.credential;
       return {
         ok: true as const,
+        filePath: picked.filePaths[0],
         relayUrl,
         hostId,
         hostDisplayName: hostDisplayName ?? null,
