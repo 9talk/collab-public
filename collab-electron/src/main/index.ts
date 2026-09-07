@@ -84,8 +84,6 @@ import {
   stopRemoteHost,
   getRemoteHostStatus,
   testRemoteHostConnection,
-  applyPairRefreshSchedule,
-  refreshPairNow,
   broadcastRemotePtyOpened,
 } from "./remote-server";
 import {
@@ -1339,16 +1337,6 @@ app.whenReady().then(async () => {
         return testRemoteHostConnection(opts.relayUrl, opts.deviceToken);
       },
     );
-
-    // 配对码自动换新：周期修改热重排 + 立即刷新
-    ipcMain.handle("remote:host-apply-refresh", async () => {
-      applyPairRefreshSchedule();
-      return { ok: true };
-    });
-    ipcMain.handle("remote:host-refresh-now", async () => {
-      refreshPairNow();
-      return { ok: true };
-    });
   } else {
     ipcMain.handle(
       "remote:client-connect",

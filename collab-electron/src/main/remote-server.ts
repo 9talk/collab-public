@@ -1,8 +1,10 @@
 // Host-side remote-control module. When enabled, connects outbound to the
-// relay, authenticates with a device token, exposes a pairing code, and
-// mirrors local events (PTY data, fs-changed, shell:forward, canvas RPC
-// responses) to the paired client. Everything is gated on the on/off switch:
-// when disabled, all hooks are null and no data leaves this machine.
+// relay, authenticates with a device token, issues client credentials
+// (ed25519), and mirrors local events (PTY data, fs-changed, shell:forward,
+// canvas RPC responses) to the verified client. Everything is gated on the
+// on/off switch: when disabled, all hooks are null and no data leaves this
+// machine. Business data only flows after a two-way signature handshake
+// (peerVerified); the relay cannot impersonate either side.
 
 import { WebSocket, type RawData } from "ws";
 import { app, screen, shell, dialog, BrowserWindow } from "electron";
@@ -74,6 +76,19 @@ import {
 } from "./external-editor";
 import { findLatestEditLine } from "./claude-edits-rpc";
 import * as services from "./service-manager";
+import { COLLAB_DIR } from "./paths";
+import {
+  loadOrCreateHostKeys,
+  saveHostKeys,
+  issueCredential,
+  fingerprint,
+  signChallenge,
+  verifyChallenge,
+  newNonce,
+  CLIENT_AUTH_DOMAIN,
+  HOST_AUTH_DOMAIN,
+  type HostKeys,
+} from "./remote-auth";
 
 export type RemoteHostState = "idle" | "connecting" | "connected" | "error";
 
@@ -85,9 +100,8 @@ export interface RemoteHostStatus {
   deviceId?: string;
   peerConnected: boolean;
   peer?: { role: "host" | "client"; deviceId: string; displayName?: string };
-  pairCode?: string;
-  /** 当前配对码过期时刻(ms)——UI 据此显示「有效至 HH:MM」，轮询 tick 据此刻跳过/换码 */
-  pairCodeExpiresAt?: number;
+  /** 当前授权 client 公钥指纹(sha256[0:10])——UI 凭此展示「当前授权」 */
+  clientFingerprint?: string;
   lastError?: string;
 }
 
@@ -104,13 +118,18 @@ let table: MethodTable | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let retryDelayMs = 1000;
 let stopped = false;
-let pairCode: string | undefined;
-let pairCodeExpiresAt: number | undefined;
-let pairRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let deviceId: string | undefined;
 let peerConnected = false;
 let peerInfo: RemoteHostStatus["peer"];
 let lastError: string | undefined;
+// 双向签名验证通过前不转发任何业务数据(握手帧除外)
+let peerVerified = false;
+// 身份密钥:host 启用时加载/生成,长期不变,重签不换
+let hostKeys: HostKeys | null = null;
+let authNonce: string | null = null; // 进行中的 client 挑战
+let authTimer: ReturnType<typeof setTimeout> | null = null;
+
+const PEER_AUTH_TIMEOUT_MS = 5000;
 
 const statusListeners = new Set<(s: RemoteHostStatus) => void>();
 
@@ -128,82 +147,11 @@ function status(): RemoteHostStatus {
     ...(deviceId ? { deviceId } : {}),
     peerConnected,
     ...(peerInfo ? { peer: peerInfo } : {}),
-    ...(pairCode ? { pairCode } : {}),
-    ...(pairCodeExpiresAt ? { pairCodeExpiresAt } : {}),
+    ...(hostKeys?.clientPublicKey
+      ? { clientFingerprint: fingerprint(hostKeys.clientPublicKey) }
+      : {}),
     ...(lastError ? { lastError } : {}),
   };
-}
-
-const DEFAULT_PAIR_REFRESH_MINUTES = 10;
-const PAIR_REFRESH_MIN_MINUTES = 1;
-const PAIR_REFRESH_MAX_MINUTES = 1440;
-
-/** 自动换新周期（分钟）：pref remote.pairRefreshMinutes，非法回退默认 10 */
-function pairRefreshMinutes(): number {
-  const raw = opts
-    ? getPref(opts.config, "remote.pairRefreshMinutes")
-    : undefined;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < PAIR_REFRESH_MIN_MINUTES) {
-    return DEFAULT_PAIR_REFRESH_MINUTES;
-  }
-  return Math.min(PAIR_REFRESH_MAX_MINUTES, Math.round(n));
-}
-
-function sendPairCreate(force: boolean): void {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  ws.send(
-    JSON.stringify({
-      v: 1,
-      type: "pair-create",
-      ...(force ? { force: true } : {}),
-      ttlMinutes: pairRefreshMinutes(),
-    }),
-  );
-}
-
-function stopPairRefreshTimer(): void {
-  if (pairRefreshTimer) {
-    clearInterval(pairRefreshTimer);
-    pairRefreshTimer = null;
-  }
-}
-
-/**
- * 轮询 tick：码未过期且有活跃 client → 跳过（不打断在途 client 断线续连）；
- * 码未过期且无 client → force 换新；码已过期/无码 → 发新码。
- */
-function tickPairRefresh(): void {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  if (pairCodeExpiresAt && pairCodeExpiresAt > Date.now()) {
-    if (!peerConnected) sendPairCreate(true);
-  } else {
-    sendPairCreate(false);
-  }
-}
-
-/** 按当前 pref 周期启动轮询（auth-ok 后调用；周期修改时热重排） */
-function schedulePairRefresh(): void {
-  stopPairRefreshTimer();
-  pairRefreshTimer = setInterval(
-    tickPairRefresh,
-    pairRefreshMinutes() * 60_000,
-  );
-}
-
-/**
- * 热生效：UI 保存新换新周期后重排轮询定时器。Host 未激活时无 timer 可排，
- * 连接成功后按当时 pref 取值排程，本调用仅作 no-op。
- */
-export function applyPairRefreshSchedule(): void {
-  if (stopped || !opts) return;
-  schedulePairRefresh();
-}
-
-/** 立即刷新：force 换一个新配对码（配对码卡片随之更新） */
-export function refreshPairNow(): void {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  sendPairCreate(true);
 }
 
 function emitStatus(): void {
@@ -214,11 +162,11 @@ function emitStatus(): void {
       win.webContents.send("remote-status", s);
     }
   }
-  // settings 是 shell 窗口内的惰性 webview（独立 webContents），收不到上面的
-  // broadcast——经 shell:forward 桥接，仅面板打开（webview 存在）时送达。
+  // settings 是 shell 窗口内的惰性 webview(独立 webContents),收不到上面的
+  // broadcast——经 shell:forward 桥接,仅面板打开(webview 存在)时送达。
   forwardToWebview("settings", "remote-status", s);
   console.log(
-    `[remote] host state=${s.state} relay=${s.relayUrl} peer=${s.peerConnected ? (s.peer?.deviceId ?? "?") : "none"}${s.pairCode ? ` code=${s.pairCode}` : ""}`,
+    `[remote] host state=${s.state} relay=${s.relayUrl} peer=${s.peerConnected ? (s.peer?.deviceId ?? "?") : "none"} auth=${s.clientFingerprint ?? "none"}`,
   );
 }
 
@@ -238,6 +186,7 @@ function pushEvent(
   origin: RemoteEventOrigin = "host",
 ): void {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  if (!peerVerified) return; // 握手完成前不泄漏任何业务数据
   ws.send(JSON.stringify({ v: 1, type: "event", channel, args, origin }));
 }
 
@@ -261,6 +210,7 @@ export function broadcastRemotePtyOpened(payload: {
 
 function pushPtyData(sessionId: string, data: string): void {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  if (!peerVerified) return; // 握手完成前不泄漏任何业务数据
   ws.send(encodePtyBinary(sessionId, Buffer.from(data, "utf-8")));
 }
 
@@ -813,6 +763,72 @@ function detachHooks(): void {
   setTileFocusSink(null);
 }
 
+function clearAuthTimer(): void {
+  if (authTimer) {
+    clearTimeout(authTimer);
+    authTimer = null;
+  }
+}
+
+function sendToPeer(payload: Record<string, unknown>): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify(payload));
+}
+
+/** 拒绝当前 client:发 peer-auth-error 后断开本连接(close handler 调度重连)。 */
+function rejectPeerAuth(code: "unauthorized"): void {
+  clearAuthTimer();
+  peerVerified = false;
+  sendToPeer({
+    v: 1,
+    type: "peer-auth-error",
+    code,
+    message: "client not authorized",
+  });
+  peerConnected = false;
+  peerInfo = undefined;
+  const socket = ws;
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    // 不断 ws 引用:close handler 负责置空 + 重连
+    socket.close();
+  }
+  emitStatus();
+}
+
+/** peer-connected 后由 Host 先挑战:验 client 对随机 nonce 的签名。 */
+function beginPeerAuth(): void {
+  clearAuthTimer();
+  const store = hostKeys ?? loadOrCreateHostKeys(COLLAB_DIR);
+  hostKeys = store;
+  if (!store.clientPublicKey) {
+    console.log("[remote] no authorized client key, rejecting");
+    rejectPeerAuth("unauthorized");
+    return;
+  }
+  peerVerified = false;
+  authNonce = newNonce();
+  console.log("[remote] challenging client");
+  sendToPeer({ v: 1, type: "peer-auth-request", nonce: authNonce });
+  authTimer = setTimeout(() => {
+    authTimer = null;
+    console.log("[remote] peer auth timeout");
+    rejectPeerAuth("unauthorized");
+  }, PEER_AUTH_TIMEOUT_MS);
+}
+
+/** 验签通过后回执:对 client 的 nonce 用身份私钥签名,供 client 验 Host。 */
+function sendPeerAuthAck(clientNonce: string): void {
+  const store = hostKeys ?? loadOrCreateHostKeys(COLLAB_DIR);
+  hostKeys = store;
+  if (!store.identityPrivateKey) return;
+  const signature = signChallenge(
+    HOST_AUTH_DOMAIN,
+    clientNonce,
+    store.identityPrivateKey,
+  );
+  sendToPeer({ v: 1, type: "peer-auth-ack", nonce: clientNonce, signature });
+}
+
 function handleFrame(frame: { type: string; [key: string]: unknown }): void {
   switch (frame.type) {
     case "auth-ok": {
@@ -821,11 +837,6 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
       // 连接成功才算被控端「开启」：持久化，下次启动据此自动连接
       if (opts) setPref(opts.config, "remote.hostEnabled", true);
       emitStatus();
-      // 取配对码（TTL 跟随 remote.pairRefreshMinutes）并启动自动换新轮询
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        sendPairCreate(false);
-        schedulePairRefresh();
-      }
       break;
     }
     case "auth-error": {
@@ -834,20 +845,11 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
       lastError = (frame.message as string) ?? "auth failed";
       peerConnected = false;
       peerInfo = undefined;
+      peerVerified = false;
+      clearAuthTimer();
       // 连接未成功不持久化「开启」，避免下次启动反复自动连接失败
       if (opts) setPref(opts.config, "remote.hostEnabled", false);
       void stopRemoteHost();
-      break;
-    }
-    case "pair-created": {
-      pairCode = frame.code as string;
-      const ttlSec = Number(frame.ttlSec);
-      pairCodeExpiresAt =
-        Number.isFinite(ttlSec) && ttlSec > 0
-          ? Date.now() + ttlSec * 1000
-          : undefined;
-      console.log(`[remote] pair-code: ${pairCode} expiresIn=${ttlSec}s`);
-      emitStatus();
       break;
     }
     case "peer-connected": {
@@ -857,11 +859,49 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
         `[remote] peer-connected ${peerInfo?.role}:${peerInfo?.deviceId}`,
       );
       emitStatus();
+      beginPeerAuth();
+      break;
+    }
+    case "peer-auth-response": {
+      const nonce = frame.nonce as string;
+      const signature = frame.signature as string;
+      const clientNonce = frame.clientNonce as string;
+      if (!peerConnected || peerVerified) break;
+      const store = hostKeys ?? loadOrCreateHostKeys(COLLAB_DIR);
+      hostKeys = store;
+      if (
+        !authNonce ||
+        nonce !== authNonce ||
+        !store.clientPublicKey ||
+        !verifyChallenge(
+          CLIENT_AUTH_DOMAIN,
+          nonce,
+          store.clientPublicKey,
+          signature,
+        )
+      ) {
+        console.log("[remote] client signature invalid");
+        rejectPeerAuth("unauthorized");
+        break;
+      }
+      peerVerified = true;
+      clearAuthTimer();
+      console.log("[remote] client verified");
+      sendPeerAuthAck(clientNonce);
+      emitStatus();
+      break;
+    }
+    case "peer-auth-error": {
+      // 对端(理论不会)或中继路径异常——按未授权断开
+      console.log("[remote] peer auth error received");
+      rejectPeerAuth("unauthorized");
       break;
     }
     case "peer-disconnected": {
       peerConnected = false;
       peerInfo = undefined;
+      peerVerified = false;
+      clearAuthTimer();
       console.log(
         `[remote] peer-disconnected reason=${frame.reason as string}`,
       );
@@ -876,9 +916,11 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
       };
       const { id, method, params } = frame2;
       if (!table || !ws) return;
+      if (!peerVerified) return; // 握手未完成前丢弃一切业务调用
       console.log(`[remote] rpc ${method}`);
       void table.call(method, params).then((result) => {
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        if (!peerVerified) return; // 执行期间被踢/重连,不再回执
         if (result.ok) {
           ws.send(
             JSON.stringify({
@@ -966,6 +1008,8 @@ function connectOnce(): void {
     ws = null;
     peerConnected = false;
     peerInfo = undefined;
+    peerVerified = false;
+    clearAuthTimer();
     console.log("[remote] disconnected");
     emitStatus();
     scheduleRetry();
@@ -986,11 +1030,12 @@ export async function startRemoteHost(o: HostOptions): Promise<void> {
   opts = o;
   stopped = false;
   retryDelayMs = 1000;
-  pairCode = undefined;
-  pairCodeExpiresAt = undefined;
-  stopPairRefreshTimer();
+  // 启用 host 时载入/生成身份密钥(幂等;长期不变)
+  hostKeys = loadOrCreateHostKeys(COLLAB_DIR);
   peerConnected = false;
   peerInfo = undefined;
+  peerVerified = false;
+  clearAuthTimer();
   lastError = undefined;
   table = registerRemoteMethods(o.config);
   attachHooks();
@@ -1043,11 +1088,10 @@ export async function stopRemoteHost(): Promise<void> {
       // already closed
     }
   }
-  pairCode = undefined;
-  pairCodeExpiresAt = undefined;
-  stopPairRefreshTimer();
   peerConnected = false;
   peerInfo = undefined;
+  peerVerified = false;
+  clearAuthTimer();
   detachHooks();
   emitStatus();
   console.log("[remote] host stopped");
@@ -1149,4 +1193,54 @@ function tryTestOnce(
       finish({ ok: false, code: "ECONNRESET", error: "connection closed" });
     });
   });
+}
+
+export interface IssueCredentialResult {
+  ok: boolean;
+  error?: string;
+  content?: string; // 凭证 JSON,由主进程弹保存框落盘
+  clientFingerprint?: string;
+}
+
+/**
+ * 生成新授权凭证并作废旧 client(若在线立即断开,旧凭证下次连接即被拒)。
+ * 严格单份:新签发自动覆盖本地授权公钥。
+ */
+export function issueNewCredential(): IssueCredentialResult {
+  if (!opts) return { ok: false, error: "Host is not active" };
+  const store = hostKeys ?? loadOrCreateHostKeys(COLLAB_DIR);
+  hostKeys = store;
+  if (!store.identityPrivateKey) return { ok: false, error: "keys missing" };
+  if (!deviceId) {
+    return { ok: false, error: "Host not connected yet" };
+  }
+  // 先踢在线的旧 client(签发语义 = 旧凭证立即作废,host 重连后房间即空)
+  if (peerVerified || peerConnected) {
+    clearAuthTimer();
+    peerVerified = false;
+    sendToPeer({
+      v: 1,
+      type: "peer-auth-error",
+      code: "unauthorized",
+      message: "credential reissued",
+    });
+    peerConnected = false;
+    peerInfo = undefined;
+    const socket = ws;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      // 不断 ws 引用:close handler 负责置空 + 重连
+      socket.close();
+    }
+  }
+  const content = issueCredential({
+    hostKeys: store,
+    hostId: deviceId,
+    relayUrl: opts.relayUrl,
+    hostDisplayName: opts.deviceName,
+  });
+  saveHostKeys(COLLAB_DIR, store);
+  const fp = fingerprint(store.clientPublicKey!);
+  console.log(`[remote] credential issued fingerprint=${fp}`);
+  emitStatus();
+  return { ok: true, content, clientFingerprint: fp };
 }
