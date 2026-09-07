@@ -93,7 +93,7 @@ export function startRelay(opts: Options): WebSocketServer {
   if (opts.persistDir) {
     const state = loadState(opts.persistDir);
     console.log(
-      `[relay] loaded state codes=${state?.codes.length ?? 0} rooms=${state?.rooms.length ?? 0}`,
+      `[relay] loaded state rooms=${state?.rooms.length ?? 0}`,
     );
     if (state) rooms.restore(state);
   }
@@ -119,7 +119,7 @@ export function startRelay(opts: Options): WebSocketServer {
         }, PERSIST_INTERVAL_MS)
       : null;
 
-  // 配对码/房间等关键状态变化时立即落盘，避免 relay 崩溃后配对码丢失
+  // 房间占用状态变化时立即落盘,避免 relay 崩溃后恢复时丢状态
   const persistNow = (): void => {
     if (opts.persistDir !== null) {
       saveState(opts.persistDir, rooms.snapshot());
@@ -188,22 +188,6 @@ export function startRelay(opts: Options): WebSocketServer {
         return;
       }
 
-      if (frame.type === "pair-create") {
-        if (peer.role !== "host") return;
-        const { code, ttlSec } = rooms.createPairCode(peer.deviceId, {
-          ...(frame.force ? { force: true } : {}),
-          ...(frame.ttlMinutes !== undefined
-            ? { ttlMinutes: frame.ttlMinutes }
-            : {}),
-        });
-        console.log(
-          `[relay] pair-created code=${code} host=${peer.deviceId} ttl=${ttlSec}s${frame.force ? " force" : ""}`,
-        );
-        ws.send(JSON.stringify({ v: 1, type: "pair-created", code, ttlSec }));
-        persistNow();
-        return;
-      }
-
       if (isPassthroughFrame(frame)) {
         const peerWs = rooms.peerOf(ws);
         if (!peerWs) return;
@@ -267,14 +251,14 @@ export function startRelay(opts: Options): WebSocketServer {
       return;
     }
     if (frame.role === "client") {
-      const code = frame.pairCode ?? "";
-      if (rooms.isCodeLocked(code)) {
+      const hostId = frame.hostId ?? "";
+      if (!hostId) {
         ws.send(
           JSON.stringify({
             v: 1,
             type: "auth-error",
-            code: "pair-code-expired",
-            message: "pair code locked",
+            code: "malformed",
+            message: "hostId is required",
           }),
         );
         ws.close();
@@ -286,9 +270,9 @@ export function startRelay(opts: Options): WebSocketServer {
         role: "client",
         displayName: frame.deviceName,
       };
-      const joined = rooms.join(code, client);
+      const joined = rooms.joinHost(hostId, client);
       if (!joined.ok) {
-        console.log(`[relay] auth failed: ${joined.code}`);
+        console.log(`[relay] join failed: ${joined.code} host=${hostId}`);
         ws.send(
           JSON.stringify({
             v: 1,
@@ -309,7 +293,7 @@ export function startRelay(opts: Options): WebSocketServer {
           displayName: frame.deviceName,
         }),
       );
-      console.log(`[relay] paired client=${client.deviceId} host=${joined.host.deviceId}`);
+      console.log(`[relay] client joined host=${hostId}`);
       persistNow();
       const toClient = {
         v: 1,

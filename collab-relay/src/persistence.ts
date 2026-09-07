@@ -1,14 +1,12 @@
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { PairRecord } from "./rooms";
 
 interface PersistedSnapshot {
   version: 1;
-  codes: PairRecord[];
   rooms: { deviceId: string; hasClient: boolean }[];
 }
 
-const FILE_NAME = "codes.json";
+const FILE_NAME = "rooms.json";
 
 export function loadState(dir: string): PersistedSnapshot | null {
   const file = join(dir, FILE_NAME);
@@ -24,7 +22,7 @@ export function loadState(dir: string): PersistedSnapshot | null {
 
 export function saveState(
   dir: string,
-  state: { codes: PairRecord[]; rooms: { deviceId: string; hasClient: boolean }[] },
+  state: { rooms: { deviceId: string; hasClient: boolean }[] },
 ): void {
   try {
     mkdirSync(dir, { recursive: true });
