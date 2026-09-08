@@ -788,6 +788,32 @@ function clearAuthTimer(): void {
   }
 }
 
+// Client 端操作会触发 Host 端 spawn 新的 terminal guest / tile 几何变化并
+// refit。Host 窗口若隐藏/被遮挡,Chromium 停止出帧,guest 的 fit 链
+// (rAF/ResizeObserver)停摆,挂载补推会以从未 fit 的默认网格(80×24)直写
+// PTY winsize 并广播给镜像端 —— 镜像端按 80×24 自适应字号会把字放得巨大。
+// 这类 RPC 进入时先把 Host 主窗口调度到前台,保证权威收敛侧真实可渲染
+// (与 canvas.terminalWriteFocused 的 restore+show+focus 同款语义)。
+const HOST_VISIBLE_RPC_METHODS = new Set([
+  "pty:create",
+  "pty:reconnect",
+  "canvas:focus-tile",
+  "canvas:refresh-tile",
+  "canvas:update-tile-geometry",
+  "canvas:relayout-tiles",
+]);
+
+function bringHostShellToFront(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
+    if (!win.webContents.getURL().includes("/shell/")) continue;
+    if (win.isMinimized()) win.restore();
+    if (!win.isVisible()) win.show();
+    win.focus();
+    return;
+  }
+}
+
 function sendToPeer(payload: Record<string, unknown>): void {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   ws.send(JSON.stringify(payload));
@@ -935,6 +961,7 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
       const { id, method, params } = frame2;
       if (!table || !ws) return;
       if (!peerVerified) return; // 握手未完成前丢弃一切业务调用
+      if (HOST_VISIBLE_RPC_METHODS.has(method)) bringHostShellToFront();
       console.log(`[remote] rpc ${method}`);
       void table.call(method, params).then((result) => {
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
