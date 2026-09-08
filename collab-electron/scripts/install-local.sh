@@ -167,6 +167,10 @@ install_flavor remote
 echo "Clearing Claude Code plugin cache..."
 rm -rf "$HOME/.claude/plugins/cache/collaborator"
 
+# Step 5: 安装 Finder 快速操作(发送选中路径到 Collaborator 聚焦终端)
+echo "Installing Finder quick action..."
+"$PROJECT_DIR/scripts/install-finder-action.sh"
+
 END_TIME=$(date +%s)
 ELAPSED=$((END_TIME - START_TIME))
 echo ""
