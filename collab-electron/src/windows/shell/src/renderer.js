@@ -772,6 +772,20 @@ async function init() {
     if (surface === "canvas-tile" && tileManager.getFocusedTileId()) {
       const dom = tileManager.getTileDOMs().get(tileManager.getFocusedTileId());
       if (dom && dom.webview) {
+        // 与 focusCanvasTile 同款语义:焦点被其他 webview guest(Nav 等)持有时
+        // 直接 focus 不会移交窗口焦点,先 blur 当前持焦的 webview。
+        const current = document.activeElement;
+        if (
+          current &&
+          current !== dom.webview &&
+          current.tagName === "WEBVIEW"
+        ) {
+          try {
+            current.blur();
+          } catch {
+            /* noop */
+          }
+        }
         dom.webview.focus();
         noteSurfaceFocus("canvas-tile");
         return;
@@ -837,7 +851,35 @@ async function init() {
   // -- Window + canvas focus listeners --
 
   window.addEventListener("focus", () => {
-    noteSurfaceFocus("shell");
+    // 窗口失焦再激活:恢复最近聚焦的 tile(ring + 键盘焦点),而不是清空。
+    // 若清空,任何窗口 focus 事件(如 dblclick 新建 tile 后 dom-ready 的
+    // autoFocus 与窗口激活交错)都会把 tile 聚焦打断——新 tile 无黑框、
+    // 键盘输入无效,必须再单击一次。
+    const focusedId = tileManager.getFocusedTileId();
+    if (focusedId) {
+      const dom = tileManager.getTileDOMs().get(focusedId);
+      if (dom?.webview) {
+        // 与 focusCanvasTile 同款语义:窗口重新激活后 Chromium 焦点可能回到
+        // 之前持焦的 webview guest(如 Nav),直接 focus 目标不会移交窗口
+        // 焦点,需先 blur 当前持焦的 webview 再 focus。
+        const current = document.activeElement;
+        if (
+          current &&
+          current !== dom.webview &&
+          current.tagName === "WEBVIEW"
+        ) {
+          try {
+            current.blur();
+          } catch {
+            /* noop */
+          }
+        }
+        dom.webview.focus();
+        noteSurfaceFocus("canvas-tile");
+        return;
+      }
+    }
+    noteSurfaceFocus("canvas");
   });
   canvasEl.addEventListener("focus", () => {
     noteSurfaceFocus("canvas");

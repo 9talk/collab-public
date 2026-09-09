@@ -289,6 +289,29 @@ export function createTileManager({
     }
   }
 
+  // 焦点被其他 webview 的 guest(Nav/Files 面板等)持有时,Electron 下对目标
+  // webview 调 focus() 只改变宿主文档的 activeElement,窗口焦点不会移交
+  // (Chromium 焦点仍留在原 guest,guest 的 hasFocus 保持 false)。先 blur
+  // 持焦点的 webview,让焦点回到宿主文档,再 focus 目标,guest 才能拿到
+  // 键盘焦点。顺序必须同帧执行,不可拆分。
+  function focusTileWebview(dom) {
+    const wv = dom?.webview;
+    if (!wv) return;
+    const current = document.activeElement;
+    if (current && current !== wv && current.tagName === "WEBVIEW") {
+      try {
+        current.blur();
+      } catch {
+        /* noop */
+      }
+    }
+    try {
+      wv.focus();
+    } catch {
+      /* not attached yet */
+    }
+  }
+
   function forwardClickToWebview(webview, mouseEvent) {
     if (!webview.isConnected) return;
     // isLoading() throws when the guest hasn't attached or emitted dom-ready
@@ -361,7 +384,7 @@ export function createTileManager({
         // Electron forbids webview.focus() before dom-ready; _pendingFocus
         // handles the actual focus transfer once the webview has loaded.
         if (!wasRebuilt) {
-          dom.webview.focus();
+          focusTileWebview(dom);
         }
         onNoteSurfaceFocus("canvas-tile");
 
@@ -399,11 +422,7 @@ export function createTileManager({
       clearTileFocusRing();
       dom.container.classList.add("tile-focused");
       if (dom.webview) {
-        try {
-          dom.webview.focus();
-        } catch {
-          /* not attached yet */
-        }
+        focusTileWebview(dom);
       }
       onNoteSurfaceFocus("canvas-tile");
     }
@@ -479,6 +498,11 @@ export function createTileManager({
       revealed = true;
       if (revealTimer) clearTimeout(revealTimer);
       wv.style.visibility = "";
+      // dom-ready 的 autoFocus 可能发生在 visibility:hidden 期间,键盘焦点
+      // 并未真正给到 guest;首帧可见后若该 tile 仍是聚焦目标则补一次。
+      if (focusedTileId === tile.id) {
+        focusTileWebview(dom);
+      }
     };
 
     dom.contentArea.appendChild(wv);
@@ -491,9 +515,9 @@ export function createTileManager({
       if (autoFocus) focusCanvasTile(tile.id);
       if (dom._pendingFocus) {
         dom._pendingFocus = false;
-        if (dom.webview) dom.webview.focus();
         // Re-establish canvas-focused and tile-focused in case window
         // focus events cleared them while the webview was loading.
+        focusTileWebview(dom);
         dom.container.classList.add("tile-focused");
         onNoteSurfaceFocus("canvas-tile");
       }
@@ -699,9 +723,10 @@ export function createTileManager({
         toggleTileSelection(id);
         syncSelectionVisuals();
       },
-      // 拖拽路径不触发 pan 动画：350ms 的 pan 会经 panDX 补偿污染拖拽坐标
-      //（点 tile 居中只应发生在非拖拽聚焦时，双击 title-bar 仍可居中）。
-      onFocus: (id, e) => focusCanvasTile(id, e, { pan: false }),
+      // pan 开关由 attachDrag 按语义传入:拖拽启动聚焦(mousedown)为
+      // { pan: false },避免 350ms 居中动画经 panDX 补偿污染拖拽坐标;
+      // 纯点击聚焦(mouseup 无位移)为 { pan: true },恢复单击 tile 居中。
+      onFocus: (id, e, opts = {}) => focusCanvasTile(id, e, opts),
       onCommit: (movedTiles) => {
         for (const t of movedTiles) onTileGeometryCommitted?.(t);
       },

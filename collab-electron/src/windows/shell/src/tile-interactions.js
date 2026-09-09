@@ -25,6 +25,9 @@ const CLICK_THRESHOLD = 3;
  * @param {() => Array<{webview: HTMLElement}>} opts.getAllWebviews
  * @param {() => null | Array<{tile: object, container: HTMLElement, startX: number, startY: number}>} opts.getGroupDragContext
  * @param {(tileId: string) => void} opts.onShiftClick
+ * @param {(tileId: string, e: MouseEvent, opts: { pan: boolean }) => void} opts.onFocus
+ *   第三个参数由本模块填充:拖拽启动聚焦传 { pan: false },纯点击(无位移)
+ *   聚焦传 { pan: true },由调用方决定是否触发居中动画
  * @param {(tiles: Array<import('./canvas-state.js').Tile>) => void} [opts.onCommit]
  *   drag 真正发生移动并落定（snap 后）回调，参数为几何变动的 tile 列表（组拖为整组）
  * @param {() => boolean} [opts.isSpaceHeld] - when true, suppress drag (canvas is panning)
@@ -51,11 +54,12 @@ export function attachDrag(
     if (e.button !== 0) return;
     if (isSpaceHeld?.()) return;
     e.preventDefault();
-    if (!deferFocus && onFocus) onFocus(tile.id, e);
     if (tile.locked !== false) {
-      if (deferFocus && onFocus) onFocus(tile.id, e);
+      // 锁定 tile 不可拖拽,点击即纯点击,可安全触发居中
+      if (onFocus) onFocus(tile.id, e, { pan: true });
       return;
     }
+    if (!deferFocus && onFocus) onFocus(tile.id, e, { pan: false });
 
     const startMX = e.clientX;
     const startMY = e.clientY;
@@ -130,8 +134,10 @@ export function attachDrag(
         return;
       }
 
-      if (deferFocus && !moved && onFocus) {
-        onFocus(tile.id, e);
+      // 纯点击(按下-抬起无位移):deferFocus 路径此时才首次聚焦;
+      // titleBar 路径 mousedown 已以 { pan: false } 聚焦,这里是补触发居中。
+      if (!moved && onFocus) {
+        onFocus(tile.id, e, { pan: true });
       }
 
       container.classList.remove("tile-dragging");
