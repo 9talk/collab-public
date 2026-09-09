@@ -931,6 +931,25 @@ bindIpc(
   ) => pty.resizeSession(sessionId, cols, rows),
 );
 
+// guest 真实 fit 落定后上报(终端 xterm 渲染出的实际 cell 度量,以 CSS px
+// 计的 px/格),用于校准新建会话的初始 winsize 估算,替代硬编码常量。
+bindIpc(
+  "pty:report-fit",
+  "on",
+  (
+    _event,
+    payload: { cols: number; rows: number; widthPx: number; heightPx: number },
+  ) => {
+    if (!payload || !(payload.cols > 0) || !(payload.widthPx > 0)) return;
+    const cellW = payload.widthPx / payload.cols;
+    const cellH = payload.rows > 0 ? payload.heightPx / payload.rows : 0;
+    if (cellW > 0 && cellH > 0) {
+      setPref(config, "terminalCellWidth", cellW);
+      setPref(config, "terminalCellHeight", cellH);
+    }
+  },
+);
+
 bindIpc("pty:kill", "handle", (_event, { sessionId }: { sessionId: string }) =>
   pty.killSession(sessionId),
 );

@@ -202,6 +202,16 @@ export interface CollabApi {
   ptyWrite: (sessionId: string, data: string) => void;
   ptySendRawKeys: (sessionId: string, data: string) => void;
   ptyResize: (sessionId: string, cols: number, rows: number) => Promise<void>;
+  /**
+   * 上报一次真实 fit 落定后的网格与容器像素尺寸,主进程据此校准
+   * 终端 cell 度量(px/格),替代新建会话初始 winsize 的硬编码估算常量。
+   */
+  ptyReportFit: (
+    cols: number,
+    rows: number,
+    widthPx: number,
+    heightPx: number,
+  ) => void;
   ptyKill: (sessionId: string) => Promise<void>;
   ptyReconnect: (
     sessionId: string,
@@ -211,6 +221,8 @@ export interface CollabApi {
   ptyDiscover: () => Promise<
     Array<{
       sessionId: string;
+      cols?: number;
+      rows?: number;
       meta: {
         shell: string;
         cwd: string;

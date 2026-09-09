@@ -850,6 +850,18 @@ function TerminalTab({
         const t = termRef.current;
         if (!t) return;
         window.api.ptyResize(sessionId, t.cols, t.rows).catch(() => {});
+        // 真实 fit 落定(非镜像)后把网格与容器像素上报主进程,反推实际
+        // cell 度量(px/格)校准后续新建会话的初始 winsize 估算。
+        if (!mirrorRef.current) {
+          const container = containerRef.current;
+          if (container) {
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            if (w > 0 && h > 0) {
+              window.api.ptyReportFit(t.cols, t.rows, w, h);
+            }
+          }
+        }
       }, 300);
     };
     term.onResize(() => {

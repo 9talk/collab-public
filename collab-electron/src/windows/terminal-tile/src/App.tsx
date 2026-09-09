@@ -1,21 +1,53 @@
 import { useEffect, useRef, useState } from "react";
 import { TerminalTab } from "@collab/components/Terminal";
+import {
+  estimateGrid,
+  FALLBACK_CELL_HEIGHT,
+  FALLBACK_CELL_WIDTH,
+} from "./estimate-grid";
 
 // Remote Client 应用里的 terminal webview 都是 Host 会话的镜像视图:
 // 以会话 winsize 渲染(见 TerminalTab mirror prop),不参与会话尺寸仲裁。
 const IS_MIRROR = window.api.getAppFlavor() === "remote";
 
-const CHAR_WIDTH = 7.0; // 实测 xterm cell 宽(Menlo 12px on macOS,与 TerminalTab 渲染一致)
-const CELL_HEIGHT = 14; // 实测 xterm cell 高;旧值 17 使初始 winsize 行数比视口少约 7 行,全屏程序下方留白
+/** 读主进程校准的 cell 度量(px/格);首个 tile 尚未 fit 上报时回落常量 */
+function readCalibratedCell(): { cellW: number; cellH: number } {
+  let cellW = FALLBACK_CELL_WIDTH;
+  let cellH = FALLBACK_CELL_HEIGHT;
+  try {
+    const w = window.api.getPrefSync("terminalCellWidth");
+    const h = window.api.getPrefSync("terminalCellHeight");
+    if (typeof w === "number" && w > 0) cellW = w;
+    if (typeof h === "number" && h > 0) cellH = h;
+  } catch {
+    /* 同步读取失败时使用常量 */
+  }
+  return { cellW, cellH };
+}
 
-/** Approximate terminal dimensions from the viewport before xterm mounts. */
+/** Approximate terminal dimensions from pixel size before xterm mounts. */
+function estimateFromPx(
+  width: number,
+  height: number,
+): { cols: number; rows: number } {
+  const { cellW, cellH } = readCalibratedCell();
+  return estimateGrid(width, height, cellW, cellH);
+}
+
 function estimateTermSize(): { cols: number; rows: number } {
-  const w = document.documentElement.clientWidth;
-  const h = document.documentElement.clientHeight;
-  return {
-    cols: Math.max(80, Math.floor(w / CHAR_WIDTH)),
-    rows: Math.max(24, Math.floor(h / CELL_HEIGHT)),
-  };
+  return estimateFromPx(
+    document.documentElement.clientWidth,
+    document.documentElement.clientHeight,
+  );
+}
+
+/** 初始估算优先按 tile 目标布局尺寸(挂载前窗口未布局,尺寸不可靠) */
+function estimateFromLayout(
+  layout?: { width: number; height: number } | null,
+): { cols: number; rows: number } {
+  return layout
+    ? estimateFromPx(layout.width, layout.height)
+    : estimateTermSize();
 }
 
 function App() {
@@ -55,14 +87,7 @@ function App() {
     }
 
     const createFreshSession = (target?: string, nextCwd?: string) => {
-      // 优先按 tile 目标布局尺寸估算(挂载前的 webview 是未布局的窗口
-      // 尺寸,会让初始 winsize 偏大,全屏程序随后错位)。
-      const est = layout
-        ? {
-            cols: Math.max(80, Math.floor(layout.width / CHAR_WIDTH)),
-            rows: Math.max(24, Math.floor(layout.height / CELL_HEIGHT)),
-          }
-        : estimateTermSize();
+      const est = estimateFromLayout(layout);
       window.api
         .ptyCreate(nextCwd ?? cwd, est.cols, est.rows, target, tileId, layout)
         .then((result) => {
@@ -76,7 +101,7 @@ function App() {
 
     if (isRestored && existingSessionId) {
       setRestored(true);
-      const { cols, rows } = estimateTermSize();
+      const est = estimateFromLayout(layout);
 
       window.api
         .ptyDiscover()
@@ -87,12 +112,14 @@ function App() {
           if (!session) {
             throw new Error("Missing restored session");
           }
-          // 镜像端必须以会话现行 winsize 回连:sidecar reconnect 会按传入
-          // 尺寸 resize PTY,若传本地视口尺寸(通常比 Host 小)会把权威
-          // winsize 改小,全屏程序(如 Claude Code)按缩小后的行数排布,
-          // 渲染在更大的可视区里下方留白。
-          const rcCols = IS_MIRROR && session.cols ? session.cols : cols;
-          const rcRows = IS_MIRROR && session.rows ? session.rows : rows;
+          // 已有会话以现行 winsize 为权威:sidecar reconnect 会按传入尺寸
+          // resize PTY,若用本地估算(挂载前窗口未布局时偏小甚至落到
+          // 80x24)会把运行中的会话改小,全屏程序(如 Claude Code)收到
+          // SIGWINCH 重排后下方留白。会话从未设过尺寸(缺失)才回落布局估算。
+          const rcCols =
+            session.cols && session.cols > 0 ? session.cols : est.cols;
+          const rcRows =
+            session.rows && session.rows > 0 ? session.rows : est.rows;
           return window.api.ptyReconnect(existingSessionId, rcCols, rcRows);
         })
         .then((result) => {
@@ -120,8 +147,8 @@ function App() {
                     setTimeout(retry, 2000);
                     return;
                   }
-                  const rcCols = session.cols ?? cols;
-                  const rcRows = session.rows ?? rows;
+                  const rcCols = session.cols ?? est.cols;
+                  const rcRows = session.rows ?? est.rows;
                   window.api
                     .ptyReconnect(existingSessionId, rcCols, rcRows)
                     .then((result) => {

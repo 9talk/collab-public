@@ -310,6 +310,14 @@ contextBridge.exposeInMainWorld("api", {
   },
   ptyResize: (sessionId: string, cols: number, rows: number) =>
     ipcRenderer.invoke("pty:resize", { sessionId, cols, rows }),
+  ptyReportFit: (
+    cols: number,
+    rows: number,
+    widthPx: number,
+    heightPx: number,
+  ) => {
+    ipcRenderer.send("pty:report-fit", { cols, rows, widthPx, heightPx });
+  },
   ptyKill: (sessionId: string) => ipcRenderer.invoke("pty:kill", { sessionId }),
   ptyReconnect: (sessionId: string, cols: number, rows: number) =>
     ipcRenderer.invoke("pty:reconnect", { sessionId, cols, rows }),
