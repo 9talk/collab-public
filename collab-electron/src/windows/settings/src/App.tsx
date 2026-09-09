@@ -13,6 +13,7 @@ import {
   Gauge,
   Robot,
   Broadcast,
+  Code,
 } from "@phosphor-icons/react";
 import { ResponsiveTreeMap } from "@nivo/treemap";
 import { useTranslation } from "./translations";
@@ -92,7 +93,12 @@ const APP_FLAVOR = api.getAppFlavor();
 // 其余 pane 依赖 Host 功能或被控端角色；connection pane 仅 remote 独立版展示。
 function isPaneVisible(id: Pane): boolean {
   if (APP_FLAVOR === "remote") {
-    return id === "appearance" || id === "connection" || id === "updates";
+    return (
+      id === "appearance" ||
+      id === "connection" ||
+      id === "updates" ||
+      id === "developer"
+    );
   }
   return id !== "connection";
 }
@@ -963,6 +969,7 @@ type Pane =
   | "files"
   | "claude"
   | "remote"
+  | "developer"
   | "connection";
 
 interface RemoteStatusView {
@@ -1983,6 +1990,84 @@ function UpdatesPane({ t }: { t: (key: TranslationKey) => string }) {
 
 type RemoteStatus = Record<string, unknown>;
 
+function DeveloperPane({ t }: { t: (key: TranslationKey) => string }) {
+  const [port, setPort] = useState(0);
+  const [portInput, setPortInput] = useState("9222");
+
+  useEffect(() => {
+    api
+      .getPref("devtoolsCdpPort")
+      .then((v) => {
+        if (typeof v === "number" && v > 0) {
+          setPort(v);
+          setPortInput(String(v));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function handleToggle(enabled: boolean) {
+    if (!enabled) {
+      setPort(0);
+      await api.setPref("devtoolsCdpPort", 0);
+      return;
+    }
+    const p = Number.parseInt(portInput, 10);
+    const portNum = Number.isInteger(p) && p > 0 && p <= 65535 ? p : 9222;
+    setPortInput(String(portNum));
+    setPort(portNum);
+    await api.setPref("devtoolsCdpPort", portNum);
+  }
+
+  async function handlePortChange(raw: string) {
+    setPortInput(raw);
+    const p = Number.parseInt(raw, 10);
+    if (Number.isInteger(p) && p > 0 && p <= 65535) {
+      setPort(p);
+      await api.setPref("devtoolsCdpPort", p);
+    }
+  }
+
+  return (
+    <div className="space-y-6 p-6">
+      <div className="space-y-1">
+        <h2 className="text-base font-semibold">{t("developer.title")}</h2>
+        <p className="text-sm text-muted-foreground">
+          {t("developer.description")}
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium">{t("developer.cdpEnable")}</p>
+            <p className="text-xs text-muted-foreground">
+              {t("developer.cdpHint")}
+            </p>
+          </div>
+          <ToggleSwitch
+            checked={port > 0}
+            onChange={(v) => void handleToggle(v)}
+          />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">{t("developer.cdpPort")}</p>
+          <input
+            type="number"
+            min={1}
+            max={65535}
+            value={portInput}
+            disabled={port === 0}
+            onChange={(e) => void handlePortChange(e.target.value)}
+            className="w-28 rounded-md border border-border bg-background px-2 py-1 text-sm text-right disabled:opacity-50"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RemotePane({ t }: { t: (key: TranslationKey) => string }) {
   const [relayUrl, setRelayUrl] = useState("");
   const [deviceToken, setDeviceToken] = useState("");
@@ -2693,6 +2778,7 @@ export default function App() {
       { id: "files", label: t("nav.files"), icon: FolderOpen },
       { id: "claude", label: t("nav.claude"), icon: Robot },
       { id: "remote", label: t("nav.remote"), icon: Broadcast },
+      { id: "developer", label: t("nav.developer"), icon: Code },
       { id: "connection", label: t("nav.connection"), icon: Broadcast },
     ] as { id: Pane; label: string; icon: typeof Palette }[]
   ).filter((item) => isPaneVisible(item.id));
@@ -2756,6 +2842,7 @@ export default function App() {
         {activePane === "files" && <FilesPane t={t} />}
         {activePane === "claude" && <ClaudePane t={t} />}
         {activePane === "remote" && <RemotePane t={t} />}
+        {activePane === "developer" && <DeveloperPane t={t} />}
         {activePane === "connection" && <ConnectionPane t={t} />}
       </div>
     </div>

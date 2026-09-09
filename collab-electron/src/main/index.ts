@@ -144,6 +144,17 @@ if (import.meta.env.DEV) {
 let mainWindow: BrowserWindow | null = null;
 let pendingFilePath: string | null = null;
 let config = loadConfig();
+// CDP 远程调试:Chromium 启动开关,必须在 app ready 前设置,运行时不可
+// 动态开关。设置面板「开发者」中配置端口(>0 开启),重启后生效。
+const cdpPort = (config.ui ?? {}).devtoolsCdpPort;
+if (
+  typeof cdpPort === "number" &&
+  Number.isInteger(cdpPort) &&
+  cdpPort > 0 &&
+  cdpPort <= 65535
+) {
+  app.commandLine.appendSwitch("remote-debugging-port", String(cdpPort));
+}
 let shuttingDown = false;
 // Cmd+Q 退出确认：quitConfirmed 为 true 后不再弹确认框；
 // quitDialogOpen 为 true 时再次触发退出（连按 Cmd+Q）直接放行。

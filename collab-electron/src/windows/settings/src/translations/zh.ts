@@ -232,6 +232,15 @@ export const zh: Record<TranslationKey, string> = {
   "connection.none": "—",
   "connection.notAvailable": "本设备当前没有进行中的镜像会话。",
 
+  // Developer pane
+  "nav.developer": "开发者",
+  "developer.title": "开发者",
+  "developer.description": "本设备的调试与开发选项。",
+  "developer.cdpEnable": "允许远程调试（CDP）",
+  "developer.cdpPort": "调试端口",
+  "developer.cdpHint":
+    "在 127.0.0.1 上监听 DevTools 协议且无鉴权——本机任意进程可完全控制本应用，仅调试时开启。重启应用后生效。",
+
   // Misc
   esc: "esc",
   close: "关闭",

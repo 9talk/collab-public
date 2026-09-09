@@ -237,6 +237,15 @@ export const en = {
   "connection.none": "—",
   "connection.notAvailable": "No mirror session is active on this device.",
 
+  // Developer pane
+  "nav.developer": "Developer",
+  "developer.title": "Developer",
+  "developer.description": "Debugging and development options for this device.",
+  "developer.cdpEnable": "Allow remote debugging (CDP)",
+  "developer.cdpPort": "Debug port",
+  "developer.cdpHint":
+    "Listens on 127.0.0.1 without authentication — any local process can fully control this app. Enable only while debugging. Restart the app to apply.",
+
   // Misc
   esc: "esc",
   close: "Close",
