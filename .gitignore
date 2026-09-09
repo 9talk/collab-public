@@ -8,6 +8,10 @@ docs/
 .claude/
 notes/
 Screenshots/
+
+# collab-relay runtime data (pairing codes / rooms)
+collab-relay/data/
+
 .worktrees
 opencode.json
 .idea
