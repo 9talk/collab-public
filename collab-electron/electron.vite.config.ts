@@ -47,7 +47,6 @@ export default defineConfig({
         input: {
           universal: resolve(__dirname, "src/preload/universal.ts"),
           shell: resolve(__dirname, "src/preload/shell.ts"),
-          "quit-confirm": resolve(__dirname, "src/preload/quit-confirm.ts"),
         },
         output: {
           format: "cjs",
