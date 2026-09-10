@@ -306,6 +306,10 @@ export const WorkspaceTree = forwardRef<
     [toggleDirExpand],
   );
 
+  // 搜索时无匹配的 workspace 整组隐藏(头部与提示都不占位)。allFiles 加载
+  // 完成(非 null)前仍按旧内容渲染,避免异步期间列表闪空。
+  if (isSearching && allFiles && filteredItems.length === 0) return null;
+
   return (
     <div className={`workspace-group${isExpanded ? "" : " collapsed"}`}>
       <FolderRow
@@ -428,7 +432,7 @@ export const WorkspaceTree = forwardRef<
           searchQuery={searchQuery}
         />
       ) : null}
-      {(isExpanded || isSearching) && filteredItems.length === 0 && (
+      {isExpanded && !isSearching && filteredItems.length === 0 && (
         <div className="search-no-matches">No matching files</div>
       )}
     </div>
