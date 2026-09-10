@@ -3,6 +3,9 @@ import {
   pushToHistory,
   goBack,
   goForward,
+  getCurrent,
+  getSnapshot,
+  restoreSnapshot,
   resetHistory,
 } from "./navigation-history";
 
@@ -84,5 +87,66 @@ describe("goForward", () => {
     pushToHistory("c");
     goBack();
     expect(goForward()).toBe("c");
+  });
+});
+
+describe("getCurrent", () => {
+  test("returns null when history is empty", () => {
+    expect(getCurrent()).toBeNull();
+  });
+
+  test("returns the most recent tile", () => {
+    pushToHistory("a");
+    pushToHistory("b");
+    expect(getCurrent()).toBe("b");
+  });
+
+  test("follows goBack", () => {
+    pushToHistory("a");
+    pushToHistory("b");
+    goBack();
+    expect(getCurrent()).toBe("a");
+  });
+});
+
+describe("getSnapshot", () => {
+  test("returns a copy of the stack", () => {
+    pushToHistory("a");
+    const snap = getSnapshot();
+    expect(snap).toEqual({ history: ["a"], currentIndex: 0 });
+    snap.history.push("b");
+    expect(getSnapshot()).toEqual({ history: ["a"], currentIndex: 0 });
+  });
+});
+
+describe("restoreSnapshot", () => {
+  test("restores stack and position", () => {
+    restoreSnapshot({ history: ["a", "b", "c"], currentIndex: 1 });
+    expect(getCurrent()).toBe("b");
+    expect(goBack()).toBe("a");
+    expect(goForward()).toBe("b");
+  });
+
+  test("ignores invalid input", () => {
+    restoreSnapshot(null);
+    restoreSnapshot({ history: "nope" });
+    restoreSnapshot({ history: [1, 2], currentIndex: 0 });
+    expect(getSnapshot()).toEqual({ history: [], currentIndex: -1 });
+  });
+
+  test("trims oversized stacks keeping newest and remaps index", () => {
+    const ids = Array.from({ length: 130 }, (_, i) => `tile-${i}`);
+    restoreSnapshot({ history: ids, currentIndex: 129 });
+    expect(getSnapshot()).toEqual({
+      history: ids.slice(30),
+      currentIndex: 99,
+    });
+  });
+
+  test("clamps out-of-range currentIndex", () => {
+    restoreSnapshot({ history: ["a"], currentIndex: 5 });
+    expect(getCurrent()).toBe("a");
+    restoreSnapshot({ history: [], currentIndex: 3 });
+    expect(getSnapshot()).toEqual({ history: [], currentIndex: -1 });
   });
 });

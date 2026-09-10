@@ -301,6 +301,8 @@ contextBridge.exposeInMainWorld("shellApi", {
     ipcRenderer.invoke("navigation:go-back"),
   navigationGoForward: (): Promise<string | null> =>
     ipcRenderer.invoke("navigation:go-forward"),
+  navigationGetCurrent: (): Promise<string | null> =>
+    ipcRenderer.invoke("navigation:get-current"),
 
   // Terminal screenshot
   termScreenshotClipboard: (webContentsId: number): Promise<{ ok: boolean }> =>

@@ -2012,6 +2012,15 @@ async function init() {
       minimap.update();
     }
   }
+
+  // 重启后回到上次使用的 tile:历史中当前项对应的 tile 存在才聚焦,
+  // 否则什么都不做。镜像(Client)端不做(启动聚焦为 Host 本地功能)。
+  if (!IS_REMOTE_APP) {
+    const lastTileId = await window.shellApi.navigationGetCurrent();
+    if (lastTileId && getTile(lastTileId)) {
+      tileManager.focusCanvasTile(lastTileId, null);
+    }
+  }
 }
 
 async function checkFirstLaunchDialog() {

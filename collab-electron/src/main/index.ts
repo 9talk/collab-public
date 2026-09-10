@@ -38,6 +38,7 @@ import {
   forwardToWebview,
 } from "./ipc";
 import { registerCanvasRpc } from "./canvas-rpc";
+import { loadHistory } from "./navigation-history-store";
 import {
   registerIntegrationsIpc,
   isClaudeDeepIntegrationEnabled,
@@ -1227,6 +1228,7 @@ app.whenReady().then(async () => {
     // Claude 集成/权限检查 —— 镜像会话的 fs/pty 全部经 relay 转发到 Host。
     registerIpcHandlers(config);
   } else {
+    await loadHistory();
     installCli();
     watcher.startWorker();
     registerIpcHandlers(config);

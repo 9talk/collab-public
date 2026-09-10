@@ -49,7 +49,44 @@ export function goForward() {
 }
 
 /**
- * Reset history state (useful for tests or app restart).
+ * Tile id at the current position (most recent navigation target), or null.
+ */
+export function getCurrent() {
+  return currentIndex >= 0 && currentIndex < history.length
+    ? history[currentIndex]
+    : null;
+}
+
+/**
+ * Snapshot of the full stack for persistence.
+ */
+export function getSnapshot() {
+  return { history: history.slice(), currentIndex };
+}
+
+/**
+ * Replace state with a persisted snapshot. Invalid input is ignored
+ * (state stays empty), oversized stacks are trimmed to the newest entries.
+ */
+export function restoreSnapshot(snapshot) {
+  if (!snapshot || !Array.isArray(snapshot.history)) return;
+  if (!snapshot.history.every((id) => typeof id === "string")) return;
+
+  let ids = snapshot.history;
+  let index = Number.isInteger(snapshot.currentIndex)
+    ? snapshot.currentIndex
+    : -1;
+  if (ids.length > MAX_HISTORY) {
+    const excess = ids.length - MAX_HISTORY;
+    ids = ids.slice(excess);
+    index = Math.max(0, index - excess);
+  }
+  history = ids.slice();
+  currentIndex = Math.max(-1, Math.min(index, history.length - 1));
+}
+
+/**
+ * Reset history state (tests only; app restart restores via restoreSnapshot).
  */
 export function resetHistory() {
   history = [];

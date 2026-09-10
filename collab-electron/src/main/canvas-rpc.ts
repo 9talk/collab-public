@@ -1,7 +1,13 @@
 import { ipcMain, type BrowserWindow } from "electron";
 import { randomUUID } from "node:crypto";
 import { registerMethod } from "./json-rpc-server";
-import { pushToHistory, goBack, goForward } from "./navigation-history";
+import {
+  pushToHistory,
+  goBack,
+  goForward,
+  getCurrent,
+} from "./navigation-history";
+import { saveHistory } from "./navigation-history-store";
 
 type PendingRequest = {
   resolve: (value: unknown) => void;
@@ -83,6 +89,7 @@ export function registerCanvasRpc(win: BrowserWindow): void {
   ipcMain.removeAllListeners("navigation:push");
   ipcMain.removeHandler("navigation:go-back");
   ipcMain.removeHandler("navigation:go-forward");
+  ipcMain.removeHandler("navigation:get-current");
 
   ipcMain.on(
     "canvas:rpc-response",
@@ -271,11 +278,23 @@ export function registerCanvasRpc(win: BrowserWindow): void {
     },
   );
 
-  // Navigation history IPC
+  // Navigation history IPC（每次变更后落盘,重启时由 loadHistory 恢复）
   ipcMain.on("navigation:push", (_event, tileId: string) => {
     pushToHistory(tileId);
+    void saveHistory();
   });
 
-  ipcMain.handle("navigation:go-back", () => goBack());
-  ipcMain.handle("navigation:go-forward", () => goForward());
+  ipcMain.handle("navigation:go-back", () => {
+    const tileId = goBack();
+    void saveHistory();
+    return tileId;
+  });
+
+  ipcMain.handle("navigation:go-forward", () => {
+    const tileId = goForward();
+    void saveHistory();
+    return tileId;
+  });
+
+  ipcMain.handle("navigation:get-current", () => getCurrent());
 }
