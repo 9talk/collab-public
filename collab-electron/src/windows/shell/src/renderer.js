@@ -1392,9 +1392,14 @@ async function init() {
             console.log(
               `[remote] pty-opened 同 tile 更新 session 指向 ${existing.id} -> ${payload.sessionId}`,
             );
-            // 旧 webview 的 URL 携带过期 sessionId,仍连旧会话(或镜像端
-            // 自建的错误会话):重建 webview 指向新会话
-            tileManager.respawnTerminalWebview(payload.tileId);
+            // 仅镜像端重建 webview 追赶 Host 新会话:镜像的 URL 死绑旧
+            // sessionId,自身无法切会话。Host 本地该事件是 tile webview
+            // 自建会话的回声(死会话 fallback),webview 内部已切到新会话;
+            // 重建会把 URL 变成 restored=1,恢复逻辑(claude --resume 等)
+            // 被误判为"会话已存在"而跳过。
+            if (IS_REMOTE_APP) {
+              tileManager.respawnTerminalWebview(payload.tileId);
+            }
           }
           return;
         }
