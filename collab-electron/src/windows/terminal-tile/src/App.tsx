@@ -41,10 +41,16 @@ function estimateTermSize(): { cols: number; rows: number } {
   );
 }
 
-/** 初始估算优先按 tile 目标布局尺寸(挂载前窗口未布局,尺寸不可靠) */
-function estimateFromLayout(
+/** 初始估算:优先 spawn 时实测的内容区尺寸(webview 内容盒,与 cell 校准
+ *  同一口径);缺失回落 tile 布局尺寸(整块、含标题栏,会高估约 1 列 2 行),
+ *  再缺失用实时视口(挂载前可能未布局,仅作兜底) */
+function estimateInitial(
   layout?: { width: number; height: number } | null,
+  content?: { width: number; height: number } | null,
 ): { cols: number; rows: number } {
+  if (content && content.width > 0 && content.height > 0) {
+    return estimateFromPx(content.width, content.height);
+  }
   return layout
     ? estimateFromPx(layout.width, layout.height)
     : estimateTermSize();
@@ -85,9 +91,24 @@ function App() {
         // 非法 layout 忽略，镜像创建时回退到自动布局
       }
     }
+    const contentParam = params.get("content");
+    let content: { width: number; height: number } | undefined;
+    if (contentParam) {
+      try {
+        const parsed = JSON.parse(contentParam);
+        if (
+          typeof parsed?.width === "number" &&
+          typeof parsed?.height === "number"
+        ) {
+          content = parsed;
+        }
+      } catch {
+        // 非法 content 忽略，估算回落 layout/实时视口
+      }
+    }
 
     const createFreshSession = (target?: string, nextCwd?: string) => {
-      const est = estimateFromLayout(layout);
+      const est = estimateInitial(layout, content);
       window.api
         .ptyCreate(nextCwd ?? cwd, est.cols, est.rows, target, tileId, layout)
         .then((result) => {
@@ -101,7 +122,7 @@ function App() {
 
     if (isRestored && existingSessionId) {
       setRestored(true);
-      const est = estimateFromLayout(layout);
+      const est = estimateInitial(layout, content);
 
       window.api
         .ptyDiscover()

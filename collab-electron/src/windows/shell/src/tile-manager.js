@@ -470,6 +470,26 @@ export function createTileManager({
         height: tile.height,
       }),
     );
+    // 内容区内容盒尺寸(webview 占满它,与 guest 视口及 cell 校准同一口径):
+    // layout 是整块 tile 尺寸、含标题栏与内边距,用它估算会高估约 1 列 2 行。
+    const ca = dom.contentArea;
+    if (ca) {
+      const cs = getComputedStyle(ca);
+      const contentW =
+        ca.clientWidth -
+        parseFloat(cs.paddingLeft) -
+        parseFloat(cs.paddingRight);
+      const contentH =
+        ca.clientHeight -
+        parseFloat(cs.paddingTop) -
+        parseFloat(cs.paddingBottom);
+      if (contentW > 0 && contentH > 0) {
+        params.set(
+          "content",
+          JSON.stringify({ width: contentW, height: contentH }),
+        );
+      }
+    }
     if (tile.ptySessionId) {
       params.set("sessionId", tile.ptySessionId);
       params.set("restored", "1");
