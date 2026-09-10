@@ -1209,28 +1209,34 @@ async function init() {
           }
         });
     } else if (action === "refresh-terminal") {
-      if (IS_REMOTE_APP) {
-        // 镜像端无会话/布局权威:Cmd+R 委托 Host 执行同款
-        // refresh+relayout+focus,结果(几何/聚焦/会话)经事件通道镜像回来。
-        const focusedId = tileManager.getFocusedTileId();
-        if (focusedId) {
-          window.shellApi.refreshRemoteTile(focusedId).catch((err) => {
-            console.log("[remote] refresh-tile failed:", err?.message ?? err);
+      const focusedId = tileManager.getFocusedTileId();
+      if (!focusedId) {
+        // 画布聚焦(无 tile)时 Cmd+R = 重排:与工具栏重排按钮同语义
+        if (IS_REMOTE_APP) {
+          window.shellApi.relayoutRemoteTiles().catch((err) => {
+            console.log("[remote] relayout-tiles failed:", err?.message ?? err);
           });
+        } else {
+          relayoutTerminalTiles();
         }
         return;
       }
-      console.log("[refresh-terminal] shortcut triggered");
-      const focusedId = tileManager.getFocusedTileId();
-      if (focusedId) {
-        const dom = tileManager.getTileDOMs().get(focusedId);
-        if (dom?.webview) dom.webview.blur();
-        requestAnimationFrame(() => {
-          tileManager.refreshTerminalTile(focusedId);
-          relayoutTerminalTiles();
-          tileManager.focusCanvasTile(focusedId);
+      if (IS_REMOTE_APP) {
+        // 镜像端无会话/布局权威:Cmd+R 委托 Host 执行同款
+        // refresh+relayout+focus,结果(几何/聚焦/会话)经事件通道镜像回来。
+        window.shellApi.refreshRemoteTile(focusedId).catch((err) => {
+          console.log("[remote] refresh-tile failed:", err?.message ?? err);
         });
+        return;
       }
+      console.log("[refresh-terminal] shortcut triggered");
+      const dom = tileManager.getTileDOMs().get(focusedId);
+      if (dom?.webview) dom.webview.blur();
+      requestAnimationFrame(() => {
+        tileManager.refreshTerminalTile(focusedId);
+        relayoutTerminalTiles();
+        tileManager.focusCanvasTile(focusedId);
+      });
     } else if (
       action === "focus-tile-right" ||
       action === "focus-tile-left" ||
