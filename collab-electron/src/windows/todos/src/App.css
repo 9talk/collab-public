@@ -363,7 +363,7 @@ body {
   padding: 6px 8px;
   outline: none;
   resize: vertical;
-  min-height: 50px;
+  min-height: 150px;
 }
 
 .modal-textarea:focus {
@@ -402,12 +402,15 @@ body {
   min-height: 18px;
 }
 
-/* 标签快捷选择:未选中的半透明,选中描边加粗;点击切换 */
+/* 标签快捷选择:未选中的半透明,选中描边加粗;点击切换。
+   与上方预览区之间固定分割线(预览为空时 min-height 保留空白,布局不跳动) */
 .modal-tag-suggest {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
   margin-top: 4px;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
 }
 
 .tag-chip.suggest {

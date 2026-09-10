@@ -330,10 +330,10 @@ function App() {
         )}
       </div>
 
-      {/* Modal: add / edit */}
+      {/* Modal: add / edit — 仅关闭/取消/保存按钮可关闭,点击空白不关闭 */}
       {modalMode && (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <div className="modal-content">
             <div className="modal-header">
               <span className="modal-title">
                 {modalMode === "add" ? "添加待办" : "编辑待办"}
@@ -349,7 +349,7 @@ function App() {
                   className="modal-textarea"
                   value={modalText}
                   onChange={(e) => setModalText(e.target.value)}
-                  rows={3}
+                  rows={9}
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -401,6 +401,21 @@ function App() {
                   onChange={(e) => setModalTags(e.target.value)}
                   placeholder="以空格或逗号分隔"
                 />
+                <div className="modal-tags-preview">
+                  {modalTags
+                    .split(/[,，\s]+/)
+                    .map((t) => t.trim())
+                    .filter(Boolean)
+                    .map((tag) => (
+                      <span
+                        key={tag}
+                        className="tag-chip"
+                        style={{ background: hashTagColor(tag) }}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                </div>
                 {allTags.length > 0 && (
                   <div className="modal-tag-suggest">
                     {allTags.map((tag) => {
@@ -419,21 +434,6 @@ function App() {
                     })}
                   </div>
                 )}
-              </div>
-              <div className="modal-tags-preview">
-                {modalTags
-                  .split(/[,，\s]+/)
-                  .map((t) => t.trim())
-                  .filter(Boolean)
-                  .map((tag) => (
-                    <span
-                      key={tag}
-                      className="tag-chip"
-                      style={{ background: hashTagColor(tag) }}
-                    >
-                      {tag}
-                    </span>
-                  ))}
               </div>
             </div>
             <div className="modal-footer">
