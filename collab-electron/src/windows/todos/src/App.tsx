@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 type Priority = "p0" | "p1" | "p2" | "p3";
@@ -114,6 +114,35 @@ function App() {
 
   const closeModal = useCallback(() => {
     setModalMode(null);
+  }, []);
+
+  // 标签快捷选择:汇总全部已有标签(去重排序),点击 chip 增删到当前输入
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of todos) for (const tag of t.tags) set.add(tag);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [todos]);
+
+  const modalTagsList = useMemo(
+    () =>
+      modalTags
+        .split(/[,，\s]+/)
+        .map((t) => t.trim())
+        .filter(Boolean),
+    [modalTags],
+  );
+
+  const toggleTag = useCallback((tag: string) => {
+    setModalTags((prev) => {
+      const current = prev
+        .split(/[,，\s]+/)
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const next = current.includes(tag)
+        ? current.filter((t) => t !== tag)
+        : [...current, tag];
+      return next.join(" ");
+    });
   }, []);
 
   const submitModal = useCallback(() => {
@@ -372,6 +401,24 @@ function App() {
                   onChange={(e) => setModalTags(e.target.value)}
                   placeholder="以空格或逗号分隔"
                 />
+                {allTags.length > 0 && (
+                  <div className="modal-tag-suggest">
+                    {allTags.map((tag) => {
+                      const active = modalTagsList.includes(tag);
+                      return (
+                        <span
+                          key={tag}
+                          className={`tag-chip suggest${active ? " active" : ""}`}
+                          style={{ background: hashTagColor(tag) }}
+                          onClick={() => toggleTag(tag)}
+                          title={active ? "点击移除" : "点击添加"}
+                        >
+                          {tag}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               <div className="modal-tags-preview">
                 {modalTags
