@@ -843,12 +843,24 @@ function TerminalTab({
     // 回调时取实时网格:settle 窗口内的任何变化都以最后状态为准,挂载补推
     // 等调用方无需预知最终值。
     let resizePushTimer: ReturnType<typeof setTimeout> | null = null;
+    // 首次 fit 落定前网格还是 xterm 构造默认值 80×24:webview reveal 前
+    // (visibility:hidden)Chromium 暂停 rAF,double-rAF 首帧 fit 被挂起,
+    // 挂载补推会抢先把默认网格写入 PTY(新建时闪一下,省内存重建时把
+    // 运行中的全屏程序压到 80 列再弹回)。settle 时先同步补一次 fit;
+    // 容器不可测(proposeDimensions 为空)则本次跳过,等真实 fit 的
+    // onResize 走正常通道顺延。
+    let fittedOnce = false;
     const pushResizeSettled = () => {
       if (resizePushTimer) clearTimeout(resizePushTimer);
       resizePushTimer = window.setTimeout(() => {
         resizePushTimer = null;
         const t = termRef.current;
         if (!t) return;
+        if (!fittedOnce) {
+          fit.fit();
+          if (!fit.proposeDimensions()) return;
+          fittedOnce = true;
+        }
         window.api.ptyResize(sessionId, t.cols, t.rows).catch(() => {});
         // 真实 fit 落定(非镜像)后把网格与容器像素上报主进程,反推实际
         // cell 度量(px/格)校准后续新建会话的初始 winsize 估算。
