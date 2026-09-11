@@ -739,6 +739,56 @@ describe("Reconnect queues output produced during gap", () => {
   });
 });
 
+describe("capture strips replayed query/residue payloads", () => {
+  it("capture 输出剥离 DSR/DA/DECRQM 查询与已回显的应答残留", async (t) => {
+    if (process.platform === "win32") {
+      t.skip("printf 转义语义依赖 POSIX shell");
+      return;
+    }
+
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    const { sessionId, socketPath } = await createSession(ctrl, 1);
+    const data = await connectDataSocket(socketPath);
+
+    // KEEP 锚定头尾;中段 = 三类查询(真 ESC 字节) + 被 shell 回显过的
+    // 应答残留(无 ESC 前缀的纯文本 "24;3R 1;2c 2026;2$y")
+    data.write(
+      "printf 'KEEP-A\\n\\033[6n\\033[c\\033[?2026$p24;3R 1;2c 2026;2$y\\nKEEP-B\\n'\n",
+    );
+    await waitForOutput(data, "KEEP-B");
+
+    // capture 的消费方(pty.ts reconnectSession scrollback)会把它回放给
+    // 全新 xterm, 不剥离则新 xterm 对历史查询重复应答, 被空闲 shell 回显
+    const cap = await rpcCall(ctrl, 2, "session.capture", {
+      sessionId,
+      lines: 50,
+    });
+    const output = (cap.result as { output: string }).output;
+
+    assert.ok(output.includes("KEEP-A"), "无查询的正常输出应保留");
+    assert.ok(output.includes("KEEP-B"), "无查询的正常输出应保留");
+    for (const gone of [
+      "\x1b[6n",
+      "\x1b[c",
+      "\x1b[?2026$p",
+      "24;3R",
+      "1;2c",
+      "2026;2$y",
+    ]) {
+      assert.ok(
+        !output.includes(gone),
+        `capture 不应再包含 ${JSON.stringify(gone)}`,
+      );
+    }
+
+    data.destroy();
+    ctrl.destroy();
+  });
+});
+
 describe("Unknown RPC method returns error", () => {
   it("returns error code -32601 for unknown method", async () => {
     server = createServer();

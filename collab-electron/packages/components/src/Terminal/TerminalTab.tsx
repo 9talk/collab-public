@@ -109,6 +109,9 @@ function TerminalTab({
   const flushDataRef = useRef<(() => void) | null>(null);
   const refreshingRef = useRef(false);
   const pendingDuringRefreshRef = useRef<Uint8Array[]>([]);
+  // scrollback 回放窗口:回放未解析完成前 onData 只可能是新 xterm 对历史
+  // 查询的自动应答(DSR/DA/DECRQM), 不得写回 pty。
+  const replayingRef = useRef(false);
   const isComposingRef = useRef(false);
   // OSC 9;4 上报的终端运行状态(running/idle),供主进程更新 tile 状态。
   const runningRef = useRef(false);
@@ -364,7 +367,15 @@ function TerminalTab({
     window.addEventListener("focus", onWindowFocus);
 
     if (restored && scrollbackData) {
-      term.write(scrollbackData);
+      // 回放窗口内屏蔽 onData(见 replayingRef):全新 xterm 处理历史回放
+      // 时会对残留的查询逐条自动应答, 应答经 onData 写回 pty 会被空闲
+      // shell 回显成 "24;3R"/"1;2c"/"2026;2$y" 文本。xterm 的 write 回调
+      // = 全部解析完成;该窗口在 webview 显示(term:ready)之前, 用户无法
+      // 输入, 丢弃出站数据无感。
+      replayingRef.current = true;
+      term.write(scrollbackData, () => {
+        replayingRef.current = false;
+      });
     }
 
     // 首帧渲染完成 → 通知 shell 解除 webview 隐藏(spawnTerminalWebview 的
@@ -712,6 +723,8 @@ function TerminalTab({
     });
 
     term.onData((data: string) => {
+      // 回放窗口内的出站数据只会是对历史查询的自动应答, 一律不回写 pty
+      if (replayingRef.current) return;
       // SGR 鼠标事件在转发给 pty 前先解析, 还原程序自身的选中状态(见上)。
       // 命中 hovered 链接的点击序列被剥离(链接已由 linkHandler.activate 消费),
       // 其余字节原样透传。

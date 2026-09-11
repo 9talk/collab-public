@@ -96,12 +96,12 @@ export class SidecarServer {
   }
 
   /**
-   * 重连/重建回放 ring buffer 时, 剥离 shell 早前发出的 DSR/DA/XTVERSION/
+   * 凡是将 ring buffer 历史导出给新 xterm 的路径(重连/重建的数据通道快照、
+   * capture RPC 的 scrollback), 一律剥离 shell 早前发出的 DSR/DA/XTVERSION/
    * XTGETTCAP 查询 (\x1b[6n、\x1b[...c、\x1b[>0q、\x1b[?Psq)。这些是历史
    * 查询, 回放给新 xterm 会触发对过期查询的应答, 应答涌入 shell 侧被回显成
-   * "37;3R"/"1;2c"/">|xterm.js(6.0.0)2026;2$y" 泄漏(主进程 pty.ts 拦截
-   * 回放流中的 \x1b[>0q 时也会重复应答写回 pty, zsh 将其当键盘输入回显)。
-   * 仅作用于回放快照, 实时数据不受影响。
+   * "37;3R"/"1;2c"/"2026;2$y" 泄漏(主进程 pty.ts 拦截 \x1b[>0q 时也会重复
+   * 应答写回 pty, zsh 将其当键盘输入回显)。仅作用于回放导出, 实时数据不受影响。
    */
   private stripRebuildReportQueries(buf: Buffer): Buffer {
     if (buf.length === 0) return buf;
@@ -111,11 +111,15 @@ export class SidecarServer {
       // @collab/shared/terminal-queries), 防全新 xterm / 主进程对过期查询
       // 重复应答
       .replace(buildRebuildQueryRe(), "")
-      // 剥离回放里已污染的无 \x1b 前缀应答载荷(上次泄漏残留), 防再次显示
-      .replace(/(?<![\d\x1b[?])(?:\d{1,4};\d{1,4}R|\d{1,3};2c)/g, "")
-      // 剥离 XTVERSION/XTGETTCAP 应答被 shell 回显后的纯文本残留(如
-      // ">|xterm.js(6.0.0)2026;2$y"), 防历史泄漏在重建后再次回放显示
-      .replace(/>\|xterm\.js\([^)]*\)[\d;]*\$y/g, "");
+      // 剥离回放里已污染的无 \x1b 前缀应答载荷(上次泄漏残留), 防再次显示:
+      // CPR 尾"24;3R" / DA1 尾"1;2c" / DECRQM 尾"2026;2$y"
+      .replace(
+        /(?<![\d\x1b[?])(?:\d{1,4};\d{1,4}R|\d{1,3};2c|\d{1,4};\d{1,2}\$y)/g,
+        "",
+      )
+      // 剥离 XTVERSION 应答被 shell 回显后的纯文本残留(如 ">|xterm.js(6.0.0)",
+      // 可后接 DECRQM 尾构成 ">|xterm.js(6.0.0)2026;2$y"), 防再次回放显示
+      .replace(/>\|xterm\.js\([^)]*\)(?:[\d;]*\$y)?/g, "");
     return cleaned === s ? buf : Buffer.from(cleaned, "utf-8");
   }
 
@@ -712,7 +716,10 @@ export class SidecarServer {
       return;
     }
     const snapshot = session.ringBuffer.snapshot();
-    const text = snapshot.toString("utf-8");
+    // capture 的历史最终也会回放给全新 xterm(pty.ts reconnectSession 的
+    // scrollback / 远端中继镜像), 与数据通道快照同口径剥离, 防新 xterm
+    // 对历史查询重复应答被 shell 回显
+    const text = this.stripRebuildReportQueries(snapshot).toString("utf-8");
     const lines = (params.lines as number) || 50;
     const allLines = text.split("\n");
     const tail = allLines.slice(-lines).join("\n");
