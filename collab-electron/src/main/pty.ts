@@ -781,7 +781,13 @@ export async function reconnectSession(
     scrollback = snapshot.snapshot;
     snapshotCols = snapshot.cols;
     snapshotRows = snapshot.rows;
-  } catch {
+    console.log(
+      `[pty] reconnect ${sessionId.slice(0, 8)}: serialize ${snapshot.cols}x${snapshot.rows} ${scrollback.length}B`,
+    );
+  } catch (err) {
+    console.log(
+      `[pty] serialize unavailable, capture fallback: ${err instanceof Error ? err.message : String(err)}`,
+    );
     try {
       scrollback = await client.captureSession(sessionId, 500);
     } catch {

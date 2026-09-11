@@ -23,16 +23,6 @@ function killTreeRec(pid, signal) {
   }
 }
 
-/** 杀进程组 + 递归进程树（electron 主进程可能已脱离 bun 的进程组）。 */
-function killTree(child, signal = "SIGTERM") {
-  try {
-    process.kill(-child.pid, signal);
-  } catch {
-    // group already gone
-  }
-  killTreeRec(child.pid, signal);
-}
-
 export function spawnLog(name, cmd, args, env, cwd, logDir) {
   mkdirSync(logDir, { recursive: true });
   const logPath = join(logDir, `${name}.log`);
