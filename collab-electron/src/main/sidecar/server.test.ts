@@ -1019,6 +1019,69 @@ describe("session.serialize outputs terminal-state snapshot", () => {
 
     ctrl.destroy();
   });
+
+  it("性能对比: 快照恢复 vs 字节历史回放(全屏多帧负载)", async (t) => {
+    if (skipWin(t)) return;
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    const { sessionId, socketPath } = await createSession(ctrl, 1);
+    const data = await connectDataSocket(socketPath);
+
+    // 模拟全屏 TUI 逐帧重绘: 250 帧 alt 屏整屏覆盖 + 彩色 SGR,
+    // 帧尾用运行期拼接的标记规避命令回声误匹配。
+    data.write(
+      'awk \'BEGIN{printf "\\033[?1049h"; for(i=0;i<250;i++){printf "\\033[H\\033[2J\\033[3%dmFRAME-%d\\n", i%8, i; for(j=0;j<18;j++) printf "row %d filler content %d\\n", j, i}; printf "FRAME-F%s\\n", "INAL"}\'\n',
+    );
+    await waitForOutput(data, "FRAME-FINAL", 15000);
+
+    const capResp = await rpcCall(ctrl, 2, "session.capture", {
+      sessionId,
+      lines: 500,
+    });
+    const captureText = (capResp.result as { output: string }).output;
+    const snapResp = await rpcCall(ctrl, 3, "session.serialize", {
+      sessionId,
+    });
+    const snap = snapResp.result as {
+      snapshot: string;
+      cols: number;
+      rows: number;
+    };
+
+    const parseInto = async (
+      text: string,
+      cols: number,
+      rows: number,
+    ): Promise<{ ms: number; text: string }> => {
+      const fresh = new Terminal({ cols, rows, allowProposedApi: true });
+      const t0 = performance.now();
+      await new Promise<void>((resolve) => fresh.write(text, () => resolve()));
+      const ms = performance.now() - t0;
+      const screen = readScreenText(fresh);
+      fresh.dispose();
+      return { ms, text: screen };
+    };
+
+    const capture = await parseInto(captureText, 80, 24);
+    const snapshot = await parseInto(snap.snapshot, snap.cols, snap.rows);
+
+    // 两条路径都应恢复到同一终帧(还原正确性等价), 快照体积应是
+    // 字节历史的一帧量级而非全部帧(约 250 帧负载下数量级更小)。
+    assert.ok(capture.text.includes("FRAME-FINAL"), "旧路径恢复终帧");
+    assert.ok(snapshot.text.includes("FRAME-FINAL"), "快照恢复终帧");
+    assert.ok(
+      snap.snapshot.length < captureText.length,
+      `快照应小于字节历史 (snapshot=${snap.snapshot.length}B capture=${captureText.length}B)`,
+    );
+    console.log(
+      `[perf] 快照 ${snap.snapshot.length}B / 解析 ${snapshot.ms.toFixed(1)}ms · 字节历史 ${captureText.length}B / 解析 ${capture.ms.toFixed(1)}ms (${(captureText.length / snap.snapshot.length).toFixed(1)}x 体积)`,
+    );
+
+    data.destroy();
+    ctrl.destroy();
+  });
 });
 
 describe("Unknown RPC method returns error", () => {
