@@ -8,6 +8,7 @@ import { displayCommandName } from "@collab/shared/path-utils";
 import { buildRebuildQueryRe } from "@collab/shared/terminal-queries";
 import { cleanupEndpoint, prepareEndpoint } from "../ipc-endpoint";
 import { RingBuffer } from "./ring-buffer";
+import { SessionEmulator } from "./session-emulator";
 import {
   makeResponse,
   makeError,
@@ -44,6 +45,8 @@ interface Session {
   cwdGuestPath?: string;
   createdAt: string;
   ringBuffer: RingBuffer;
+  /** 终端状态镜像: serialize 快照的事实源(reconnect/镜像 attach 用) */
+  emulator: SessionEmulator;
   dataServer: net.Server;
   dataClient: net.Socket | null;
   socketPath: string;
@@ -336,12 +339,16 @@ export class SidecarServer {
         return this.handleSignal(sock, id, params as Record<string, unknown>);
       case "session.capture":
         return this.handleCapture(sock, id, params as Record<string, unknown>);
+      case "session.serialize":
+        void this.handleSerialize(sock, id, params as Record<string, unknown>);
+        return;
       case "session.clearBuffer":
-        return this.handleClearBuffer(
+        void this.handleClearBuffer(
           sock,
           id,
           params as Record<string, unknown>,
         );
+        return;
       default:
         sock.write(makeError(id, -32601, `Unknown method: ${method}`));
     }
@@ -411,6 +418,8 @@ export class SidecarServer {
     }
 
     const ringBuffer = new RingBuffer(this.opts.ringBufferBytes);
+    // 以 node-pty 实际值初始化(防入参归一化差异), emulator 与 pty 几何从此同源
+    const emulator = new SessionEmulator(ptyProcess.cols, ptyProcess.rows);
     const terminateProcess = this.createTerminateProcess(ptyProcess);
     const session = this.withOptional(
       {
@@ -425,6 +434,7 @@ export class SidecarServer {
         cwdGuestPath: params.cwdGuestPath,
         createdAt: new Date().toISOString(),
         ringBuffer,
+        emulator,
         dataServer: null!,
         dataClient: null,
         socketPath,
@@ -441,7 +451,11 @@ export class SidecarServer {
 
     // Listen for PTY output
     ptyProcess.onData((data: string | Buffer) => {
-      ringBuffer.write(this.chunkToBuffer(data));
+      const chunk = this.chunkToBuffer(data);
+      ringBuffer.write(chunk);
+      // 喂原始 chunk(剥离之前): 查询由 parser 消化, 不进快照; 不经
+      // reconnectQueue——emulator 状态恒随最新输出, serialize 取"此刻"。
+      emulator.write(chunk);
 
       if (session.reconnectQueue) {
         session.reconnectQueue.push(data);
@@ -573,6 +587,7 @@ export class SidecarServer {
       return;
     }
     session.pty.resize(params.cols as number, params.rows as number);
+    session.emulator.resize(params.cols as number, params.rows as number);
     sock.write(makeResponse(id, { ok: true }));
   }
 
@@ -610,6 +625,7 @@ export class SidecarServer {
       if (rows !== baseRows) return;
       try {
         session.pty.resize(cols, rows + 1);
+        session.emulator.resize(cols, rows + 1);
       } catch {
         // PTY already dead
       }
@@ -620,6 +636,7 @@ export class SidecarServer {
       if (rows > baseRows) {
         try {
           session.pty.resize(cols, baseRows);
+          session.emulator.resize(cols, baseRows);
         } catch {
           // PTY already dead
         }
@@ -726,17 +743,42 @@ export class SidecarServer {
     sock.write(makeResponse(id, { output: tail }));
   }
 
-  private handleClearBuffer(
+  /**
+   * 输出会话终态快照(serialize): reconnect/镜像 attach 的恢复内容。
+   * 等解析排空后序列化, 保证快照含截至此刻的全部输出; 携带 cols/rows
+   * 供消费端在写入前校准网格(alt 缓冲内容不可 reflow, 几何须一致)。
+   */
+  private async handleSerialize(
     sock: net.Socket,
     id: number,
     params: Record<string, unknown>,
-  ): void {
+  ): Promise<void> {
+    const session = this.sessions.get(params.sessionId as string);
+    if (!session) {
+      sock.write(makeError(id, -32000, "Session not found"));
+      return;
+    }
+    try {
+      const snapshot = await session.emulator.serialize();
+      sock.write(makeResponse(id, snapshot));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      sock.write(makeError(id, -32000, `serialize failed: ${msg}`));
+    }
+  }
+
+  private async handleClearBuffer(
+    sock: net.Socket,
+    id: number,
+    params: Record<string, unknown>,
+  ): Promise<void> {
     const session = this.sessions.get(params.sessionId as string);
     if (!session) {
       sock.write(makeError(id, -32000, "Session not found"));
       return;
     }
     session.ringBuffer.clear();
+    await session.emulator.reset();
     sock.write(makeResponse(id, { ok: true }));
   }
 

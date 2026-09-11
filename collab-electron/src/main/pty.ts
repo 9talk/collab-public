@@ -743,6 +743,9 @@ export async function reconnectSession(
   cwdGuestPath?: string;
   meta: SessionMeta | null;
   scrollback: string;
+  /** 快照序列化时的网格尺寸(消费端写入前校准;仅 serialize 路径有值) */
+  snapshotCols?: number;
+  snapshotRows?: number;
 }> {
   await ensureSidecar();
   const client = getSidecarClient();
@@ -764,15 +767,26 @@ export async function reconnectSession(
     sidecarPowerShellSessionIds.add(sessionId);
   }
 
-  // 回放 ring buffer 尾部:attach 数据通道的推式快照发生在 guest 页面
-  // 订阅 ptyData 之前(webview 加载窗口外),会直接丢失;历史内容只能
-  // 经 scrollback 字段由 guest 主动拉取后 term.write。失败回退空串,
-  // 不阻断重连本身。
+  // 恢复内容:优先 serialize 终态快照(全屏应用的历史是逐帧录像, 快照
+  // 解析渲染量 O(1 帧); 查询被解析器消化, 不含历史查询)。失败回退
+  // capture 尾部 500 行(旧 sidecar 无 serialize 方法 / 序列化异常)。
+  // attach 数据通道的推式快照发生在 guest 页面订阅 ptyData 之前(webview
+  // 加载窗口外),会直接丢失;历史内容只能经 scrollback 字段由 guest 主动
+  // 拉取后 term.write。两路都失败按无历史处理, 不阻断重连本身。
   let scrollback = "";
+  let snapshotCols: number | undefined;
+  let snapshotRows: number | undefined;
   try {
-    scrollback = await client.captureSession(sessionId, 500);
+    const snapshot = await client.serializeSession(sessionId);
+    scrollback = snapshot.snapshot;
+    snapshotCols = snapshot.cols;
+    snapshotRows = snapshot.rows;
   } catch {
-    // 快照失败时按无历史处理
+    try {
+      scrollback = await client.captureSession(sessionId, 500);
+    } catch {
+      // 快照失败时按无历史处理
+    }
   }
 
   return withOptionalFields(
@@ -789,6 +803,8 @@ export async function reconnectSession(
       args: meta?.args,
       cwdHostPath: meta?.cwdHostPath ?? meta?.cwd,
       cwdGuestPath: meta?.cwdGuestPath,
+      snapshotCols,
+      snapshotRows,
     },
   );
 }

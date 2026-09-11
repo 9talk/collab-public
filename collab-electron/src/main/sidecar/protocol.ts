@@ -109,6 +109,13 @@ export interface SessionReconnectResult {
   socketPath: string;
 }
 
+// session.serialize result: 终态快照 + 序列化时的网格尺寸(消费端写入前校准)
+export interface SessionSerializeResult {
+  snapshot: string;
+  cols: number;
+  rows: number;
+}
+
 // session.list result
 export interface SessionInfo {
   sessionId: string;

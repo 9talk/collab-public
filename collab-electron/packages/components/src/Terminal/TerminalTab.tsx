@@ -79,6 +79,11 @@ interface TerminalTabProps {
   restored?: boolean;
   scrollbackData?: string | null;
   /**
+   * 快照序列化时的网格尺寸(serialize 恢复路径):alt 缓冲内容不可
+   * reflow,写入前先本地校准网格到该尺寸,随后由 settle/nudge 收敛视口。
+   */
+  snapshotSize?: { cols: number; rows: number } | null;
+  /**
    * 镜像端(Remote Client)渲染模式:PTY winsize 由 Host 端决定,本端
    * xterm 以会话 winsize 为网格基准、字符尺寸自适应容器铺满,且不再
    * 把本地 fit 的尺寸回写会话(避免 winsize 随镜像端视口漂移)。
@@ -91,6 +96,7 @@ function TerminalTab({
   visible,
   restored,
   scrollbackData,
+  snapshotSize,
   mirror = false,
 }: TerminalTabProps) {
   const mirrorRef = useRef(mirror);
@@ -367,6 +373,15 @@ function TerminalTab({
     window.addEventListener("focus", onWindowFocus);
 
     if (restored && scrollbackData) {
+      // serialize 快照含光标/alt 缓冲等几何敏感状态(alt 内容不可
+      // reflow):先本地校准网格到快照尺寸(不碰 pty),再写入;挂载后的
+      // settle 推流 / nudge 会把 pty 几何收敛到视口。
+      if (
+        snapshotSize &&
+        (term.cols !== snapshotSize.cols || term.rows !== snapshotSize.rows)
+      ) {
+        term.resize(snapshotSize.cols, snapshotSize.rows);
+      }
       // 回放窗口内屏蔽 onData(见 replayingRef):全新 xterm 处理历史回放
       // 时会对残留的查询逐条自动应答, 应答经 onData 写回 pty 会被空闲
       // shell 回显成 "24;3R"/"1;2c"/"2026;2$y" 文本。xterm 的 write 回调

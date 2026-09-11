@@ -6,6 +6,7 @@ import {
   type SessionCreateParams,
   type SessionCreateResult,
   type SessionReconnectResult,
+  type SessionSerializeResult,
   type SessionInfo,
   type PingResult,
 } from "./protocol";
@@ -147,6 +148,12 @@ export class SidecarClient {
       cols,
       rows,
     }) as Promise<SessionReconnectResult>;
+  }
+
+  async serializeSession(sessionId: string): Promise<SessionSerializeResult> {
+    return this.rpc("session.serialize", {
+      sessionId,
+    }) as Promise<SessionSerializeResult>;
   }
 
   async resizeSession(

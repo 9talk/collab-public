@@ -306,7 +306,14 @@ export interface CollabApi {
     sessionId: string,
     cols: number,
     rows: number,
-  ) => Promise<PtySession & { scrollback: string }>;
+  ) => Promise<
+    PtySession & {
+      scrollback: string;
+      /** 快照序列化时的网格尺寸(serialize 路径;写入前校准用) */
+      snapshotCols?: number;
+      snapshotRows?: number;
+    }
+  >;
   ptyDiscover: () => Promise<
     Array<{
       sessionId: string;

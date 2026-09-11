@@ -13,6 +13,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { execFileSync } from "node:child_process";
 import { SidecarServer } from "./server";
+import { Terminal } from "@xterm/headless/lib-headless/xterm-headless.mjs";
 import {
   makeRequest,
   type JsonRpcResponse,
@@ -246,6 +247,17 @@ function collectMessages(
       }
     }
   });
+}
+
+/** 读取 headless 终端当前屏面文本(逐行 translateToString) */
+function readScreenText(term: Terminal): string {
+  const buf = term.buffer.active;
+  const lines: string[] = [];
+  for (let y = 0; y < term.rows; y++) {
+    const line = buf.getLine(buf.viewportY + y);
+    lines.push(line ? line.translateToString(true) : "");
+  }
+  return lines.join("\n");
 }
 
 describe("SidecarServer", () => {
@@ -785,6 +797,226 @@ describe("capture strips replayed query/residue payloads", () => {
     }
 
     data.destroy();
+    ctrl.destroy();
+  });
+});
+
+describe("session.serialize outputs terminal-state snapshot", () => {
+  const skipWin = (t: { skip: (msg: string) => void }): boolean => {
+    if (process.platform === "win32") {
+      t.skip("printf 转义语义依赖 POSIX shell");
+      return true;
+    }
+    return false;
+  };
+
+  it("基本: 快照含输出文本, 携带网格尺寸", async (t) => {
+    if (skipWin(t)) return;
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    const { sessionId, socketPath } = await createSession(ctrl, 1);
+    const data = await connectDataSocket(socketPath);
+
+    data.write("printf 'SNAP%s\\nSNAP%s\\n' -ONE -TWO\n");
+    await waitForOutput(data, "SNAP-TWO");
+
+    const resp = await rpcCall(ctrl, 2, "session.serialize", { sessionId });
+    assert.equal(resp.error, undefined);
+    const snap = resp.result as {
+      snapshot: string;
+      cols: number;
+      rows: number;
+    };
+    assert.ok(snap.snapshot.includes("SNAP-ONE"), "快照应含输出文本");
+    assert.ok(snap.snapshot.includes("SNAP-TWO"), "快照应含输出文本");
+    assert.equal(snap.cols, 80);
+    assert.equal(snap.rows, 24);
+
+    data.destroy();
+    ctrl.destroy();
+  });
+
+  it("全屏: alt 缓冲内容与 ?1049h 进入快照", async (t) => {
+    if (skipWin(t)) return;
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    const { sessionId, socketPath } = await createSession(ctrl, 1);
+    const data = await connectDataSocket(socketPath);
+
+    data.write(
+      "printf '\\033[?1049h\\033[2J\\033[HFULLSCREEN%s\\nALT%s\\n' -TITLE -ROW\n",
+    );
+    await waitForOutput(data, "ALT-ROW");
+
+    const resp = await rpcCall(ctrl, 2, "session.serialize", { sessionId });
+    const snap = resp.result as { snapshot: string };
+    assert.ok(snap.snapshot.includes("FULLSCREEN-TITLE"));
+    assert.ok(snap.snapshot.includes("ALT-ROW"));
+    assert.ok(
+      snap.snapshot.includes("\x1b[?1049h"),
+      "alt 缓冲激活标记应进入快照",
+    );
+
+    data.destroy();
+    ctrl.destroy();
+  });
+
+  it("往返保真: 快照写入全新 headless 后屏面一致", async (t) => {
+    if (skipWin(t)) return;
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    const { sessionId, socketPath } = await createSession(ctrl, 1);
+    const data = await connectDataSocket(socketPath);
+
+    data.write(
+      "printf 'RT%s\\n\\033[?1049h\\033[2J\\033[HROUNDTRIP%s\\n' -HEAD -ALT\n",
+    );
+    await waitForOutput(data, "ROUNDTRIP-ALT");
+
+    const resp = await rpcCall(ctrl, 2, "session.serialize", { sessionId });
+    const snap = resp.result as {
+      snapshot: string;
+      cols: number;
+      rows: number;
+    };
+
+    const fresh = new Terminal({
+      cols: snap.cols,
+      rows: snap.rows,
+      allowProposedApi: true,
+    });
+    await new Promise<void>((resolve) =>
+      fresh.write(snap.snapshot, () => resolve()),
+    );
+    assert.equal(
+      fresh.buffer.active.type,
+      "alternate",
+      "恢复后应处于 alt 缓冲",
+    );
+    assert.ok(
+      readScreenText(fresh).includes("ROUNDTRIP-ALT"),
+      "alt 屏面文本应还原",
+    );
+
+    fresh.dispose();
+    data.destroy();
+    ctrl.destroy();
+  });
+
+  it("查询序列不进快照(按构造消除)", async (t) => {
+    if (skipWin(t)) return;
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    const { sessionId, socketPath } = await createSession(ctrl, 1);
+    const data = await connectDataSocket(socketPath);
+
+    data.write("printf 'Q%s\\n\\033[6n\\033[c\\033[?2026$p\\nQ%s\\n' -A -B\n");
+    await waitForOutput(data, "Q-B");
+
+    const resp = await rpcCall(ctrl, 2, "session.serialize", { sessionId });
+    const snap = resp.result as { snapshot: string };
+    assert.ok(snap.snapshot.includes("Q-A"));
+    assert.ok(snap.snapshot.includes("Q-B"));
+    for (const gone of ["\x1b[6n", "\x1b[c", "\x1b[?2026$p"]) {
+      assert.ok(
+        !snap.snapshot.includes(gone),
+        `快照不应包含查询 ${JSON.stringify(gone)}`,
+      );
+    }
+
+    data.destroy();
+    ctrl.destroy();
+  });
+
+  it("resize 后 serialize 的尺寸跟随", async (t) => {
+    if (skipWin(t)) return;
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    const { sessionId, socketPath } = await createSession(ctrl, 1);
+    const data = await connectDataSocket(socketPath);
+
+    data.write("printf 'RESIZE%s\\n' -MARK\n");
+    await waitForOutput(data, "RESIZE-MARK");
+
+    await rpcCall(ctrl, 2, "session.resize", {
+      sessionId,
+      cols: 100,
+      rows: 30,
+    });
+    const resp = await rpcCall(ctrl, 3, "session.serialize", { sessionId });
+    const snap = resp.result as { cols: number; rows: number };
+    assert.equal(snap.cols, 100);
+    assert.equal(snap.rows, 30);
+
+    data.destroy();
+    ctrl.destroy();
+  });
+
+  it("clearBuffer 后快照近空", async (t) => {
+    if (skipWin(t)) return;
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    const { sessionId, socketPath } = await createSession(ctrl, 1);
+    const data = await connectDataSocket(socketPath);
+
+    data.write("printf 'WILL%s\\n' -BE-CLEARED\n");
+    await waitForOutput(data, "WILL-BE-CLEARED");
+
+    await rpcCall(ctrl, 2, "session.clearBuffer", { sessionId });
+    const resp = await rpcCall(ctrl, 3, "session.serialize", { sessionId });
+    const snap = resp.result as { snapshot: string };
+    assert.ok(
+      !snap.snapshot.includes("WILL-BE-CLEARED"),
+      "clearBuffer 后历史不应出现在快照",
+    );
+
+    data.destroy();
+    ctrl.destroy();
+  });
+
+  it("洪峰后 serialize 含最后一段(排空生效)", async (t) => {
+    if (skipWin(t)) return;
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    const { sessionId, socketPath } = await createSession(ctrl, 1);
+    const data = await connectDataSocket(socketPath);
+
+    data.write("awk 'BEGIN{i=0; while(i<4000){print \"DRN-\" i; i++}}'\n");
+    await waitForOutput(data, "DRN-3999", 15000);
+
+    const resp = await rpcCall(ctrl, 2, "session.serialize", { sessionId });
+    const snap = resp.result as { snapshot: string };
+    assert.ok(snap.snapshot.includes("DRN-3999"), "排空后快照应含洪峰最后一行");
+
+    data.destroy();
+    ctrl.destroy();
+  });
+
+  it("未知会话返回错误", async () => {
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    const resp = await rpcCall(ctrl, 1, "session.serialize", {
+      sessionId: "no-such-session",
+    });
+    assert.ok(resp.error, "应返回错误");
+    assert.equal(resp.error!.code, -32000);
+
     ctrl.destroy();
   });
 });

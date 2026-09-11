@@ -61,6 +61,10 @@ function App() {
   const [exited, setExited] = useState(false);
   const [restored, setRestored] = useState(false);
   const [scrollbackData, setScrollbackData] = useState<string | null>(null);
+  const [snapshotSize, setSnapshotSize] = useState<{
+    cols: number;
+    rows: number;
+  } | null>(null);
 
   // Parse URL params once
   const paramsRef = useRef<URLSearchParams | null>(null);
@@ -147,6 +151,12 @@ function App() {
           if (result.scrollback) {
             setScrollbackData(result.scrollback);
           }
+          if (result.snapshotCols && result.snapshotRows) {
+            setSnapshotSize({
+              cols: result.snapshotCols,
+              rows: result.snapshotRows,
+            });
+          }
           setSessionId(existingSessionId);
         })
         .catch(async () => {
@@ -175,6 +185,12 @@ function App() {
                     .then((result) => {
                       if (result.scrollback) {
                         setScrollbackData(result.scrollback);
+                      }
+                      if (result.snapshotCols && result.snapshotRows) {
+                        setSnapshotSize({
+                          cols: result.snapshotCols,
+                          rows: result.snapshotRows,
+                        });
                       }
                       setSessionId(existingSessionId);
                     })
@@ -294,6 +310,7 @@ function App() {
       visible={true}
       restored={restored}
       scrollbackData={scrollbackData}
+      snapshotSize={snapshotSize}
       mirror={IS_MIRROR}
     />
   );
