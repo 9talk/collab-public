@@ -367,3 +367,41 @@ button {
   animation: locate-flash-anim 3s ease-out;
   border-radius: 4px;
 }
+
+/* ── 模板挂载拖拽接收 ── */
+
+/* 模板窗口拖拽期间：默认禁止光标，合法落点（drop-target）显示可放置 */
+body.template-drag-active .collection-tree-row {
+  cursor: no-drop;
+}
+
+body.template-drag-active .collection-tree-row.drop-target {
+  cursor: copy;
+}
+
+/* ── Toast ── */
+
+.nav-toast {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3000;
+  max-width: 90%;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 0.8rem;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.nav-toast.error {
+  border-color: var(--destructive, #ef4444);
+  color: var(--destructive, #ef4444);
+}

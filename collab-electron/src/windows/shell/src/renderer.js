@@ -176,6 +176,7 @@ async function init() {
   // DOM elements
   const panelNav = document.getElementById("panel-nav");
   const panelViewer = document.getElementById("panel-viewer");
+  const panelTemplates = document.getElementById("panel-templates");
   const navResizeHandle = document.getElementById("nav-resize");
   const navToggle = document.getElementById("nav-toggle");
   const settingsOverlay = document.getElementById("settings-overlay");
@@ -261,6 +262,69 @@ async function init() {
     viewerInstance.webview.blur();
     viewerInstance.webview.remove();
     viewerInstance = null;
+  }
+
+  // -- Embedded templates view (lazily created on first open) --
+  // 独立于画布的主区域视图（#panel-templates）:画布面板整体让位,不叠加在画布上。
+
+  let templatesInstance = null;
+
+  function ensureTemplatesView() {
+    if (templatesInstance) return templatesInstance;
+    templatesInstance = createWebview(
+      "模板",
+      configs.templates,
+      panelTemplates,
+      handleDndMessage,
+      "templates",
+    );
+    templatesInstance.webview.addEventListener("focus", () => {
+      noteSurfaceFocus("templates");
+    });
+    return templatesInstance;
+  }
+
+  function isTemplatesVisible() {
+    // 初始态由 CSS(display:none)决定,用计算样式判断而非内联样式
+    return getComputedStyle(panelTemplates).display !== "none";
+  }
+
+  function hideTemplatesView() {
+    if (!isTemplatesVisible()) return;
+    templatesInstance?.webview.blur();
+    panelTemplates.style.display = "none";
+    panelViewer.style.display = "";
+    destroyTemplatesView();
+  }
+
+  // 关闭视图即销毁 guest(释放渲染进程内存),重开时按需重建。
+  // 模板数据每次打开都从主进程重新拉取,重建无状态损失。
+  function destroyTemplatesView() {
+    if (!templatesInstance) return;
+    templatesInstance.webview.remove();
+    templatesInstance = null;
+  }
+
+  function openTemplatesView() {
+    // 先显示面板再创建 webview:在 display:none 容器里创建的 guest 不会合成
+    panelViewer.style.display = "none";
+    panelTemplates.style.display = "flex";
+    const v = ensureTemplatesView();
+    requestAnimationFrame(() => {
+      v.webview.focus();
+      noteSurfaceFocus("templates");
+    });
+  }
+
+  function closeTemplatesView() {
+    if (!isTemplatesVisible()) return;
+    hideTemplatesView();
+    if (viewerInstance) {
+      // 文件仍处于选中态:恢复查看器
+      focusSurface("viewer");
+    } else {
+      focusSurface();
+    }
   }
 
   // -- Singleton webviews (settings only; lazily created by onSettingsToggle) --
@@ -416,6 +480,16 @@ async function init() {
   }
 
   updateSegmentedControl(panelManager.getMode());
+
+  const templatesBtn = document.getElementById("templates-btn");
+  if (IS_REMOTE_APP) {
+    // 模板库是 Host 本地功能,镜像端不提供入口
+    templatesBtn?.style.setProperty("display", "none");
+  }
+  templatesBtn?.addEventListener("click", () => {
+    if (isTemplatesVisible()) closeTemplatesView();
+    else openTemplatesView();
+  });
 
   const workspaceManager = createWorkspaceManager({
     navWebview,
@@ -758,10 +832,14 @@ async function init() {
     if (surface === "viewer" && !isViewerVisible()) {
       surface = null;
     }
+    if (surface === "templates" && !isTemplatesVisible()) {
+      surface = null;
+    }
     if (surface === "nav" && !panelManager.isVisible()) {
       surface = null;
     }
     if (surface === "viewer") return "viewer";
+    if (surface === "templates") return "templates";
     if (surface === "nav") return "nav";
     if (panelManager.isVisible()) return "nav";
     if (isViewerVisible()) return "viewer";
@@ -810,6 +888,11 @@ async function init() {
         noteSurfaceFocus("viewer");
         return;
       }
+      if (resolved === "templates" && isTemplatesVisible()) {
+        templatesInstance.webview.focus();
+        noteSurfaceFocus("templates");
+        return;
+      }
       canvasEl.focus();
       noteSurfaceFocus("canvas");
     });
@@ -825,6 +908,7 @@ async function init() {
     canvasEl.blur();
     navToggle.blur();
     if (viewerInstance) viewerInstance.webview.blur();
+    if (templatesInstance) templatesInstance.webview.blur();
     workspaceManager.getNavWebview().webview.blur();
   }
 
@@ -833,6 +917,7 @@ async function init() {
   function getAllWebviews() {
     const all = [workspaceManager.getNavWebview()];
     if (viewerInstance) all.push(viewerInstance);
+    if (templatesInstance) all.push(templatesInstance);
     if (tileListWebview) all.push(tileListWebview);
     if (singletonWebviews.settings) all.push(singletonWebviews.settings);
     for (const [, dom] of tileManager.getTileDOMs()) {
@@ -1432,6 +1517,8 @@ async function init() {
         if (hasSelectedFile) {
           const v = ensureViewer();
           v.webview.style.display = "";
+          // 打开文件时让位查看器(模板视图实例保留,仅隐藏面板)
+          if (isTemplatesVisible()) hideTemplatesView();
           v.send(channel, ...args);
         } else {
           destroyViewer();
@@ -1451,6 +1538,18 @@ async function init() {
       ) {
         tileManager.broadcastToTileWebviews(channel, ...args);
       }
+    } else if (target === "templates") {
+      if (channel === "templates:open-view") {
+        openTemplatesView();
+        return;
+      }
+      if (channel === "templates:close") {
+        closeTemplatesView();
+        return;
+      }
+      // 视图未打开时丢弃(reveal / mounts-changed / pref:changed 等)
+      if (!templatesInstance) return;
+      templatesInstance.send(channel, ...args);
     } else if (target === "canvas") {
       if (channel === "open-terminal") {
         const cwd = args[0];

@@ -66,6 +66,14 @@ export function watchWorkspace(workspacePath: string): void {
   worker?.postMessage({ cmd: "watch-add", path: workspacePath });
 }
 
+/**
+ * 由写操作方主动注入一次变更通知（如模板挂载建链/卸载），复用与
+ * watcher 相同的下游管道（nav/viewer 刷新），不依赖 watcher 时序。
+ */
+export function emitFsChange(events: FsChangeEvent[]): void {
+  notifyFn?.(events);
+}
+
 export function unwatchWorkspace(workspacePath: string): void {
   if (!watchedPaths.delete(workspacePath)) return;
   worker?.postMessage({ cmd: "watch-remove", path: workspacePath });

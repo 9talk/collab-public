@@ -157,6 +157,24 @@ body.platform-win {
   background: rgba(var(--canvas-bg-rgb), var(--canvas-opacity));
 }
 
+/* 模板视图：与画布同级的主区域视图（不叠加画布,背景不透明） */
+#panel-templates {
+  display: none;
+  flex: 1 1 0;
+  min-width: 200px;
+  overflow: hidden;
+  position: relative;
+  /* 顶部让位给窗口拖拽条(#titlebar):真实鼠标落在拖拽区内会被吞成拖窗,
+     且拖拽区不理会 webview 的 z-index,只能物理避让 */
+  padding-top: var(--toolbar-height);
+  background: rgb(var(--bg-rgb));
+}
+
+#panel-templates webview {
+  flex: 1;
+  position: relative;
+}
+
 #grid-canvas {
   position: absolute;
   inset: 0;
@@ -219,6 +237,29 @@ body.platform-win {
   border-bottom-color: var(--fg);
   color: var(--fg);
   font-weight: 500;
+}
+
+#templates-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px 8px;
+  margin-bottom: -1px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.1s ease;
+}
+
+#templates-btn:hover {
+  color: var(--fg);
+}
+
+#templates-btn:active {
+  transform: scale(0.94);
 }
 
 #new-tile-btn {

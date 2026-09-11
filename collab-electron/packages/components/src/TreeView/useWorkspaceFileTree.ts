@@ -51,6 +51,10 @@ export function useWorkspaceFileTree(
             (e: {
               name: string;
               isDirectory: boolean;
+              isSymlink: boolean;
+              linkTarget?: string;
+              templateName?: string;
+              broken?: boolean;
               createdAt: string;
               modifiedAt: string;
               fileCount?: number;
@@ -64,6 +68,16 @@ export function useWorkspaceFileTree(
               };
               if (e.fileCount !== undefined) {
                 node.fileCount = e.fileCount;
+              }
+              if (e.isSymlink) {
+                node.isSymlink = true;
+                if (e.linkTarget !== undefined) {
+                  node.linkTarget = e.linkTarget;
+                }
+                if (e.templateName !== undefined) {
+                  node.templateName = e.templateName;
+                }
+                if (e.broken) node.broken = true;
               }
               return node;
             },

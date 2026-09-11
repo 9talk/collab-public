@@ -3,7 +3,9 @@ import {
   ArrowSquareOut,
   CaretDown,
   CaretRight,
+  LinkSimple,
   Terminal,
+  Warning,
 } from "@phosphor-icons/react";
 import type { FlatItem } from "./useFileTree";
 import { formatRelativeTime, displayFileName } from "./Helpers";
@@ -45,6 +47,31 @@ interface FolderRowProps {
   dimmed?: boolean;
   hideChevron?: boolean;
 }
+
+const LinkBadge = React.memo(function LinkBadge({ item }: { item: FlatItem }) {
+  if (!item.isSymlink) return null;
+  const target = item.linkTarget ?? "";
+  const tip = item.broken
+    ? `Broken link${target ? ` → ${target}` : ""}`
+    : target
+      ? `Symlink → ${target}`
+      : "Symlink";
+  return (
+    <span
+      className={`tree-link-badge${item.broken ? " broken" : ""}`}
+      title={tip}
+    >
+      {item.broken ? (
+        <Warning size={11} weight="bold" />
+      ) : (
+        <LinkSimple size={11} weight="bold" />
+      )}
+      {!item.broken && item.templateName && (
+        <span className="tree-link-source">{item.templateName}</span>
+      )}
+    </span>
+  );
+});
 
 const WorkspaceLabel = React.memo(function WorkspaceLabel({
   item,
@@ -194,6 +221,7 @@ export const FolderRow = React.memo(function FolderRow({
       ) : (
         <span className="collection-tree-name">{item.name}</span>
       )}
+      <LinkBadge item={item} />
       {item.childCount != null && (
         <span className="collection-tree-count">{item.childCount}</span>
       )}
@@ -385,6 +413,7 @@ export const FileRow = React.memo(
             {ext && <span style={{ opacity: 0.4 }}>{ext}</span>}
           </span>
         )}
+        <LinkBadge item={item} />
         <div className="row-action-buttons">
           {showTimestamp && (
             <span className="row-timestamp">
@@ -399,6 +428,10 @@ export const FileRow = React.memo(
     prev.item.id === next.item.id &&
     prev.item.name === next.item.name &&
     prev.item.ctime === next.item.ctime &&
+    prev.item.isSymlink === next.item.isSymlink &&
+    prev.item.linkTarget === next.item.linkTarget &&
+    prev.item.templateName === next.item.templateName &&
+    prev.item.broken === next.item.broken &&
     prev.isSelected === next.isSelected &&
     prev.isMultiSelected === next.isMultiSelected &&
     prev.isDeleteConfirm === next.isDeleteConfirm &&

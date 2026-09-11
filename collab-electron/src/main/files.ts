@@ -1,16 +1,24 @@
 import type { Dirent } from "node:fs";
-import { renameSync, writeFileSync } from "node:fs";
+import { renameSync, writeFileSync, existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import {
   access,
   mkdir,
   readdir,
   readFile,
+  readlink,
   rename,
   stat,
   writeFile,
 } from "node:fs/promises";
-import { basename, dirname, extname, join } from "node:path";
+import {
+  basename,
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  resolve,
+} from "node:path";
 import { isSubpath } from "@collab/shared/path-utils";
 import { type FileFilter } from "./file-filter";
 
@@ -19,6 +27,12 @@ export interface DirEntry {
   isDirectory: boolean;
   isFile: boolean;
   isSymlink: boolean;
+  /** 软链接的原始目标路径（readlink 结果，可能是相对路径）。仅 isSymlink 时有值。 */
+  linkTarget?: string;
+  /** 链接指向模板库内时的来源模板名（nav 树 🔗 徽标） */
+  templateName?: string;
+  /** 悬空软链接（nav 树 ⚠ 标识） */
+  broken?: boolean;
   createdAt: string;
   modifiedAt: string;
   fileCount?: number;
@@ -151,6 +165,17 @@ export async function fsReadDir(
         modifiedAt,
       };
       if (fileCount !== undefined) entry.fileCount = fileCount;
+      if (isSymlink) {
+        try {
+          const raw = await readlink(fullPath);
+          entry.linkTarget = raw;
+          // 断链判定（不 follow）：目标不存在即为悬空链接
+          const resolved = isAbsolute(raw)
+            ? raw
+            : resolve(dirname(fullPath), raw);
+          if (!existsSync(resolved)) entry.broken = true;
+        } catch {}
+      }
       return entry;
     }),
   );

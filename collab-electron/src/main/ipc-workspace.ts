@@ -6,7 +6,7 @@ import {
   realpathSync,
   existsSync,
 } from "node:fs";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, readlink, stat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import fm from "front-matter";
 import { saveConfig, type AppConfig } from "./config";
@@ -19,6 +19,7 @@ import {
 import { createFileFilter, type FileFilter } from "./file-filter";
 import { setThumbnailCacheDir } from "./image-service";
 import { shouldIncludeEntryWithContent, fsWriteFile } from "./files";
+import { describeSymlink } from "./symlink-info";
 import * as watcher from "./watcher";
 import * as wikilinkIndex from "./wikilink-index";
 import { trackEvent } from "./analytics";
@@ -171,25 +172,49 @@ export async function readTreeRecursive(
     }
 
     let stats;
+    let broken = false;
     try {
       stats = await stat(fullPath);
     } catch {
-      continue;
+      // 悬空软链接：stat 失败但节点仍要出现在树里（断链 ⚠ 标识）
+      if (!entry.isSymbolicLink()) continue;
+      broken = true;
     }
 
-    const ctime = stats.birthtime.toISOString();
-    const mtime = stats.mtime.toISOString();
+    const ctime = stats ? stats.birthtime.toISOString() : "";
+    const mtime = stats ? stats.mtime.toISOString() : "";
 
-    if (stats.isDirectory()) {
+    const isSymlink = entry.isSymbolicLink();
+    let linkTarget: string | undefined;
+    let templateName: string | undefined;
+    if (isSymlink) {
+      try {
+        linkTarget = await readlink(fullPath);
+        const desc = describeSymlink(fullPath, linkTarget);
+        templateName = desc.templateName;
+        broken = desc.broken;
+      } catch {
+        linkTarget = undefined;
+      }
+    }
+
+    if (stats?.isDirectory()) {
       const children = await readTreeRecursive(fullPath, rootPath, filter);
-      folders.push({
+      const node: TreeNode = {
         path: fullPath,
         name: entry.name,
         kind: "folder",
         ctime,
         mtime,
         children,
-      });
+      };
+      if (isSymlink) {
+        node.isSymlink = true;
+        if (linkTarget !== undefined) node.linkTarget = linkTarget;
+        if (templateName !== undefined) node.templateName = templateName;
+        if (broken) node.broken = true;
+      }
+      folders.push(node);
     } else {
       const stem = basename(entry.name, extname(entry.name));
       const node: TreeNode = {
@@ -199,6 +224,12 @@ export async function readTreeRecursive(
         ctime,
         mtime,
       };
+      if (isSymlink) {
+        node.isSymlink = true;
+        if (linkTarget !== undefined) node.linkTarget = linkTarget;
+        if (templateName !== undefined) node.templateName = templateName;
+        if (broken) node.broken = true;
+      }
 
       if (entry.name.endsWith(".md")) {
         try {

@@ -6,7 +6,7 @@ import {
   shell,
   app,
   webContents,
-  type BrowserWindow,
+  BrowserWindow,
 } from "electron";
 import { execFileSync } from "node:child_process";
 import * as gitReplay from "./git-replay";
@@ -373,14 +373,16 @@ export function registerMiscHandlers(ctx: IpcContext): void {
   ipcMain.handle(
     "context-menu:show",
     async (
-      _event,
+      event,
       items: Array<{
         id: string;
         label: string;
         enabled?: boolean;
       }>,
     ) => {
-      const win = ctx.mainWindow();
+      // 弹到调用方所在窗口（模板窗口的右键菜单不能弹到主窗口上）
+      const win =
+        BrowserWindow.fromWebContents(event.sender) ?? ctx.mainWindow();
       if (!win) return null;
 
       return new Promise<string | null>((resolve) => {

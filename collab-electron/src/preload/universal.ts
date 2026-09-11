@@ -183,6 +183,21 @@ ipcRenderer.on("settings:open-pane", (_event: unknown, pane: string) => {
   for (const cb of openPaneListeners) cb(pane);
 });
 
+// -- Templates reveal buffering --------------------------------------
+type TemplatesRevealPayload = { template: string; relPath: string };
+type TemplatesRevealCb = (payload: TemplatesRevealPayload) => void;
+const templatesRevealListeners = new Set<TemplatesRevealCb>();
+// 同 openPane:reveal 随"打开视图"投递,可能早于 React 侧订阅,无监听者时先缓存。
+let bufferedTemplatesReveal: TemplatesRevealPayload | null = null;
+ipcRenderer.on(
+  "templates:reveal",
+  (_event: unknown, payload: TemplatesRevealPayload) => {
+    if (!payload || typeof payload.template !== "string") return;
+    if (templatesRevealListeners.size === 0) bufferedTemplatesReveal = payload;
+    for (const cb of templatesRevealListeners) cb(payload);
+  },
+);
+
 // -- Unified API surface --------------------------------------------
 
 contextBridge.exposeInMainWorld("api", {
@@ -255,6 +270,102 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.send("nav:locate-terminal", folderPath),
   runInTerminal: (command: string) =>
     ipcRenderer.send("viewer:run-in-terminal", command),
+
+  // Templates
+  templatesList: () => ipcRenderer.invoke("templates:list"),
+  templatesTree: (template: string, relPath: string) =>
+    ipcRenderer.invoke("templates:tree", { template, relPath }),
+  templatesCreate: (name: string) =>
+    ipcRenderer.invoke("templates:create", name),
+  templatesRename: (name: string, newName: string) =>
+    ipcRenderer.invoke("templates:rename", { name, newName }),
+  templatesDelete: (name: string) =>
+    ipcRenderer.invoke("templates:delete", name),
+  templatesCreateNode: (params: {
+    template: string;
+    relPath: string;
+    kind: "file" | "dir";
+    name: string;
+  }) => ipcRenderer.invoke("templates:create-node", params),
+  templatesRenameNode: (params: {
+    template: string;
+    relPath: string;
+    newName: string;
+  }) => ipcRenderer.invoke("templates:rename-node", params),
+  templatesDeleteNode: (params: { template: string; relPath: string }) =>
+    ipcRenderer.invoke("templates:delete-node", params),
+  templatesOpenExternal: (params: {
+    template: string;
+    relPath?: string;
+    isDir?: boolean;
+  }) => ipcRenderer.invoke("templates:open-external", params),
+  templatesRevealPath: (params: { template?: string; relPath?: string }) =>
+    ipcRenderer.invoke("templates:reveal-path", params),
+  templatesDragStart: (payload: { template: string; relPath: string }) =>
+    ipcRenderer.send("templates:drag-start", payload),
+  templatesDragEnd: () => ipcRenderer.send("templates:drag-end"),
+  templatesDropMount: (params: { workspace: string; relPath: string }) =>
+    ipcRenderer.invoke("templates:drop-mount", params),
+  templatesMountTo: (params: {
+    source: { template: string; relPath: string };
+    target: { workspace: string; relPath: string };
+  }) => ipcRenderer.invoke("templates:mount-to", params),
+  templatesWorkspaces: () => ipcRenderer.invoke("templates:workspaces"),
+  templatesLinkInfo: (params: { workspace: string; relPath: string }) =>
+    ipcRenderer.invoke("templates:link-info", params),
+  templatesRemoveLink: (params: { workspace: string; relPath: string }) =>
+    ipcRenderer.invoke("templates:remove-link", params),
+  templatesRevealSource: (params: { workspace: string; relPath: string }) =>
+    ipcRenderer.invoke("templates:reveal-source", params),
+  templatesListMounts: (params: { template?: string }) =>
+    ipcRenderer.invoke("templates:list-mounts", params),
+  templatesRevealInWorkspace: (params: {
+    workspace: string;
+    relPath: string;
+  }) => ipcRenderer.invoke("templates:reveal-in-workspace", params),
+  onTemplatesReveal: (cb: TemplatesRevealCb) => {
+    templatesRevealListeners.add(cb);
+    if (bufferedTemplatesReveal !== null) {
+      const payload = bufferedTemplatesReveal;
+      bufferedTemplatesReveal = null;
+      cb(payload);
+    }
+    return () => {
+      templatesRevealListeners.delete(cb);
+    };
+  },
+  templatesCloseView: () => ipcRenderer.send("templates:close-view"),
+  onTemplatesMountsChanged: (cb: () => void) => {
+    const handler = () => cb();
+    ipcRenderer.on("templates:mounts-changed", handler);
+    return () =>
+      ipcRenderer.removeListener("templates:mounts-changed", handler);
+  },
+  onTemplateDragStart: (
+    cb: (payload: {
+      template: string;
+      relPath: string;
+      name: string;
+      isDir: boolean;
+    }) => void,
+  ) => {
+    const handler = (
+      _event: unknown,
+      payload: {
+        template: string;
+        relPath: string;
+        name: string;
+        isDir: boolean;
+      },
+    ) => cb(payload);
+    ipcRenderer.on("template-drag:start", handler);
+    return () => ipcRenderer.removeListener("template-drag:start", handler);
+  },
+  onTemplateDragEnd: (cb: () => void) => {
+    const handler = () => cb();
+    ipcRenderer.on("template-drag:end", handler);
+    return () => ipcRenderer.removeListener("template-drag:end", handler);
+  },
 
   // Viewer
   readFile: (path: string) => ipcRenderer.invoke("fs:readfile", path),
@@ -450,8 +561,13 @@ contextBridge.exposeInMainWorld("api", {
   onPrefChanged: (cb: (key: string, value: unknown) => void) => {
     const handler = (_event: unknown, key: string, value: unknown) =>
       cb(key, value);
+    // 主进程广播用 pref:changed；shell 向 tile webview 转发沿用 pref-changed
+    ipcRenderer.on("pref:changed", handler);
     ipcRenderer.on("pref-changed", handler);
-    return () => ipcRenderer.removeListener("pref-changed", handler);
+    return () => {
+      ipcRenderer.removeListener("pref:changed", handler);
+      ipcRenderer.removeListener("pref-changed", handler);
+    };
   },
   onFolderSelected: (cb: (path: string) => void) => {
     const handler = (_event: unknown, path: string) => cb(path);

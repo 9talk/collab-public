@@ -63,7 +63,7 @@ function flattenAllFiles(nodes: TreeNode[], workspacePath: string): FlatItem[] {
   function walk(children: TreeNode[]) {
     for (const node of children) {
       if (node.kind === "file") {
-        items.push({
+        const item: FlatItem = {
           id: node.path,
           kind: "file",
           level: 1,
@@ -72,7 +72,15 @@ function flattenAllFiles(nodes: TreeNode[], workspacePath: string): FlatItem[] {
           ctime: node.ctime,
           mtime: node.mtime,
           workspacePath,
-        });
+        };
+        if (node.isSymlink) {
+          item.isSymlink = true;
+          if (node.linkTarget !== undefined) item.linkTarget = node.linkTarget;
+          if (node.templateName !== undefined)
+            item.templateName = node.templateName;
+          if (node.broken) item.broken = true;
+        }
+        items.push(item);
       }
       if (node.children) {
         walk(node.children);

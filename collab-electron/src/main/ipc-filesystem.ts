@@ -12,6 +12,7 @@ import {
   fsMkdir,
   fsMove,
 } from "./files";
+import { describeSymlink } from "./symlink-info";
 import {
   getImageThumbnail,
   getImageFull,
@@ -105,13 +106,21 @@ export async function readFolderTable(
 }
 
 export function registerFilesystemHandlers(ctx: IpcFilesystemContext): void {
-  bindIpc("fs:readdir", "handle", (_event, path) =>
-    fsReadDir(
+  bindIpc("fs:readdir", "handle", async (_event, path) => {
+    const entries = await fsReadDir(
       path,
       ctx.fileFilter() ?? undefined,
       workspaceForFile(path, ctx.workspaces()) ?? undefined,
-    ),
-  );
+    );
+    // 软链接补充展示信息（来源模板名 / 断链），供 nav 树渲染 🔗 徽标
+    for (const e of entries) {
+      if (!e.isSymlink || typeof e.linkTarget !== "string") continue;
+      const desc = describeSymlink(join(path, e.name), e.linkTarget);
+      if (desc.templateName !== undefined) e.templateName = desc.templateName;
+      if (desc.broken) e.broken = true;
+    }
+    return entries;
+  });
 
   bindIpc("fs:count-files", "handle", (_event, path) =>
     countTreeFiles(

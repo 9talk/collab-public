@@ -15,6 +15,14 @@ export interface TreeNode {
   preview?: string;
   fileCount?: number;
   children?: TreeNode[];
+  /** 该节点是软链接（文件树中显示链接标识） */
+  isSymlink?: boolean;
+  /** 软链接的原始目标路径（readlink 结果） */
+  linkTarget?: string;
+  /** 链接指向模板库内时的来源模板名 */
+  templateName?: string;
+  /** 悬空软链接（断链） */
+  broken?: boolean;
 }
 
 export interface ViewerItem {

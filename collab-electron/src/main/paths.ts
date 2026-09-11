@@ -72,3 +72,6 @@ export const COLLAB_DIR = process.env.COLLAB_DIR
     : getAppFlavor() === "remote"
       ? REMOTE_BASE
       : BASE;
+
+// 模板库:固定在应用数据目录下,随 COLLAB_DIR 一起做 dev/remote 隔离。
+export const TEMPLATES_DIR = join(COLLAB_DIR, "templates");

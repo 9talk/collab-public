@@ -14,6 +14,14 @@ export interface FlatItem {
   mtime?: string;
   childCount?: number;
   workspacePath?: string;
+  isSymlink?: boolean;
+  linkTarget?: string;
+  /** 链接指向模板库内时的来源模板名 */
+  templateName?: string;
+  /** 悬空软链接（断链） */
+  broken?: boolean;
+  /** 位于某个软链接节点内部（含其下所有层级）——禁止作为挂载放置目标 */
+  linkAncestor?: boolean;
 }
 
 export function saveExpandedDirs(
@@ -55,12 +63,22 @@ function sortFiles(files: TreeNode[], sortMode: SortMode): TreeNode[] {
   });
 }
 
+function copyLinkFields(item: FlatItem, node: TreeNode): FlatItem {
+  if (!node.isSymlink) return item;
+  item.isSymlink = true;
+  if (node.linkTarget !== undefined) item.linkTarget = node.linkTarget;
+  if (node.templateName !== undefined) item.templateName = node.templateName;
+  if (node.broken) item.broken = true;
+  return item;
+}
+
 export function flattenTree(
   nodes: TreeNode[],
   expanded: Set<string>,
   level: number,
   sortMode: SortMode,
   levelOffset = 0,
+  insideLink = false,
 ): FlatItem[] {
   const effectiveLevel = level + levelOffset;
   const items: FlatItem[] = [];
@@ -69,15 +87,20 @@ export function flattenTree(
 
   for (const dir of dirs) {
     const isOpen = expanded.has(dir.path);
-    items.push({
-      id: dir.path,
-      kind: "folder",
-      level: effectiveLevel,
-      name: dir.name,
-      path: dir.path,
-      isExpanded: isOpen,
-      childCount: countFilesInNode(dir),
-    });
+    const item: FlatItem = copyLinkFields(
+      {
+        id: dir.path,
+        kind: "folder",
+        level: effectiveLevel,
+        name: dir.name,
+        path: dir.path,
+        isExpanded: isOpen,
+        childCount: countFilesInNode(dir),
+      },
+      dir,
+    );
+    if (insideLink) item.linkAncestor = true;
+    items.push(item);
     if (isOpen && (dir.children ?? []).length > 0) {
       items.push(
         ...flattenTree(
@@ -86,6 +109,7 @@ export function flattenTree(
           level + 1,
           sortMode,
           levelOffset,
+          insideLink || !!dir.isSymlink,
         ),
       );
     }
@@ -93,15 +117,20 @@ export function flattenTree(
 
   const sorted = sortFiles(files, sortMode);
   for (const file of sorted) {
-    items.push({
-      id: file.path,
-      kind: "file",
-      level: effectiveLevel,
-      name: file.name,
-      path: file.path,
-      ctime: file.ctime,
-      mtime: file.mtime,
-    });
+    const item: FlatItem = copyLinkFields(
+      {
+        id: file.path,
+        kind: "file",
+        level: effectiveLevel,
+        name: file.name,
+        path: file.path,
+        ctime: file.ctime,
+        mtime: file.mtime,
+      },
+      file,
+    );
+    if (insideLink) item.linkAncestor = true;
+    items.push(item);
   }
 
   return items;
@@ -139,7 +168,9 @@ export function treesEqual(left: TreeNode[], right: TreeNode[]): boolean {
       a.kind !== b.kind ||
       a.ctime !== b.ctime ||
       a.mtime !== b.mtime ||
-      a.fileCount !== b.fileCount
+      a.fileCount !== b.fileCount ||
+      a.isSymlink !== b.isSymlink ||
+      a.linkTarget !== b.linkTarget
     ) {
       return false;
     }

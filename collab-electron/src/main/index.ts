@@ -52,6 +52,7 @@ import {
 import { registerClaudeIpc } from "./claude-rpc";
 import { registerClaudeEditsRpc, findLatestEditLine } from "./claude-edits-rpc";
 import { registerDebugMouseRpc } from "./debug-mouse-rpc";
+import { registerTemplatesIpc, notifyTemplatesPrefChanged } from "./templates";
 import {
   registerMethod,
   startJsonRpcServer,
@@ -780,6 +781,7 @@ ipcMain.handle("shell:get-view-config", () => {
     settings: { src: getRendererURL("settings"), preload },
     tileList: { src: getRendererURL("tile-list"), preload },
     todos: { src: getRendererURL("todos"), preload },
+    templates: { src: getRendererURL("templates"), preload },
   };
 });
 
@@ -791,6 +793,7 @@ ipcMain.on("pref:get-sync", (event, key: string) => {
 
 bindIpc("pref:set", "handle", (_event, key: string, value: unknown) => {
   setPref(config, key, value);
+  notifyTemplatesPrefChanged(key, value);
   if (key === "locale") {
     buildAppMenu();
   }
@@ -1244,6 +1247,13 @@ app.whenReady().then(async () => {
     syncClaudeMdOnLaunch();
     registerClaudeIpc();
     registerClaudeEditsRpc();
+    registerTemplatesIpc({
+      mainWindow: () => mainWindow,
+      forwardToWebview,
+      workspaces: () => config.workspaces,
+      getPref: (key: string) => getPref(config, key),
+      setPref: (key: string, value: unknown) => setPref(config, key, value),
+    });
   }
   setupUpdateIPC();
   if (!isRemoteFlavor()) {

@@ -23,9 +23,56 @@ interface DirEntry {
   isDirectory: boolean;
   isFile: boolean;
   isSymlink: boolean;
+  linkTarget?: string;
   createdAt: string;
   modifiedAt: string;
   fileCount?: number;
+}
+
+interface TemplateEntry {
+  name: string;
+  relPath: string;
+  kind: "folder" | "file";
+  isSymlink?: boolean;
+  linkTarget?: string;
+  broken?: boolean;
+}
+
+interface TemplateLinkInfo {
+  isLink: boolean;
+  linkTarget?: string;
+  resolvedTarget?: string;
+  template?: string;
+  templateRelPath?: string;
+}
+
+type TemplateMountStatus =
+  | "created"
+  | "replaced"
+  | "renamed"
+  | "already"
+  | "cancelled"
+  | "error";
+
+interface TemplateMountResult {
+  status: TemplateMountStatus;
+  path?: string;
+  message?: string;
+}
+
+interface TemplateDragPayload {
+  template: string;
+  relPath: string;
+  name: string;
+  isDir: boolean;
+}
+
+interface TemplateMountPoint {
+  template: string;
+  sourceRel: string;
+  workspace: string;
+  linkRel: string;
+  broken: boolean;
 }
 
 interface FileStats {
@@ -178,6 +225,9 @@ export interface CollabApi {
 
   // Workspace
   workspaceRemoveByPath: (path: string) => Promise<{ workspaces: string[] }>;
+  workspaceAddByPath: (
+    folderPath: string,
+  ) => Promise<{ workspaces: string[] } | null>;
   getWorkspaceGraph: (params: { workspacePath: string }) => Promise<GraphData>;
   updateFrontmatter: (
     filePath: string,
@@ -285,6 +335,79 @@ export interface CollabApi {
   >;
   openFileInExternalEditor: (filePath: string, editorId?: string) => void;
 
+  // Templates
+  templatesList: () => Promise<string[]>;
+  templatesTree: (
+    template: string,
+    relPath: string,
+  ) => Promise<TemplateEntry[]>;
+  templatesCreate: (name: string) => Promise<string[]>;
+  templatesRename: (name: string, newName: string) => Promise<string[]>;
+  templatesDelete: (name: string) => Promise<string[]>;
+  templatesCreateNode: (params: {
+    template: string;
+    relPath: string;
+    kind: "file" | "dir";
+    name: string;
+  }) => Promise<TemplateEntry>;
+  templatesRenameNode: (params: {
+    template: string;
+    relPath: string;
+    newName: string;
+  }) => Promise<TemplateEntry>;
+  templatesDeleteNode: (params: {
+    template: string;
+    relPath: string;
+  }) => Promise<unknown>;
+  templatesOpenExternal: (params: {
+    template: string;
+    relPath?: string;
+    isDir?: boolean;
+  }) => Promise<unknown>;
+  templatesRevealPath: (params: {
+    template?: string;
+    relPath?: string;
+  }) => Promise<unknown>;
+  templatesDragStart: (payload: { template: string; relPath: string }) => void;
+  templatesDragEnd: () => void;
+  templatesDropMount: (params: {
+    workspace: string;
+    relPath: string;
+  }) => Promise<TemplateMountResult>;
+  templatesMountTo: (params: {
+    source: { template: string; relPath: string };
+    target: { workspace: string; relPath: string };
+  }) => Promise<TemplateMountResult>;
+  templatesWorkspaces: () => Promise<string[]>;
+  templatesLinkInfo: (params: {
+    workspace: string;
+    relPath: string;
+  }) => Promise<TemplateLinkInfo>;
+  templatesRemoveLink: (params: {
+    workspace: string;
+    relPath: string;
+  }) => Promise<unknown>;
+  templatesRevealSource: (params: {
+    workspace: string;
+    relPath: string;
+  }) => Promise<unknown>;
+  templatesListMounts: (params: {
+    template?: string;
+  }) => Promise<TemplateMountPoint[]>;
+  templatesRevealInWorkspace: (params: {
+    workspace: string;
+    relPath: string;
+  }) => Promise<unknown>;
+  onTemplatesReveal: (
+    cb: (payload: { template: string; relPath: string }) => void,
+  ) => Unsubscribe;
+  templatesCloseView: () => void;
+  onTemplatesMountsChanged: (cb: () => void) => Unsubscribe;
+  onTemplateDragStart: (
+    cb: (payload: TemplateDragPayload) => void,
+  ) => Unsubscribe;
+  onTemplateDragEnd: (cb: () => void) => Unsubscribe;
+
   // Context menu
   showContextMenu: (
     items: Array<{
@@ -314,6 +437,7 @@ export interface CollabApi {
   onWorkspaceRemoved: (cb: (path: string) => void) => Unsubscribe;
   onWikilinksUpdated: (cb: (paths: string[]) => void) => Unsubscribe;
   onNavVisibility: (cb: (visible: boolean) => void) => Unsubscribe;
+  onPrefChanged: (cb: (key: string, value: unknown) => void) => Unsubscribe;
 
   onScopeChanged: (cb: (newPath: string) => void) => Unsubscribe;
 
