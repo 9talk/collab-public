@@ -119,3 +119,68 @@ describe("RingBuffer", () => {
     expect(first.toString()).toBe("hello");
   });
 });
+
+describe("RingBuffer 查询剥离(写入口)", () => {
+  const ESC = "\x1b";
+
+  test("完整查询序列不进入历史", () => {
+    const buf = new RingBuffer(1024);
+    buf.write(
+      Buffer.from(`A${ESC}[6nB${ESC}[?2026$pC${ESC}[?1;2cD${ESC}[>0qE`),
+    );
+    expect(buf.snapshot().toString()).toBe("ABCDE");
+  });
+
+  test("跨 chunk 查询: 前缀扣在 carry, 拼齐后整体剥离", () => {
+    const buf = new RingBuffer(1024);
+    buf.write(Buffer.from(`A${ESC}[?20`));
+    // 半截前缀不落历史(回放无意义)
+    expect(buf.snapshot().toString()).toBe("A");
+    buf.write(Buffer.from("26$pB"));
+    expect(buf.snapshot().toString()).toBe("AB");
+  });
+
+  test("跨 chunk 的 DSR 查询", () => {
+    const buf = new RingBuffer(1024);
+    buf.write(Buffer.from(`${ESC}[6`));
+    expect(buf.snapshot().length).toBe(0);
+    buf.write(Buffer.from("nZ"));
+    expect(buf.snapshot().toString()).toBe("Z");
+  });
+
+  test("普通转义序列不受影响(不误扣不误剥)", () => {
+    const buf = new RingBuffer(1024);
+    const seq = `${ESC}[?2004h${ESC}[H${ESC}[1;32mhi${ESC}[0m`;
+    buf.write(Buffer.from(seq));
+    expect(buf.snapshot().toString()).toBe(seq);
+  });
+
+  test("被切断的普通序列拼齐后原样补回", () => {
+    const buf = new RingBuffer(1024);
+    buf.write(Buffer.from(`A${ESC}[`));
+    expect(buf.snapshot().toString()).toBe("A");
+    buf.write(Buffer.from("H"));
+    expect(buf.snapshot().toString()).toBe(`A${ESC}[H`);
+  });
+
+  test("多字节 UTF-8 字节无损(latin1 往返)", () => {
+    const buf = new RingBuffer(1024);
+    buf.write(Buffer.from(`中文${ESC}[6n🎉`));
+    expect(buf.snapshot().toString("utf-8")).toBe("中文🎉");
+  });
+
+  test("clear 复位 carry", () => {
+    const buf = new RingBuffer(1024);
+    buf.write(Buffer.from(`${ESC}[?`));
+    buf.clear();
+    buf.write(Buffer.from("x"));
+    expect(buf.snapshot().toString()).toBe("x");
+  });
+
+  test("超长前缀放弃扣留, 按普通数据放行(导出点剥离兜底)", () => {
+    const buf = new RingBuffer(1024);
+    const long = `${ESC}[${"1".repeat(40)}`;
+    buf.write(Buffer.from(long));
+    expect(buf.snapshot().toString()).toBe(long);
+  });
+});
