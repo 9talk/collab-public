@@ -1006,6 +1006,52 @@ describe("session.serialize outputs terminal-state snapshot", () => {
     ctrl.destroy();
   });
 
+  it("压力: 持续写入流中反复 serialize 不卡死且终帧完整", async (t) => {
+    if (skipWin(t)) return;
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    const { sessionId, socketPath } = await createSession(ctrl, 1);
+    const data = await connectDataSocket(socketPath);
+
+    // 10 段洪峰连续投递(经 pty 输入队列串行执行), 每段之间不等待,
+    // 同时并发 40 次 serialize: 覆盖 enqueue 链"排空与持续写入交错"
+    // 的重入路径 —— 每次 serialize 都可能落在某段洪峰中途。
+    const pending: Array<ReturnType<typeof rpcCall>> = [];
+    const bursts = "ABCDEFGHIJ".split("");
+    bursts.forEach((tag, bi) => {
+      data.write(`awk 'BEGIN{for(i=0;i<50;i++) print "${tag}-" i}'\n`);
+      for (let k = 0; k < 4; k++) {
+        pending.push(
+          rpcCall(ctrl, 100 + bi * 10 + k, "session.serialize", { sessionId }),
+        );
+      }
+    });
+    const all = await Promise.all(pending);
+    for (const [i, resp] of all.entries()) {
+      assert.ok(
+        !resp.error,
+        `并发第 ${i} 次 serialize 不应报错: ${JSON.stringify(resp.error)}`,
+      );
+      assert.ok(
+        typeof (resp.result as { snapshot: string }).snapshot === "string",
+        `并发第 ${i} 次 serialize 应返回字符串快照`,
+      );
+    }
+
+    await waitForOutput(data, "J-49", 15000);
+    const fin = await rpcCall(ctrl, 999, "session.serialize", { sessionId });
+    const finSnap = fin.result as { snapshot: string };
+    assert.ok(
+      finSnap.snapshot.includes("J-49"),
+      "持续写入结束后终帧应含最后一段(排空生效)",
+    );
+
+    data.destroy();
+    ctrl.destroy();
+  });
+
   it("未知会话返回错误", async () => {
     server = createServer();
     await server.start();
