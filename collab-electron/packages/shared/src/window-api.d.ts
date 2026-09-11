@@ -75,6 +75,45 @@ interface TemplateMountPoint {
   broken: boolean;
 }
 
+type MountHistoryKind = "auto" | "named" | "restore";
+
+interface MountHistoryPoint {
+  id: string;
+  ts: number;
+  kind: MountHistoryKind;
+  label?: string;
+  op: string;
+  mounts: TemplateMountPoint[];
+}
+
+interface TemplateHistoryListPayload {
+  points: MountHistoryPoint[];
+  driftCount: number;
+}
+
+type TemplateRestoreSkipReason =
+  | "workspace-missing"
+  | "source-missing"
+  | "real-content";
+
+interface TemplateRestoreDiff {
+  missing: TemplateMountPoint[];
+  extra: TemplateMountPoint[];
+  retarget: Array<{ current: TemplateMountPoint; target: TemplateMountPoint }>;
+  skipped: Array<{
+    record: TemplateMountPoint;
+    reason: TemplateRestoreSkipReason;
+  }>;
+}
+
+interface TemplateRestoreSummary {
+  created: number;
+  removed: number;
+  retargeted: number;
+  failed: Array<{ record: TemplateMountPoint; message: string }>;
+  skipped: TemplateRestoreDiff["skipped"];
+}
+
 interface FileStats {
   ctime: string;
   mtime: string;
@@ -398,11 +437,30 @@ export interface CollabApi {
     workspace: string;
     relPath: string;
   }) => Promise<unknown>;
+  templatesHistoryList: () => Promise<TemplateHistoryListPayload>;
+  templatesHistoryCreateBackup: (params: {
+    label: string;
+  }) => Promise<MountHistoryPoint>;
+  templatesHistoryRecordCurrent: (params?: {
+    op?: string;
+  }) => Promise<MountHistoryPoint>;
+  templatesHistoryRename: (params: {
+    id: string;
+    label: string;
+  }) => Promise<MountHistoryPoint>;
+  templatesHistoryDelete: (params: { id: string }) => Promise<unknown>;
+  templatesHistoryPreviewRestore: (params: {
+    id: string;
+  }) => Promise<TemplateRestoreDiff>;
+  templatesHistoryApplyRestore: (params: {
+    id: string;
+  }) => Promise<TemplateRestoreSummary>;
   onTemplatesReveal: (
     cb: (payload: { template: string; relPath: string }) => void,
   ) => Unsubscribe;
   templatesCloseView: () => void;
   onTemplatesMountsChanged: (cb: () => void) => Unsubscribe;
+  onTemplatesHistoryChanged: (cb: () => void) => Unsubscribe;
   onTemplateDragStart: (
     cb: (payload: TemplateDragPayload) => void,
   ) => Unsubscribe;

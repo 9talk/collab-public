@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import type { TemplatesContext } from "./templates";
 
 const ROOT = mkdtempSync(join(tmpdir(), "templates-test-"));
 const TEMPLATES = join(ROOT, "templates");
@@ -48,6 +49,7 @@ const {
   removeLinkAt,
   getLinkInfoAt,
   scanWorkspaceMounts,
+  listMounts,
 } = await import("./templates");
 
 const WORKSPACES = [WS];
@@ -274,6 +276,35 @@ describe("scanWorkspaceMounts", () => {
       "t1|rules|.claude/rules|false",
       "t1||whole|false",
     ]);
+  });
+});
+
+describe("listMounts", () => {
+  test("嵌套工作区：同一物理软链只返回一次（先扫到的 workspace 胜出）", async () => {
+    seedTemplate("t1", ["rules/a.md"]);
+    const NESTED = join(WS, "sub");
+    mkdirSync(join(NESTED, ".claude"), { recursive: true });
+    symlinkSync(
+      join(TEMPLATES, "t1", "rules"),
+      join(NESTED, ".claude", "rules"),
+    );
+
+    const ctx = {
+      mainWindow: () => null,
+      forwardToWebview: () => {},
+      workspaces: () => [WS, NESTED],
+      getPref: () => undefined,
+      setPref: () => {},
+    } as unknown as TemplatesContext;
+
+    const mounts = await listMounts(ctx, "t1");
+    expect(mounts).toHaveLength(1);
+    expect(mounts[0]).toMatchObject({
+      workspace: WS,
+      linkRel: "sub/.claude/rules",
+      template: "t1",
+      sourceRel: "rules",
+    });
   });
 });
 

@@ -323,6 +323,19 @@ contextBridge.exposeInMainWorld("api", {
     workspace: string;
     relPath: string;
   }) => ipcRenderer.invoke("templates:reveal-in-workspace", params),
+  templatesHistoryList: () => ipcRenderer.invoke("templates:history-list"),
+  templatesHistoryCreateBackup: (params: { label: string }) =>
+    ipcRenderer.invoke("templates:history-create-backup", params),
+  templatesHistoryRecordCurrent: (params?: { op?: string }) =>
+    ipcRenderer.invoke("templates:history-record-current", params ?? {}),
+  templatesHistoryRename: (params: { id: string; label: string }) =>
+    ipcRenderer.invoke("templates:history-rename", params),
+  templatesHistoryDelete: (params: { id: string }) =>
+    ipcRenderer.invoke("templates:history-delete", params),
+  templatesHistoryPreviewRestore: (params: { id: string }) =>
+    ipcRenderer.invoke("templates:history-preview-restore", params),
+  templatesHistoryApplyRestore: (params: { id: string }) =>
+    ipcRenderer.invoke("templates:history-apply-restore", params),
   onTemplatesReveal: (cb: TemplatesRevealCb) => {
     templatesRevealListeners.add(cb);
     if (bufferedTemplatesReveal !== null) {
@@ -340,6 +353,12 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.on("templates:mounts-changed", handler);
     return () =>
       ipcRenderer.removeListener("templates:mounts-changed", handler);
+  },
+  onTemplatesHistoryChanged: (cb: () => void) => {
+    const handler = () => cb();
+    ipcRenderer.on("templates:history-changed", handler);
+    return () =>
+      ipcRenderer.removeListener("templates:history-changed", handler);
   },
   onTemplateDragStart: (
     cb: (payload: {

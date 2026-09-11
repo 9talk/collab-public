@@ -499,7 +499,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  /* 高于 history-overlay(1000)：对话框须叠在历史面板之上 */
+  z-index: 1100;
 }
 
 .modal {
@@ -718,4 +719,321 @@ body {
 .toast.error {
   border-color: var(--destructive);
   color: var(--destructive);
+}
+
+/* ── History / backups panel ── */
+
+.history-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--background) 40%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.history-panel {
+  width: 1120px;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.history-header h3 {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-new-backup {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  cursor: pointer;
+}
+
+.history-drift {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--destructive);
+  border: 1px solid color-mix(in srgb, var(--destructive) 35%, transparent);
+  background: color-mix(in srgb, var(--destructive) 8%, transparent);
+}
+
+.history-drift-text {
+  flex: 1;
+}
+
+.history-drift button {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--destructive) 45%, transparent);
+  background: transparent;
+  color: var(--destructive);
+  cursor: pointer;
+}
+
+.history-drift button:hover {
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+}
+
+.history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 26px 14px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.history-empty p {
+  margin: 0;
+}
+
+.history-empty button {
+  margin-top: 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.history-empty button:hover {
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.history-list {
+  flex: 1;
+  min-height: 120px;
+  max-height: 480px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 0;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.history-row:hover {
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.history-row.selected {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.history-kind {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  color: var(--muted-foreground);
+}
+
+.history-kind.named {
+  color: var(--primary);
+}
+
+.history-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--muted-foreground);
+}
+
+.history-op {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-time {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+
+.history-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.history-row-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 5px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.history-row-actions button:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.history-row-actions button.danger {
+  color: var(--destructive);
+  border-color: color-mix(in srgb, var(--destructive) 40%, transparent);
+}
+
+.history-row-actions button.danger:hover {
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+}
+
+.history-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.history-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.history-mounts {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 300px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.history-mount-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.history-mount-src {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--foreground);
+}
+
+.history-mount-dst {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted-foreground);
+}
+
+.history-mount-arrow {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.history-broken {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--destructive);
+}
+
+.history-muted {
+  color: var(--muted-foreground);
+}
+
+.history-reason {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--destructive);
+}
+
+.history-preview {
+  flex: 1;
+  min-height: 120px;
+  max-height: 560px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.history-group-title {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.history-group-title.missing {
+  color: var(--destructive);
+}
+
+.history-group-title.skipped {
+  color: var(--muted-foreground);
+}
+
+.history-result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 2px;
+  font-size: 12.5px;
+}
+
+.history-result-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.modal-actions button.danger {
+  color: var(--destructive);
+  border-color: color-mix(in srgb, var(--destructive) 40%, transparent);
+}
+
+.modal-actions button.danger:hover {
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
 }

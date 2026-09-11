@@ -12,6 +12,7 @@ import {
   ArrowsClockwise,
   CaretDown,
   CaretRight,
+  ClockCounterClockwise,
   File as FileIcon,
   Folder,
   FolderOpen,
@@ -23,6 +24,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { useT, type TplKey, type TplTranslate } from "./i18n";
+import HistoryPanel from "./HistoryPanel";
 
 interface TemplateNode {
   name: string;
@@ -150,6 +152,7 @@ export default function App() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [inputDialog, setInputDialog] = useState<InputDialogState | null>(null);
   const [mountSource, setMountSource] = useState<MountSource | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [toast, setToast] = useState<{ text: string; error?: boolean } | null>(
     null,
   );
@@ -159,16 +162,16 @@ export default function App() {
     document.title = t("toolbar.title");
   }, [t]);
 
-  // Esc 关闭内嵌视图（对话框/挂载面板打开时由它们优先处理）
+  // Esc 关闭内嵌视图（对话框/挂载面板/历史面板打开时由它们优先处理）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (inputDialog !== null || mountSource !== null) return;
+      if (inputDialog !== null || mountSource !== null || historyOpen) return;
       window.api.templatesCloseView();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [inputDialog, mountSource]);
+  }, [inputDialog, mountSource, historyOpen]);
 
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const childrenRef = useRef(children);
@@ -260,15 +263,12 @@ export default function App() {
     [selectedKey],
   );
 
+  // 未选中节点 = 整个模板：显示模板全部挂载的工作区；
+  // 选中文件/文件夹 = 精确匹配该节点（不含模板根挂载与子节点）
   const shownMounts = useMemo(() => {
     const list = mounts ?? [];
     if (!selectedRel) return list;
-    return list.filter(
-      (m) =>
-        m.sourceRel === "" ||
-        m.sourceRel === selectedRel ||
-        m.sourceRel.startsWith(`${selectedRel}/`),
-    );
+    return list.filter((m) => m.sourceRel === selectedRel);
   }, [mounts, selectedRel]);
 
   // ── Mounted-in：workspace 汇总表格 + 挂载路径树 ──
@@ -893,6 +893,10 @@ export default function App() {
           <ArrowsClockwise size={13} style={{ verticalAlign: "-2px" }} />{" "}
           {t("toolbar.refresh")}
         </button>
+        <button type="button" onClick={() => setHistoryOpen(true)}>
+          <ClockCounterClockwise size={13} style={{ verticalAlign: "-2px" }} />{" "}
+          {t("toolbar.history")}
+        </button>
         <button type="button" className="primary" onClick={doCreateTemplate}>
           <Plus size={13} style={{ verticalAlign: "-2px" }} />{" "}
           {t("toolbar.newTemplate")}
@@ -1194,6 +1198,13 @@ export default function App() {
 
       {inputDialog && (
         <InputDialog state={inputDialog} onClose={() => setInputDialog(null)} />
+      )}
+
+      {historyOpen && (
+        <HistoryPanel
+          onClose={() => setHistoryOpen(false)}
+          onRequestInput={(state) => setInputDialog(state)}
+        />
       )}
 
       {toast && (

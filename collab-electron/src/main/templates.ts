@@ -37,6 +37,7 @@ import {
   resolveIgnorePatterns,
 } from "./file-filter";
 import { openFileInEditor, openWorkspaceInEditor } from "./external-editor";
+import { bindHistoryIpc, recordMountPoint } from "./mount-history";
 
 export interface TemplatesContext {
   mainWindow: () => BrowserWindow | null;
@@ -647,8 +648,16 @@ export async function listMounts(
     filter.isIgnored(rel) || filter.isIgnored(`${rel}/`);
 
   const all: TemplateMountPoint[] = [];
+  // 嵌套工作区（如父目录与子项目都注册）会让同一条软链被多个 workspace
+  // 扫描到：按物理路径去重，先扫到的 workspace 归属胜出
+  const seen = new Set<string>();
   for (const ws of ctx.workspaces()) {
-    all.push(...(await scanWorkspaceMounts(ws, isIgnoredDir)));
+    for (const m of await scanWorkspaceMounts(ws, isIgnoredDir)) {
+      const phys = join(m.workspace, m.linkRel);
+      if (seen.has(phys)) continue;
+      seen.add(phys);
+      all.push(m);
+    }
   }
   const t = typeof template === "string" && template ? template : "";
   return t ? all.filter((m) => m.template === t) : all;
@@ -872,6 +881,33 @@ function notifyMountsChanged(): void {
   forwardToTemplates("templates:mounts-changed", null);
 }
 
+/** 挂载成功后追加历史点；记录失败不影响主流程 */
+function recordMountResult(
+  ctx: TemplatesContext,
+  result: MountResult,
+  template: string,
+  sourceRel: string,
+  workspace: string,
+): void {
+  if (
+    result.status !== "created" &&
+    result.status !== "replaced" &&
+    result.status !== "renamed"
+  ) {
+    return;
+  }
+  const src = `${template}/${sourceRel || "（模板根）"}`;
+  const rel =
+    typeof result.path === "string" && workspace
+      ? relative(workspace, result.path)
+      : "";
+  const dst = rel ? `${basename(workspace)}/${rel}` : basename(workspace);
+  const verb = result.status === "replaced" ? "替换挂载" : "挂载";
+  void recordMountPoint(ctx, `${verb} ${src} → ${dst}`).catch((err) =>
+    console.warn("[templates] history record failed:", err),
+  );
+}
+
 async function revealSourceInTemplates(
   ctx: TemplatesContext,
   workspace: string,
@@ -892,6 +928,7 @@ async function revealSourceInTemplates(
 
 export function registerTemplatesIpc(ctx: TemplatesContext): void {
   activeCtx = ctx;
+  bindHistoryIpc(ctx);
 
   // 模板视图内的关闭控件(X / Esc)请求关闭内嵌视图
   bindIpc("templates:close-view", "on", () => {
@@ -1023,20 +1060,43 @@ export function registerTemplatesIpc(ctx: TemplatesContext): void {
     );
     // 放置落定即结束会话（nav 侧据 template-drag:end 退出接收态）
     endDragSession(ctx);
+    recordMountResult(
+      ctx,
+      result,
+      payload.template,
+      payload.relPath,
+      p?.workspace ?? "",
+    );
     return result;
   });
 
   bindIpc("templates:mount-to", "handle", async (event, params) => {
     const p = params as {
-      source: { template: string; relPath?: string };
-      target: { workspace: string; relPath?: string };
+      source?: { template?: string; relPath?: string };
+      target?: { workspace?: string; relPath?: string };
     };
-    return promptAndMount(
+    const source = {
+      template: p?.source?.template ?? "",
+      relPath: p?.source?.relPath ?? "",
+    };
+    const target = {
+      workspace: p?.target?.workspace ?? "",
+      relPath: p?.target?.relPath ?? "",
+    };
+    const result = await promptAndMount(
       ctx,
-      { template: p?.source?.template, relPath: p?.source?.relPath ?? "" },
-      { workspace: p?.target?.workspace, relPath: p?.target?.relPath ?? "" },
+      source,
+      target,
       dialogParent(event),
     );
+    recordMountResult(
+      ctx,
+      result,
+      source.template,
+      source.relPath,
+      target.workspace,
+    );
+    return result;
   });
 
   bindIpc("templates:workspaces", "handle", () => ctx.workspaces());
@@ -1055,7 +1115,7 @@ export function registerTemplatesIpc(ctx: TemplatesContext): void {
       detail:
         "The symlink is removed from the workspace. The template content is not affected.",
       buttons: ["Cancel", "Remove"],
-      defaultId: 1,
+      defaultId: 0,
       cancelId: 0,
     });
     if (response !== 1) return { cancelled: true };
@@ -1065,6 +1125,10 @@ export function registerTemplatesIpc(ctx: TemplatesContext): void {
       { dirPath: dirname(abs), changes: [{ path: abs, type: 3 }] },
     ]);
     notifyMountsChanged();
+    void recordMountPoint(
+      ctx,
+      `取消 ${basename(p.workspace)}/${p.relPath}`,
+    ).catch((err) => console.warn("[templates] history record failed:", err));
     return { ok: true };
   });
 
