@@ -151,6 +151,7 @@ E2E（安装后，CDP / ptyDiscover 辅助）：
 
 - 本地：claude tile 省内存回收 → 重建，全屏直出、无泄漏字符、`term:ready` 提前。
 - 镜像：Client attach / 重建画面直出；reconnect 恢复负载显著下降（relay 日志观测）。
+- **大规格 Claude Code 会话镜像滚动同步（用户指定用例）**：在已开启的 terminal tile 会话中先 `cd /Users/dingxin/IdeaProjects/ruc-zlzx/ChestnutCMS`，再执行 `clc --resume e879a4a0-d956-4ee8-b8a5-019ab407bcde`（体量很大的真实会话）；用 CDP 在该会话中模拟滚动操作，逐屏对比 Client 镜像端与 Host 端的渲染内容是否同步（CDP 读取两端屏面文本 / 截图比对）。该会话同时作为大历史下重建与镜像 attach 的压力用例（快照体量、几何一致性、解析排空）。
 
 ## 7. 风险与已知边界
 
