@@ -7,13 +7,11 @@ import type { IDisposable } from "node-pty";
 import { displayCommandName } from "@collab/shared/path-utils";
 import { buildRebuildQueryRe } from "@collab/shared/terminal-queries";
 import { cleanupEndpoint, prepareEndpoint } from "../ipc-endpoint";
-import { RingBuffer } from "./ring-buffer";
 import { SessionEmulator } from "./session-emulator";
 import {
   makeResponse,
   makeError,
   makeNotification,
-  DEFAULT_RING_BUFFER_BYTES,
   sessionSocketPath as buildSessionSocketPath,
   type JsonRpcRequest,
   type SessionCreateParams,
@@ -30,7 +28,6 @@ interface ServerOptions {
   sessionSocketDir: string;
   pidFilePath: string;
   token: string;
-  ringBufferBytes?: number;
 }
 
 interface Session {
@@ -44,13 +41,11 @@ interface Session {
   cwdHostPath: string;
   cwdGuestPath?: string;
   createdAt: string;
-  ringBuffer: RingBuffer;
   /** 终端状态镜像: serialize 快照的事实源(reconnect/镜像 attach 用) */
   emulator: SessionEmulator;
   dataServer: net.Server;
   dataClient: net.Socket | null;
   socketPath: string;
-  hasAttachedClient: boolean;
   /** When non-null, PTY output is queued here instead of sent to client. */
   reconnectQueue: Array<string | Buffer> | null;
   /**
@@ -71,13 +66,10 @@ export class SidecarServer {
   private controlClients = new Set<net.Socket>();
   private sessions = new Map<string, Session>();
   private startTime = Date.now();
-  private readonly opts: Required<ServerOptions>;
+  private readonly opts: ServerOptions;
 
   constructor(opts: ServerOptions) {
-    this.opts = {
-      ...opts,
-      ringBufferBytes: opts.ringBufferBytes ?? DEFAULT_RING_BUFFER_BYTES,
-    };
+    this.opts = { ...opts };
   }
 
   private withOptional<T extends object>(
@@ -99,12 +91,12 @@ export class SidecarServer {
   }
 
   /**
-   * 凡是将 ring buffer 历史导出给新 xterm 的路径(重连/重建的数据通道快照、
-   * capture RPC 的 scrollback), 一律剥离 shell 早前发出的 DSR/DA/XTVERSION/
-   * XTGETTCAP 查询 (\x1b[6n、\x1b[...c、\x1b[>0q、\x1b[?Psq)。这些是历史
-   * 查询, 回放给新 xterm 会触发对过期查询的应答, 应答涌入 shell 侧被回显成
-   * "37;3R"/"1;2c"/"2026;2$y" 泄漏(主进程 pty.ts 拦截 \x1b[>0q 时也会重复
-   * 应答写回 pty, zsh 将其当键盘输入回显)。仅作用于回放导出, 实时数据不受影响。
+   * 断连期间入队的输出在 attach 补发前剥离其中的 DSR/DA/XTVERSION/
+   * XTGETTCAP 查询 (\x1b[6n、\x1b[...c、\x1b[>0q、\x1b[?Psq)。这些查询
+   * 产生于无人应答的断连期, 补发给新 xterm 会触发对过期查询的应答, 应答
+   * 涌入 shell 侧被回显成 "37;3R"/"1;2c"/"2026;2$y" 泄漏(主进程 pty.ts
+   * 拦截 \x1b[>0q 时也会重复应答写回 pty, zsh 将其当键盘输入回显)。
+   * 仅作用于补发, 实时数据不受影响。
    */
   private stripRebuildReportQueries(buf: Buffer): Buffer {
     if (buf.length === 0) return buf;
@@ -338,7 +330,8 @@ export class SidecarServer {
       case "session.signal":
         return this.handleSignal(sock, id, params as Record<string, unknown>);
       case "session.capture":
-        return this.handleCapture(sock, id, params as Record<string, unknown>);
+        void this.handleCapture(sock, id, params as Record<string, unknown>);
+        return;
       case "session.serialize":
         void this.handleSerialize(sock, id, params as Record<string, unknown>);
         return;
@@ -417,7 +410,6 @@ export class SidecarServer {
       return;
     }
 
-    const ringBuffer = new RingBuffer(this.opts.ringBufferBytes);
     // 以 node-pty 实际值初始化(防入参归一化差异), emulator 与 pty 几何从此同源
     const emulator = new SessionEmulator(ptyProcess.cols, ptyProcess.rows);
     const terminateProcess = this.createTerminateProcess(ptyProcess);
@@ -433,12 +425,10 @@ export class SidecarServer {
         cwdHostPath,
         cwdGuestPath: params.cwdGuestPath,
         createdAt: new Date().toISOString(),
-        ringBuffer,
         emulator,
         dataServer: null!,
         dataClient: null,
         socketPath,
-        hasAttachedClient: false,
         reconnectQueue: null,
         nudge: null,
         exited: false,
@@ -452,8 +442,7 @@ export class SidecarServer {
     // Listen for PTY output
     ptyProcess.onData((data: string | Buffer) => {
       const chunk = this.chunkToBuffer(data);
-      ringBuffer.write(chunk);
-      // 喂原始 chunk(剥离之前): 查询由 parser 消化, 不进快照; 不经
+      // 喂原始 chunk: 查询由 parser 消化, 不进快照; 不经
       // reconnectQueue——emulator 状态恒随最新输出, serialize 取"此刻"。
       emulator.write(chunk);
 
@@ -489,12 +478,10 @@ export class SidecarServer {
       }
       session.dataClient = client;
 
-      // If reconnecting, flush ring buffer snapshot + queued data
+      // 重连期间缓冲的输出在 attach 时补发。serialize 快照路径(pty.ts
+      // 固定流程)已在快照交付时清空队列, 此处只剩快照之后的字节; 新会话
+      // 首挂队列为 null, 无历史可放, 画面由客户端自绘。
       if (session.reconnectQueue) {
-        const snapshot = ringBuffer.snapshot();
-        if (snapshot.length > 0) {
-          client.write(this.stripRebuildReportQueries(snapshot));
-        }
         // 先合并再剥离: 查询序列可能被断开期间的分块输出切断,
         // 逐块剥离会漏掉跨块的查询。
         const queued = session.reconnectQueue.map((c) => this.chunkToBuffer(c));
@@ -507,13 +494,7 @@ export class SidecarServer {
         }
         session.reconnectQueue = null;
         this.scheduleRepaintNudge(session);
-      } else if (!session.hasAttachedClient) {
-        const snapshot = ringBuffer.snapshot();
-        if (snapshot.length > 0) {
-          client.write(this.stripRebuildReportQueries(snapshot));
-        }
       }
-      session.hasAttachedClient = true;
 
       // Pipe client input to PTY
       client.on("data", (data) => {
@@ -722,25 +703,24 @@ export class SidecarServer {
     }
   }
 
-  private handleCapture(
+  /** 读会话最近 N 行文本(解析器还原, 天然不含转义/查询序列) */
+  private async handleCapture(
     sock: net.Socket,
     id: number,
     params: Record<string, unknown>,
-  ): void {
+  ): Promise<void> {
     const session = this.sessions.get(params.sessionId as string);
     if (!session) {
       sock.write(makeError(id, -32000, "Session not found"));
       return;
     }
-    const snapshot = session.ringBuffer.snapshot();
-    // capture 的历史最终也会回放给全新 xterm(pty.ts reconnectSession 的
-    // scrollback / 远端中继镜像), 与数据通道快照同口径剥离, 防新 xterm
-    // 对历史查询重复应答被 shell 回显
-    const text = this.stripRebuildReportQueries(snapshot).toString("utf-8");
     const lines = (params.lines as number) || 50;
-    const allLines = text.split("\n");
-    const tail = allLines.slice(-lines).join("\n");
-    sock.write(makeResponse(id, { output: tail }));
+    try {
+      const text = await session.emulator.readText(lines);
+      sock.write(makeResponse(id, { output: text }));
+    } catch (err) {
+      sock.write(makeError(id, -32000, String(err)));
+    }
   }
 
   /**
@@ -760,6 +740,12 @@ export class SidecarServer {
     }
     try {
       const snapshot = await session.emulator.serialize();
+      // 快照已涵盖此刻前全部输出: 重置重连队列, 已入队的旧字节不随
+      // attach 补发——它们已被快照涵盖, 二次应用会让相对定位序列从
+      // 终态错位重演。新客户端从"快照终态 + 快照之后的输出"无缝续接。
+      if (session.reconnectQueue) {
+        session.reconnectQueue = [];
+      }
       sock.write(makeResponse(id, snapshot));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -777,7 +763,6 @@ export class SidecarServer {
       sock.write(makeError(id, -32000, "Session not found"));
       return;
     }
-    session.ringBuffer.clear();
     await session.emulator.reset();
     sock.write(makeResponse(id, { ok: true }));
   }

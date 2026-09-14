@@ -752,14 +752,6 @@ export async function reconnectSession(
   const meta = readSessionMeta(sessionId);
   const { socketPath } = await client.reconnectSession(sessionId, cols, rows);
 
-  const dataSock = await client.attachDataSocket(socketPath, (data) => {
-    forwardPtyData(sessionId, senderWebContentsId, data);
-  });
-
-  dataSockets.get(sessionId)?.destroy();
-  dataSockets.set(sessionId, dataSock);
-  addSessionSender(sessionId, senderWebContentsId);
-
   const shell = meta?.command || meta?.shell || process.env.SHELL || "/bin/zsh";
   const displayName = meta?.displayName || displayBasename(shell) || "shell";
   sidecarSessionIds.add(sessionId);
@@ -767,12 +759,15 @@ export async function reconnectSession(
     sidecarPowerShellSessionIds.add(sessionId);
   }
 
-  // 恢复内容:优先 serialize 终态快照(全屏应用的历史是逐帧录像, 快照
-  // 解析渲染量 O(1 帧); 查询被解析器消化, 不含历史查询)。失败回退
-  // capture 尾部 500 行(旧 sidecar 无 serialize 方法 / 序列化异常)。
-  // attach 数据通道的推式快照发生在 guest 页面订阅 ptyData 之前(webview
-  // 加载窗口外),会直接丢失;历史内容只能经 scrollback 字段由 guest 主动
-  // 拉取后 term.write。两路都失败按无历史处理, 不阻断重连本身。
+  // 流程顺序是正确性的一部分: reconnect RPC(开启断连期间的输出队列)
+  // → serialize 快照 → attach 数据通道。serialize 会在快照交付时重置
+  // 输出队列——队列里已被快照涵盖的旧字节不再补发, 二次应用会让相对定位
+  // 重绘从终态错位重演; attach 补发的队列只含快照之后的输出。消费端
+  // preload 会缓冲订阅前的 ptyData 并在挂载时重放, 先写 snapshot 再续接
+  // 队列/live 字节, 字节流无缝且无重叠。
+  // 恢复内容: serialize 终态快照(全屏应用的历史是逐帧录像, 快照解析
+  // 渲染量 O(1 帧); 查询被解析器消化, 不含历史查询)。失败按无历史
+  // 处理(队列补发 + 重绘抖动仍会收敛画面), 不阻断重连本身。
   let scrollback = "";
   let snapshotCols: number | undefined;
   let snapshotRows: number | undefined;
@@ -786,14 +781,17 @@ export async function reconnectSession(
     );
   } catch (err) {
     console.log(
-      `[pty] serialize unavailable, capture fallback: ${err instanceof Error ? err.message : String(err)}`,
+      `[pty] serialize failed, reconnect without history: ${err instanceof Error ? err.message : String(err)}`,
     );
-    try {
-      scrollback = await client.captureSession(sessionId, 500);
-    } catch {
-      // 快照失败时按无历史处理
-    }
   }
+
+  const dataSock = await client.attachDataSocket(socketPath, (data) => {
+    forwardPtyData(sessionId, senderWebContentsId, data);
+  });
+
+  dataSockets.get(sessionId)?.destroy();
+  dataSockets.set(sessionId, dataSock);
+  addSessionSender(sessionId, senderWebContentsId);
 
   return withOptionalFields(
     {

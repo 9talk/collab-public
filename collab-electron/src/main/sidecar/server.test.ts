@@ -374,7 +374,7 @@ describe("SidecarServer session lifecycle", () => {
     ctrl.destroy();
   });
 
-  it("replays early PTY output to the first attached data client", async () => {
+  it("首挂不补发挂载前的早段输出(历史只经 serialize 交付)", async () => {
     server = createServer();
     await server.start();
 
@@ -393,12 +393,27 @@ describe("SidecarServer session lifecycle", () => {
     });
     const { socketPath } = createResp.result as SessionCreateResult;
 
+    // shell 在 attach 之前已输出 marker: 首挂不得补发(ring 已移除,
+    // 早段画面由客户端自绘 / Ctrl+L 收敛)
     await sleep(300);
 
     const data = await connectDataSocket(socketPath);
-    const output = await waitForOutput(data, marker);
+    const before = await new Promise<string>((resolve) => {
+      let buf = "";
+      data.on("data", (chunk: Buffer) => {
+        buf += chunk.toString();
+      });
+      setTimeout(() => resolve(buf), 400);
+    });
+    assert.ok(
+      !before.includes(marker),
+      `首挂不得补发挂载前的输出, got: ${JSON.stringify(before)}`,
+    );
 
-    assert.ok(output.includes(marker));
+    // 挂载后新产生的输出正常到达
+    data.write(TEST_SHELL.echo("post-attach-live"));
+    const live = await waitForOutput(data, "post-attach-live");
+    assert.ok(live.includes("post-attach-live"));
 
     data.destroy();
     ctrl.destroy();
@@ -466,7 +481,7 @@ describe("SidecarServer session lifecycle", () => {
     sock.destroy();
   });
 
-  it("session.reconnect returns scrollback over data socket", async () => {
+  it("reconnect 后历史经 serialize 快照交付, 数据通道不重放旧字节", async () => {
     fs.mkdirSync(TEST_DIR, { recursive: true });
     server = new SidecarServer({
       controlSocketPath: CONTROL_SOCK,
@@ -492,24 +507,13 @@ describe("SidecarServer session lifecycle", () => {
     const { sessionId, socketPath } = createResp.result as SessionCreateResult;
 
     // Connect, send command, wait for output, then disconnect
-    const data1 = await new Promise<net.Socket>((resolve, reject) => {
-      const s = net.createConnection(socketPath, () => resolve(s));
-      s.on("error", reject);
-    });
+    const data1 = await connectDataSocket(socketPath);
     data1.write(TEST_SHELL.echo("reconnect-marker"));
-    await new Promise<void>((resolve) => {
-      const onData = (chunk: Buffer) => {
-        if (chunk.toString().includes("reconnect-marker")) {
-          data1.off("data", onData);
-          resolve();
-        }
-      };
-      data1.on("data", onData);
-    });
+    await waitForOutput(data1, "reconnect-marker");
     data1.destroy();
     await sleep(100);
 
-    // Reconnect
+    // Reconnect: 历史改经 serialize 快照交付
     const reconResp = await rpcCall(ctrl, 2, "session.reconnect", {
       sessionId,
       cols: 80,
@@ -519,31 +523,30 @@ describe("SidecarServer session lifecycle", () => {
       (reconResp.result as SessionReconnectResult).sessionId,
       sessionId,
     );
+    const snapResp = await rpcCall(ctrl, 3, "session.serialize", { sessionId });
+    const snap = snapResp.result as { snapshot: string };
+    assert.ok(
+      snap.snapshot.includes("reconnect-marker"),
+      "快照应涵盖重连前的历史输出",
+    );
 
-    // Connect new data socket — should receive scrollback
-    const data2 = await new Promise<net.Socket>((resolve, reject) => {
-      const s = net.createConnection(socketPath, () => resolve(s));
-      s.on("error", reject);
-    });
-
-    const scrollback = await new Promise<string>((resolve) => {
+    // 新数据通道只续接快照之后的输出, 不重放旧字节
+    const data2 = await connectDataSocket(socketPath);
+    const stale = await new Promise<string>((resolve) => {
       let buf = "";
-      const onData = (chunk: Buffer) => {
+      data2.on("data", (chunk: Buffer) => {
         buf += chunk.toString();
-        if (buf.includes("reconnect-marker")) {
-          data2.off("data", onData);
-          resolve(buf);
-        }
-      };
-      data2.on("data", onData);
-      // Timeout fallback
-      setTimeout(() => {
-        data2.off("data", onData);
-        resolve(buf);
-      }, 2000);
+      });
+      setTimeout(() => resolve(buf), 400);
     });
+    assert.ok(
+      !stale.includes("reconnect-marker"),
+      `数据通道不得重放快照已涵盖的旧字节, got: ${JSON.stringify(stale)}`,
+    );
 
-    assert.ok(scrollback.includes("reconnect-marker"));
+    // 通道仍可正常收发
+    data2.write(TEST_SHELL.echo("after-reconnect"));
+    await waitForOutput(data2, "after-reconnect");
 
     data2.destroy();
     ctrl.destroy();
@@ -681,33 +684,30 @@ describe("session.foreground returns a command name", () => {
 });
 
 describe("Reconnect queues output produced during gap", () => {
-  it("scrollback includes output from both commands", async () => {
+  it("断连窗口产生的输出在 attach 时补发", async (t) => {
+    if (process.platform === "win32") {
+      t.skip("sh sleep 语义依赖 POSIX shell");
+      return;
+    }
+
     server = createServer();
     await server.start();
 
     const ctrl = await connectControl();
-    const { sessionId, socketPath } = await createSession(ctrl, 1);
+    // 后台任务 1.5s 后输出: 落在 reconnect 开始之后、attach 之前
+    const resp = await rpcCall(ctrl, 1, "session.create", {
+      command: "/bin/sh",
+      args: ["-lc", "(sleep 1.5; echo gap-marker) & exec /bin/sh"],
+      displayName: "sh",
+      target: "shell",
+      cwdHostPath: TEST_CWD,
+      cwd: TEST_CWD,
+      cols: 80,
+      rows: 24,
+    });
+    const { sessionId, socketPath } = resp.result as SessionCreateResult;
 
-    // Connect first data socket, send command, wait for output
-    const data1 = await connectDataSocket(socketPath);
-    data1.write(TEST_SHELL.echo("first-cmd-aaa"));
-    await waitForOutput(data1, "first-cmd-aaa");
-
-    // Disconnect first data socket
-    data1.destroy();
-    await sleep(200);
-
-    // Connect a second data socket directly (no reconnect)
-    // to send another command while the session is alive
-    const data2 = await connectDataSocket(socketPath);
-    data2.write(TEST_SHELL.echo("second-cmd-bbb"));
-    await waitForOutput(data2, "second-cmd-bbb");
-
-    // Disconnect second data socket
-    data2.destroy();
-    await sleep(200);
-
-    // Now do a formal reconnect
+    // 无数据通道直接 reconnect: 此后输出进入队列
     const reconResp = await rpcCall(ctrl, 2, "session.reconnect", {
       sessionId,
       cols: 80,
@@ -718,41 +718,99 @@ describe("Reconnect queues output produced during gap", () => {
       sessionId,
     );
 
-    // Connect new data socket to receive scrollback
-    const data3 = await connectDataSocket(socketPath);
-    const scrollback = await new Promise<string>((resolve) => {
-      let buf = "";
-      const onData = (chunk: Buffer) => {
-        buf += chunk.toString();
-        // Wait until we see both markers or timeout
-        if (buf.includes("first-cmd-aaa") && buf.includes("second-cmd-bbb")) {
-          data3.off("data", onData);
-          resolve(buf);
-        }
-      };
-      data3.on("data", onData);
-      setTimeout(() => {
-        data3.off("data", onData);
-        resolve(buf);
-      }, 3000);
-    });
+    // 等后台任务输出(此刻无客户端, 只能落入队列)
+    await sleep(2000);
 
+    const data = await connectDataSocket(socketPath);
+    const received = await waitForOutput(data, "gap-marker");
     assert.ok(
-      scrollback.includes("first-cmd-aaa"),
-      "Scrollback should contain output from the first command",
-    );
-    assert.ok(
-      scrollback.includes("second-cmd-bbb"),
-      "Scrollback should contain output from the second command",
+      received.includes("gap-marker"),
+      "断连窗口的输出应在 attach 时补发",
     );
 
-    data3.destroy();
+    data.destroy();
     ctrl.destroy();
   });
 });
 
-describe("capture strips replayed query/residue payloads", () => {
-  it("capture 输出剥离 DSR/DA/DECRQM 查询与已回显的应答残留", async (t) => {
+describe("serialize 之后的 attach 不回放快照前的旧字节", () => {
+  it("attach 仅补发快照之后的输出, 快照已涵盖的历史不重放", async (t) => {
+    if (process.platform === "win32") {
+      t.skip("sh sleep 语义依赖 POSIX shell");
+      return;
+    }
+
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    // 立即输出 stale 标记(进入 ring), 2.5s 后输出 gap 标记
+    // (落在 reconnect 窗口内、serialize 之后)
+    const resp = await rpcCall(ctrl, 1, "session.create", {
+      command: "/bin/sh",
+      args: [
+        "-lc",
+        "echo stale-before-snap; sleep 2.5; echo gap-after-snap; exec /bin/sh",
+      ],
+      displayName: "sh",
+      target: "shell",
+      cwdHostPath: TEST_CWD,
+      cwd: TEST_CWD,
+      cols: 80,
+      rows: 24,
+    });
+    const { sessionId, socketPath } = resp.result as SessionCreateResult;
+
+    // 首次 attach: ring 里的 stale 标记到达
+    const data1 = await connectDataSocket(socketPath);
+    await waitForOutput(data1, "stale-before-snap");
+
+    // 正式流程: reconnect(队列开始) → serialize(队列应重置, 快照涵盖
+    // stale 输出) → gap 标记在快照之后进入队列
+    await rpcCall(ctrl, 2, "session.reconnect", {
+      sessionId,
+      cols: 80,
+      rows: 24,
+    });
+    const snapResp = await rpcCall(ctrl, 3, "session.serialize", { sessionId });
+    const snap = snapResp.result as { snapshot: string };
+    assert.ok(
+      snap.snapshot.includes("stale-before-snap"),
+      "环境自检: 快照应已涵盖 stale 输出",
+    );
+    await sleep(3000);
+
+    // attach: 修复后只应为快照之后(gap)的输出; 旧 ring 字节重放会
+    // 二次应用(相对定位序列从快照终态出发 → 渲染错位)。
+    const data2 = await connectDataSocket(socketPath);
+    const received = await new Promise<string>((resolve) => {
+      let buf = "";
+      const onData = (chunk: Buffer) => {
+        buf += chunk.toString();
+      };
+      data2.on("data", onData);
+      setTimeout(() => {
+        data2.off("data", onData);
+        resolve(buf);
+      }, 800);
+    });
+
+    assert.ok(
+      received.includes("gap-after-snap"),
+      "快照之后的输出应补发给新客户端",
+    );
+    assert.ok(
+      !received.includes("stale-before-snap"),
+      "快照已涵盖的旧 ring 字节不得重放",
+    );
+
+    data2.destroy();
+    ctrl.destroy();
+  });
+});
+
+describe("session.capture 读终端文本", () => {
+  it("返回解析器还原的屏面文本, 不含控制序列; lines 截尾部窗口", async (t) => {
     if (process.platform === "win32") {
       t.skip("printf 转义语义依赖 POSIX shell");
       return;
@@ -765,36 +823,37 @@ describe("capture strips replayed query/residue payloads", () => {
     const { sessionId, socketPath } = await createSession(ctrl, 1);
     const data = await connectDataSocket(socketPath);
 
-    // KEEP 锚定头尾;中段 = 三类查询(真 ESC 字节) + 被 shell 回显过的
-    // 应答残留(无 ESC 前缀的纯文本 "24;3R 1;2c 2026;2$y")
+    // KEEP 锚定可见文本, 中段混入真实查询序列(ESC 字节); L 行经参数展开
+    // 产出——命令回声里是 L%s5, 不含 "L5" 子串, 等它出现即真实输出已渲染
     data.write(
-      "printf 'KEEP-A\\n\\033[6n\\033[c\\033[?2026$p24;3R 1;2c 2026;2$y\\nKEEP-B\\n'\n",
+      "printf 'KEEP-A\\n\\033[6n\\033[c\\033[?2026$p\\nKEEP-B\\n'\nprintf 'L%s1\\nL%s2\\nL%s3\\nL%s4\\nL%s5\\n' '' '' '' '' ''\n",
     );
-    await waitForOutput(data, "KEEP-B");
+    await waitForOutput(data, "L5");
 
-    // capture 的消费方(pty.ts reconnectSession scrollback)会把它回放给
-    // 全新 xterm, 不剥离则新 xterm 对历史查询重复应答, 被空闲 shell 回显
     const cap = await rpcCall(ctrl, 2, "session.capture", {
       sessionId,
       lines: 50,
     });
     const output = (cap.result as { output: string }).output;
 
-    assert.ok(output.includes("KEEP-A"), "无查询的正常输出应保留");
-    assert.ok(output.includes("KEEP-B"), "无查询的正常输出应保留");
-    for (const gone of [
-      "\x1b[6n",
-      "\x1b[c",
-      "\x1b[?2026$p",
-      "24;3R",
-      "1;2c",
-      "2026;2$y",
-    ]) {
-      assert.ok(
-        !output.includes(gone),
-        `capture 不应再包含 ${JSON.stringify(gone)}`,
-      );
-    }
+    assert.ok(output.includes("KEEP-A"), "可见文本应保留");
+    assert.ok(output.includes("KEEP-B"), "可见文本应保留");
+    assert.ok(
+      !output.includes("\x1b"),
+      `文本化输出不应含 ESC 控制序列: ${JSON.stringify(output)}`,
+    );
+
+    // lines 截尾部窗口: 只保留最近 3 行, 更早的内容(含 L2 行)不出现
+    const tail = await rpcCall(ctrl, 3, "session.capture", {
+      sessionId,
+      lines: 3,
+    });
+    const tailOut = (tail.result as { output: string }).output;
+    assert.ok(tailOut.includes("L5"), "尾部窗口应含最后一行");
+    assert.ok(
+      !tailOut.includes("KEEP-A") && !tailOut.includes("L2"),
+      `尾部窗口不应含更早内容: ${JSON.stringify(tailOut)}`,
+    );
 
     data.destroy();
     ctrl.destroy();
@@ -859,6 +918,77 @@ describe("session.serialize outputs terminal-state snapshot", () => {
     assert.ok(
       snap.snapshot.includes("\x1b[?1049h"),
       "alt 缓冲激活标记应进入快照",
+    );
+
+    data.destroy();
+    ctrl.destroy();
+  });
+
+  it("鼠标编码与光标隐藏状态进入快照(SerializeAddon 不覆盖)", async (t) => {
+    if (skipWin(t)) return;
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    const { sessionId, socketPath } = await createSession(ctrl, 1);
+    const data = await connectDataSocket(socketPath);
+
+    // claude code 式启动序列: 开鼠标追踪 + SGR 编码(?1006h) + 隐藏硬件光标
+    // (?25l)。SerializeAddon 只序列化 trackingMode, 编码模式与光标可见性
+    // 缺失时恢复端回退 X10 编码/显示光标 —— SGR 点击定位失效、光标显形。
+    data.write(
+      "printf '\\033[?1000h\\033[?1002h\\033[?1003h\\033[?1006h\\033[?25lMODE%s\\n' -ON\n",
+    );
+    await waitForOutput(data, "MODE-ON");
+
+    const resp = await rpcCall(ctrl, 2, "session.serialize", { sessionId });
+    const snap = resp.result as { snapshot: string };
+    assert.ok(
+      snap.snapshot.includes("\x1b[?1006h"),
+      "SGR 鼠标编码(?1006h)状态应进入快照",
+    );
+    assert.ok(
+      snap.snapshot.includes("\x1b[?25l"),
+      "光标隐藏(?25l)状态应进入快照",
+    );
+
+    // 端到端: 快照写入全新 headless 后, 恢复端应处于 SGR 编码态且光标隐藏
+    const fresh = new Terminal({
+      cols: snap.cols,
+      rows: snap.rows,
+      allowProposedApi: true,
+    });
+    await new Promise<void>((resolve) =>
+      fresh.write(snap.snapshot, () => resolve()),
+    );
+    const freshCore = (
+      fresh as unknown as {
+        _core: {
+          coreMouseService: { _activeEncoding: string };
+          coreService: { isCursorHidden: boolean };
+        };
+      }
+    )._core;
+    assert.equal(
+      freshCore.coreMouseService._activeEncoding,
+      "SGR",
+      "恢复端应处于 SGR 鼠标编码态",
+    );
+    assert.equal(
+      freshCore.coreService.isCursorHidden,
+      true,
+      "恢复端光标应保持隐藏",
+    );
+    fresh.dispose();
+
+    // 关闭 SGR 编码后序列化 → 不再补 ?1006h
+    data.write("printf '\\033[?1006lMODE%s\\n' -OFF\n");
+    await waitForOutput(data, "MODE-OFF");
+    const resp2 = await rpcCall(ctrl, 3, "session.serialize", { sessionId });
+    const snap2 = resp2.result as { snapshot: string };
+    assert.ok(
+      !snap2.snapshot.includes("\x1b[?1006h"),
+      "SGR 关闭后快照不应含 ?1006h",
     );
 
     data.destroy();
@@ -1063,69 +1193,6 @@ describe("session.serialize outputs terminal-state snapshot", () => {
     assert.ok(resp.error, "应返回错误");
     assert.equal(resp.error!.code, -32000);
 
-    ctrl.destroy();
-  });
-
-  it("性能对比: 快照恢复 vs 字节历史回放(全屏多帧负载)", async (t) => {
-    if (skipWin(t)) return;
-    server = createServer();
-    await server.start();
-
-    const ctrl = await connectControl();
-    const { sessionId, socketPath } = await createSession(ctrl, 1);
-    const data = await connectDataSocket(socketPath);
-
-    // 模拟全屏 TUI 逐帧重绘: 250 帧 alt 屏整屏覆盖 + 彩色 SGR,
-    // 帧尾用运行期拼接的标记规避命令回声误匹配。
-    data.write(
-      'awk \'BEGIN{printf "\\033[?1049h"; for(i=0;i<250;i++){printf "\\033[H\\033[2J\\033[3%dmFRAME-%d\\n", i%8, i; for(j=0;j<18;j++) printf "row %d filler content %d\\n", j, i}; printf "FRAME-F%s\\n", "INAL"}\'\n',
-    );
-    await waitForOutput(data, "FRAME-FINAL", 15000);
-
-    const capResp = await rpcCall(ctrl, 2, "session.capture", {
-      sessionId,
-      lines: 500,
-    });
-    const captureText = (capResp.result as { output: string }).output;
-    const snapResp = await rpcCall(ctrl, 3, "session.serialize", {
-      sessionId,
-    });
-    const snap = snapResp.result as {
-      snapshot: string;
-      cols: number;
-      rows: number;
-    };
-
-    const parseInto = async (
-      text: string,
-      cols: number,
-      rows: number,
-    ): Promise<{ ms: number; text: string }> => {
-      const fresh = new Terminal({ cols, rows, allowProposedApi: true });
-      const t0 = performance.now();
-      await new Promise<void>((resolve) => fresh.write(text, () => resolve()));
-      const ms = performance.now() - t0;
-      const screen = readScreenText(fresh);
-      fresh.dispose();
-      return { ms, text: screen };
-    };
-
-    const capture = await parseInto(captureText, 80, 24);
-    const snapshot = await parseInto(snap.snapshot, snap.cols, snap.rows);
-
-    // 两条路径都应恢复到同一终帧(还原正确性等价), 快照体积应是
-    // 字节历史的一帧量级而非全部帧(约 250 帧负载下数量级更小)。
-    assert.ok(capture.text.includes("FRAME-FINAL"), "旧路径恢复终帧");
-    assert.ok(snapshot.text.includes("FRAME-FINAL"), "快照恢复终帧");
-    assert.ok(
-      snap.snapshot.length < captureText.length,
-      `快照应小于字节历史 (snapshot=${snap.snapshot.length}B capture=${captureText.length}B)`,
-    );
-    console.log(
-      `[perf] 快照 ${snap.snapshot.length}B / 解析 ${snapshot.ms.toFixed(1)}ms · 字节历史 ${captureText.length}B / 解析 ${capture.ms.toFixed(1)}ms (${(captureText.length / snap.snapshot.length).toFixed(1)}x 体积)`,
-    );
-
-    data.destroy();
     ctrl.destroy();
   });
 });

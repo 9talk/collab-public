@@ -14,9 +14,6 @@ export function sessionSocketPath(sessionId: string): string {
   return join(SESSION_SOCKET_DIR, `${sessionId}.sock`);
 }
 
-// Ring buffer default: 8 MB per session
-export const DEFAULT_RING_BUFFER_BYTES = 8 * 1024 * 1024;
-
 // JSON-RPC 2.0 types
 export interface JsonRpcRequest {
   jsonrpc: "2.0";

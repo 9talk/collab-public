@@ -298,7 +298,7 @@ describe("SidecarClient", () => {
     }
   });
 
-  it("reconnects session and receives scrollback", async () => {
+  it("reconnects session: 历史经 serialize 快照交付, 数据通道只续新输出", async () => {
     await startServer();
     client = new SidecarClient(CONTROL_SOCK);
     await client.connect();
@@ -334,29 +334,38 @@ describe("SidecarClient", () => {
     dataSock1.destroy();
     await sleep(100);
 
-    // Reconnect the session
+    // Reconnect the session and take the serialize snapshot (历史交付路径)
     const reconnResult = await client.reconnectSession(sessionId, 80, 24);
     assert.equal(reconnResult.sessionId, sessionId);
+    const snap = await client.serializeSession(sessionId);
+    assert.ok(
+      snap.snapshot.includes("RECONNECT_MARKER"),
+      "快照应涵盖重连前的历史输出",
+    );
 
-    // Attach a new data socket — it should receive the scrollback
+    // Attach a new data socket — 只续接快照之后的输出, 不重放旧字节
     const chunks2: DataChunk[] = [];
     const dataSock2 = await client.attachDataSocket(
       reconnResult.socketPath,
       (data) => chunks2.push(data),
     );
+    await sleep(400);
+    assert.ok(
+      !chunksToString(chunks2).includes("RECONNECT_MARKER"),
+      `数据通道不应重放快照已涵盖的旧字节: ${JSON.stringify(chunksToString(chunks2))}`,
+    );
 
+    // 通道仍可正常收发
+    dataSock2.write(TEST_SHELL.echo("AFTER_RECONNECT"));
     const deadline2 = Date.now() + 5000;
     while (
-      !chunksToString(chunks2).includes("RECONNECT_MARKER") &&
+      !chunksToString(chunks2).includes("AFTER_RECONNECT") &&
       Date.now() < deadline2
     ) {
       await sleep(50);
     }
+    assert.ok(chunksToString(chunks2).includes("AFTER_RECONNECT"));
 
-    assert.ok(
-      chunksToString(chunks2).includes("RECONNECT_MARKER"),
-      "Scrollback should contain the marker from before disconnect",
-    );
     await closeSessionGracefully(dataSock2);
   });
 

@@ -262,8 +262,8 @@ export function createCanvasRpc({
           if (dom?.webview) {
             dom.webview.send("terminal:clear");
           }
-          // Also clear the sidecar RingBuffer so reconnects / capture
-          // don't return the old output.
+          // Also clear the sidecar session emulator so reconnects /
+          // capture don't return the old output.
           if (tile.ptySessionId) {
             window.shellApi.ptyClearBuffer(tile.ptySessionId);
           }
