@@ -61,6 +61,15 @@ function errText(err: unknown): string {
   return raw.replace(/^Error invoking remote method '[^']*':\s*/, "");
 }
 
+async function isTyporaInstalled(): Promise<boolean> {
+  try {
+    const editors = await window.api.listExternalEditors();
+    return editors.some((editor) => editor.id === "typora");
+  } catch {
+    return false;
+  }
+}
+
 function ImportWebArticleModal({
   folderPath,
   onClose,
@@ -1076,10 +1085,14 @@ export default function App() {
             id: "reveal-in-finder",
             label: REVEAL_LABEL,
           },
-          {
-            id: "terminal",
-            label: "Open in Terminal",
-          },
+          ...(item.kind === "file"
+            ? []
+            : [
+                {
+                  id: "terminal",
+                  label: "Open in Terminal",
+                },
+              ]),
         ];
       } else if (!item) {
         menuItems = [
@@ -1180,7 +1193,20 @@ export default function App() {
           },
         ];
       } else {
+        const dot = item.path.lastIndexOf(".");
+        const ext = dot >= 0 ? item.path.slice(dot).toLowerCase() : "";
+        const showTypora =
+          matchesPattern(ext, "*.md") && (await isTyporaInstalled());
         menuItems = [
+          ...(showTypora
+            ? [
+                {
+                  id: "open-in-typora",
+                  label: "Open in Typora",
+                },
+                { id: "separator", label: "" },
+              ]
+            : []),
           {
             id: "rename",
             label: "Rename",
@@ -1197,10 +1223,6 @@ export default function App() {
           {
             id: "reveal-in-finder",
             label: REVEAL_LABEL,
-          },
-          {
-            id: "terminal",
-            label: "Open in Terminal",
           },
         ];
       }
@@ -1283,6 +1305,9 @@ export default function App() {
               window.api.openFileInExternalEditor?.(item.path);
             }
           }
+          break;
+        case "open-in-typora":
+          if (item) window.api.openFileInExternalEditor?.(item.path, "typora");
           break;
         case "show-template-source": {
           const ctx = item ? linkContextOf(item.path) : null;
