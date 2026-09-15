@@ -283,6 +283,17 @@ contextBridge.exposeInMainWorld("shellApi", {
     return () => ipcRenderer.removeListener("pty:status-changed", handler);
   },
 
+  onPtyProgressChanged: (
+    cb: (payload: { sessionId: string; running: boolean }) => void,
+  ) => {
+    const handler = (
+      _event: unknown,
+      payload: { sessionId: string; running: boolean },
+    ) => cb(payload);
+    ipcRenderer.on("pty:progress-changed", handler);
+    return () => ipcRenderer.removeListener("pty:progress-changed", handler);
+  },
+
   onPtyExit: (
     cb: (payload: { sessionId: string; exitCode: number }) => void,
   ) => {

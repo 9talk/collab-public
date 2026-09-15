@@ -221,6 +221,16 @@ function handleRemoteEvent(
     sendToOwner(payload.sessionId, "pty:status-changed", payload);
     return;
   }
+  if (channel === "pty:progress-changed") {
+    const payload = args[0] as { sessionId: string; running: boolean };
+    // 广播到 B 端 shell（与 pty:exit 同路径）：镜像 tile 按 sessionId 更新指示条
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send("pty:progress-changed", payload);
+      }
+    }
+    return;
+  }
   if (channel === "pty:resized") {
     // Host 端权威 resize 落定 → 拥有该会话的镜像终端实时跟随。
     // owner 未 attach(镜像 tile 尚未拉起)时丢弃,镜像端定时对账兜底。

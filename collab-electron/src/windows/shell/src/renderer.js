@@ -1613,6 +1613,12 @@ async function init() {
     }
   });
 
+  // 终端运行指示条状态: 由主进程扫描 OSC 9;4 后广播(webview 被省内存
+  // 回收时状态仍然可靠), 这里只负责按 session 找到 tile 更新。
+  window.shellApi.onPtyProgressChanged((payload) => {
+    tileManager.applyTileRunning(payload.sessionId, payload.running);
+  });
+
   // -- Tile list lazy-init --
 
   function ensureTileListWebview() {

@@ -584,17 +584,6 @@ export function createTileManager({
           }
         }
       }
-      if (event.channel === "term:status-changed") {
-        const sessionId = event.args[0];
-        const status = event.args[1];
-        const command = event.args[2] || "";
-        const t = tiles.find((t) => t.ptySessionId === sessionId);
-        if (t) {
-          t.running = status === "running";
-          t.runningCommand = status === "running" ? command : "";
-          updateTileStatus(tileDOMs.get(t.id), t);
-        }
-      }
       if (event.channel === "term:refreshed") {
         clearRefreshMask(tileDOMs.get(tile.id), tile);
         focusCanvasTile(tile.id);
@@ -954,6 +943,19 @@ export function createTileManager({
     saveCanvasImmediate();
   }
 
+  /**
+   * OSC 9;4 运行态(主进程解析 PTY 数据后经 pty:progress-changed 广播)→
+   * 更新 tile 运行指示条。与 webview 生命周期解耦: 省内存模式回收 frame
+   * 后状态仍由主进程推送, 不依赖终端 webview 里的 xterm OSC 解析。
+   */
+  function applyTileRunning(sessionId, running) {
+    const t = tiles.find((t) => t.ptySessionId === sessionId);
+    if (!t || t.running === running) return;
+    t.running = running;
+    if (!running) t.runningCommand = "";
+    updateTileStatus(tileDOMs.get(t.id), t);
+  }
+
   return {
     createCanvasTile,
     closeCanvasTile,
@@ -977,6 +979,7 @@ export function createTileManager({
     },
     refreshTerminalTile,
     renameTile,
+    applyTileRunning,
     broadcastToTileWebviews,
     saveCanvasDebounced,
     saveCanvasImmediate,

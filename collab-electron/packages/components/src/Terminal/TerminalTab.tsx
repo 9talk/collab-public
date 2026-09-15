@@ -119,8 +119,6 @@ function TerminalTab({
   // 查询的自动应答(DSR/DA/DECRQM), 不得写回 pty。
   const replayingRef = useRef(false);
   const isComposingRef = useRef(false);
-  // OSC 9;4 上报的终端运行状态(running/idle),供主进程更新 tile 状态。
-  const runningRef = useRef(false);
   // 记录上一次 alternate screen 状态,仅在翻转时打日志(避免 flushData 高频刷屏)。
   const lastAltScreenRef = useRef<boolean | null>(null);
   // 宿主侧"程序是否有选中"检测(复刻 Claude Code selection.ts 的 anchor/focus 状态机)。
@@ -708,26 +706,6 @@ function TerminalTab({
         }
       } catch {
         // Malformed URL — ignore
-      }
-      return true;
-    });
-
-    // OSC 9;4: terminal progress indicator (Claude Code etc.)
-    // 0 = CLEAR, 1 = SET, 2 = ERROR, 3 = INDETERMINATE
-    term.parser.registerOscHandler(9, (data) => {
-      const semi = data.indexOf(";");
-      const kind = semi >= 0 ? data.slice(0, semi) : data;
-      const rest = semi >= 0 ? data.slice(semi + 1) : "";
-      if (kind === "4") {
-        const semi2 = rest.indexOf(";");
-        const state = semi2 >= 0 ? rest.slice(0, semi2) : rest;
-        if (state === "1" || state === "2" || state === "3") {
-          runningRef.current = true;
-          window.api.notifyTerminalStatus(sessionId, "running");
-        } else {
-          runningRef.current = false;
-          window.api.notifyTerminalStatus(sessionId, "idle");
-        }
       }
       return true;
     });

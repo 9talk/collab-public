@@ -753,6 +753,8 @@ function attachHooks(): void {
     onData: (sessionId, data) => pushPtyData(sessionId, data),
     onExit: (payload) => pushEvent("pty:exit", [payload]),
     onStatusChanged: (payload) => pushEvent("pty:status-changed", [payload]),
+    onProgressChanged: (payload) =>
+      pushEvent("pty:progress-changed", [payload]),
     onResized: (payload) => pushEvent("pty:resized", [payload]),
   });
   setRemoteEventMirror((ev) => {

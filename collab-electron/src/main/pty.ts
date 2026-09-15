@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import { displayBasename } from "@collab/shared/path-utils";
 import { hyperlinkFilePaths } from "./hyperlink-paths";
 import { HOST_DEFERRED_REPLIES } from "@collab/shared/terminal-queries";
+import { scanOsc94 } from "./osc94";
 import {
   writeSessionMeta,
   readSessionMeta,
@@ -101,12 +102,21 @@ const queryScanBuffers = new Map<string, string>();
 // 的查询也能在下一段拼齐后命中。
 const MAX_QUERY_PREFIX_LEN = 16;
 
+// OSC 9;4 进度状态(规则见 osc94.ts): 半截前缀缓存 + 各会话最近一次已知运行态。
+// 解析必须在主进程完成 —— 省内存模式回收终端 webview 后 PTY 数据仍会到达
+// forwardPtyData, 而转发到已销毁 frame 的数据会被静默跳过; 若依赖 webview
+// 解析 OSC 9;4, claude 任务结束的 CLEAR 会随数据一起丢失, 指示条卡在运行中。
+const progressScanPending = new Map<string, string>();
+const sessionRunningState = new Map<string, boolean>();
+
 // Remote-control consumers (registered by remote-server.ts when the host
 // remote mode is active). null = no remote consumer, zero overhead.
 export interface PtyRemoteConsumers {
   onData: (sessionId: string, data: string) => void;
   onExit: (payload: { sessionId: string; exitCode: number }) => void;
   onStatusChanged: (payload: { sessionId: string; foreground: string }) => void;
+  /** OSC 9;4 运行态变化 → 镜像端同步 tile 指示条。 */
+  onProgressChanged: (payload: { sessionId: string; running: boolean }) => void;
   /** Host 端权威 resize 落定(settle 回写)→ 推给镜像端实时跟随。 */
   onResized: (payload: {
     sessionId: string;
@@ -218,6 +228,8 @@ function clearPendingPtyData(sessionId: string): void {
   pendingPtyData.delete(sessionId);
   trailingUtf8Bytes.delete(sessionId);
   queryScanBuffers.delete(sessionId);
+  progressScanPending.delete(sessionId);
+  sessionRunningState.delete(sessionId);
 }
 
 function flushPendingPtyData(
@@ -255,6 +267,26 @@ function respondToHostQueries(sessionId: string, text: string): void {
   }
 }
 
+/**
+ * 扫描 OSC 9;4(iTerm2 进度上报; Claude Code 用它标记任务运行/结束/错误),
+ * 维护各会话运行态并在变化时广播给 shell 更新 tile 运行指示条。
+ */
+function trackTerminalProgress(sessionId: string, text: string): void {
+  const prev = progressScanPending.get(sessionId) ?? "";
+  const { states, pending } = scanOsc94(prev, text);
+  if (pending) progressScanPending.set(sessionId, pending);
+  else progressScanPending.delete(sessionId);
+
+  for (const state of states) {
+    const running = state === "running";
+    if (sessionRunningState.get(sessionId) === running) continue;
+    sessionRunningState.set(sessionId, running);
+    const payload = { sessionId, running };
+    remotePtyConsumers?.onProgressChanged(payload);
+    sendToMainWindow("pty:progress-changed", payload);
+  }
+}
+
 function forwardPtyData(
   sessionId: string,
   senderWebContentsId: number | undefined,
@@ -277,6 +309,7 @@ function forwardPtyData(
   const text = full.subarray(0, safeLen).toString("utf-8");
 
   respondToHostQueries(sessionId, text);
+  trackTerminalProgress(sessionId, text);
 
   // Enrich PTY output: colorize URLs and wrap file paths with OSC 8 hyperlinks
   const enriched = hyperlinkFilePaths(text);
