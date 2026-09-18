@@ -31,6 +31,8 @@ export interface ManagedService {
   httpPort?: number | null;
   /** 服务上报的成功说明（start.sh stdout 的 COLLAB_MESSAGE:<文本> 行） */
   message?: string;
+  /** 运行超过 TTL 被自动关闭的标记（区别于手动 stop；仅内存可见） */
+  autoStopped?: boolean;
 }
 
 interface PersistedService {
@@ -43,6 +45,8 @@ const IS_WIN = process.platform === "win32";
 const DATA_FILE = join(COLLAB_DIR, "services.json");
 const LOGS_DIR = join(COLLAB_DIR, "services-logs");
 const START_TIMEOUT_MS = 120_000;
+const SERVICE_TTL_MS = 24 * 60 * 60 * 1000;
+const AUTO_STOP_SCAN_INTERVAL_MS = 60 * 1000;
 
 // 本进程 spawn 的子进程对象（应用重启后恢复的记录没有 child，靠 PID 探活）
 const children = new Map<string, ChildProcess>();
@@ -200,6 +204,7 @@ function snapshot(record: ManagedService): ManagedService {
   if (record.pgid !== undefined) out.pgid = record.pgid;
   if (record.httpPort !== undefined) out.httpPort = record.httpPort;
   if (record.message !== undefined) out.message = record.message;
+  if (record.autoStopped !== undefined) out.autoStopped = record.autoStopped;
   return out;
 }
 
@@ -441,6 +446,24 @@ export async function stopService(
   return snapshot(record);
 }
 
+/**
+ * 扫描并自动关闭运行超过 TTL 的服务；now/ttlMs 可注入，测试传未来时刻即可
+ * 免等真实 24h。模块加载后立即执行一轮（覆盖应用启动时的补检：load 恢复的
+ * 记录中已超时的立即关闭），此后由周期定时器调用。
+ */
+export async function runAutoStopScan(
+  now = Date.now(),
+  ttlMs = SERVICE_TTL_MS,
+): Promise<void> {
+  for (const record of services.values()) {
+    if (record.startedAt === null) continue;
+    if (now - record.startedAt < ttlMs) continue;
+    if (effectiveStatus(record.projectPath) !== "running") continue;
+    await stopService(record.projectPath);
+    record.autoStopped = true;
+  }
+}
+
 export async function restartService(
   projectPath: string,
 ): Promise<ManagedService> {
@@ -509,3 +532,5 @@ export function shutdownServices(): void {
 }
 
 load();
+void runAutoStopScan();
+setInterval(() => void runAutoStopScan(), AUTO_STOP_SCAN_INTERVAL_MS).unref();

@@ -20,7 +20,7 @@ export function registerServiceRpc(): void {
     async (params) => services.startService(requireProjectPath(params)),
     {
       description:
-        "在指定项目目录启动服务，要求该目录下存在 start.sh 或 scripts/start.sh 脚本，否则报错。脚本必须是后台型的：启动服务进程后立即退出（exit 0），不能前台阻塞运行，否则判定超时失败。脚本通过 stdout 按行输出约定标记上报信息：COLLAB_PID:<pid>（必需，未上报判定启动失败 no-pid）、COLLAB_HTTP_PORT:<port>（HTTP 端口）、COLLAB_MESSAGE:<文本>（成功提示，如访问地址）、COLLAB_ERROR:<文本>（失败原因）。返回服务状态，status 为 running 即启动成功。",
+        "在指定项目目录启动服务，要求该目录下存在 start.sh 或 scripts/start.sh 脚本，否则报错。脚本必须是后台型的：启动服务进程后立即退出（exit 0），不能前台阻塞运行，否则判定超时失败。脚本通过 stdout 按行输出约定标记上报信息：COLLAB_PID:<pid>（必需，未上报判定启动失败 no-pid）、COLLAB_HTTP_PORT:<port>（HTTP 端口）、COLLAB_MESSAGE:<文本>（成功提示，如访问地址）、COLLAB_ERROR:<文本>（失败原因）。返回服务状态，status 为 running 即启动成功。注意：服务运行超过 24 小时会被自动关闭（防止遗忘的服务长期占用内存）。",
       params: { projectPath: "string (required)" },
     },
   );
@@ -49,7 +49,8 @@ export function registerServiceRpc(): void {
     "devtool_check",
     (params) => services.checkService(requireProjectPath(params)),
     {
-      description: "检查指定项目目录的服务当前存活状态。",
+      description:
+        "检查指定项目目录的服务当前存活状态；若服务因运行超 24 小时被自动关闭，返回的 autoStopped 为 true。",
       params: { projectPath: "string (required)" },
     },
   );

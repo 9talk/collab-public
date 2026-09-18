@@ -23,6 +23,7 @@ const {
   listServices,
   getLogPath,
   readServiceLogs,
+  runAutoStopScan,
 } = await import("./service-manager");
 
 function makeProject(): string {
@@ -305,5 +306,80 @@ describe("service-manager", () => {
     const all = readServiceLogs(dir, 0);
     expect(all.content.split("\n")).toHaveLength(300);
     expect(all.content).toContain("log-1");
+  });
+});
+
+describe("service-manager auto-stop", () => {
+  test("runAutoStopScan stops a running service past the TTL and marks autoStopped", async () => {
+    const dir = makeProject();
+    writeStartSh(dir, SUCCESS_SH);
+    const s = await startService(dir);
+    expect(s.status).toBe("running");
+
+    await runAutoStopScan(Date.now() + 25 * 60 * 60 * 1000);
+
+    const after = checkService(dir);
+    expect(after.status).toBe("stopped");
+    expect(after.pid).toBeNull();
+    expect(after.autoStopped).toBe(true);
+    expect(() => process.kill(s.pid as number, 0)).toThrow();
+  });
+
+  test("runAutoStopScan leaves services within the TTL running", async () => {
+    const dir = makeProject();
+    writeStartSh(dir, SUCCESS_SH);
+    await startService(dir);
+
+    await runAutoStopScan();
+
+    const after = checkService(dir);
+    expect(after.status).toBe("running");
+    expect(after.autoStopped).toBeUndefined();
+  });
+
+  test("manually stopped services are not marked autoStopped by the scan", async () => {
+    const dir = makeProject();
+    writeStartSh(dir, SUCCESS_SH);
+    await startService(dir);
+    await stopService(dir);
+
+    await runAutoStopScan(Date.now() + 25 * 60 * 60 * 1000);
+
+    const after = checkService(dir);
+    expect(after.status).toBe("stopped");
+    expect(after.autoStopped).toBeUndefined();
+  });
+
+  test("naturally exited services are not marked autoStopped by the scan", async () => {
+    const dir = makeProject();
+    writeStartSh(
+      dir,
+      '#!/bin/bash\nnohup sleep 0.2 >/dev/null 2>&1 &\necho "COLLAB_PID:$!"\nexit 0\n',
+    );
+    await startService(dir);
+
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline && checkService(dir).status !== "exited") {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    expect(checkService(dir).status).toBe("exited");
+
+    await runAutoStopScan(Date.now() + 25 * 60 * 60 * 1000);
+
+    const after = checkService(dir);
+    expect(after.status).toBe("exited");
+    expect(after.autoStopped).toBeUndefined();
+  });
+
+  test("restart refreshes startedAt so the TTL window resets", async () => {
+    const dir = makeProject();
+    writeStartSh(dir, SUCCESS_SH);
+    await startService(dir);
+    const t0 = checkService(dir).startedAt as number;
+
+    const second = await restartService(dir);
+    expect(second.status).toBe("running");
+    const t1 = checkService(dir).startedAt as number;
+    expect(t1).toBeGreaterThan(t0);
   });
 });
