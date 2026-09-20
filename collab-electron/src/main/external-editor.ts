@@ -1,6 +1,17 @@
 import { existsSync, readdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
+
+/**
+ * Expand a leading `~` to the home directory. Editors are spawned without a
+ * shell, so a literal `~` would be treated as a relative directory name.
+ */
+export function expandTilde(path: string): string {
+  if (path === "~") return homedir();
+  if (path.startsWith("~/")) return join(homedir(), path.slice(2));
+  return path;
+}
 
 export interface ExternalEditor {
   id: string;

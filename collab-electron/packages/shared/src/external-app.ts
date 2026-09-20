@@ -60,6 +60,8 @@ const CODE_FILE_EXTENSIONS = new Set([
   ".sql",
   ".graphql",
   ".proto",
+  ".properties",
+  ".http",
 ]);
 
 export function isCodeFile(filePath: string): boolean {

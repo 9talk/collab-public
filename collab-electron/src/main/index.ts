@@ -75,6 +75,7 @@ import { installCli } from "./cli-installer";
 import { listTerminalTargets } from "./terminal-target";
 import {
   detectEditors,
+  expandTilde,
   openFileInEditor,
   openWorkspaceInEditor,
 } from "./external-editor";
@@ -1084,14 +1085,15 @@ bindIpc(
       ((getPref(config, "externalEditor") as string | undefined) ??
         "intellij-idea");
     console.log("[external-editor] open-file:", { editorId, filePath });
+    const resolvedPath = expandTilde(filePath);
     // 文件不在任何 workspace 内时缺少工作区上下文(idea --line 等参数),
     // workspacePath 传空让编辑器以单文件方式打开, 不再降级系统应用。
-    const ws = workspaceForFile(filePath, config.workspaces);
-    const line = findLatestEditLine(filePath);
+    const ws = workspaceForFile(resolvedPath, config.workspaces);
+    const line = findLatestEditLine(resolvedPath);
     console.log("[external-editor] open-file: line =", line);
     openFileInEditor(
       resolvedEditorId,
-      filePath,
+      resolvedPath,
       ws ?? undefined,
       line ?? undefined,
     );
@@ -1105,11 +1107,12 @@ bindIpc(
     const editorId =
       (getPref(config, "externalEditor") as string | undefined) ??
       "intellij-idea";
+    const resolvedPath = expandTilde(workspacePath);
     console.log("[external-editor] open-workspace:", {
       editorId,
-      workspacePath,
+      workspacePath: resolvedPath,
     });
-    openWorkspaceInEditor(editorId, workspacePath);
+    openWorkspaceInEditor(editorId, resolvedPath);
   },
 );
 

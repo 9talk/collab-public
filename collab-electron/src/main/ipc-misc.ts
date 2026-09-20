@@ -15,6 +15,7 @@ import * as agentActivity from "./agent-activity";
 import { registerMethod } from "./json-rpc-server";
 import { DISABLE_GIT_REPLAY } from "@collab/shared/replay-types";
 import { workspaceForFile } from "./ipc-workspace";
+import { expandTilde } from "./external-editor";
 import { bindIpc, markForward } from "./ipc-registry";
 
 interface IpcContext {
@@ -415,7 +416,7 @@ export function registerMiscHandlers(ctx: IpcContext): void {
   // Open file with system default application
   bindIpc("shell:open-path", "on", (_event, path: string) => {
     console.log("[open-path] from", _event.sender.getURL(), ":", path);
-    shell.openPath(path);
+    shell.openPath(expandTilde(path));
   });
 
   // Git replay

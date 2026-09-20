@@ -72,6 +72,7 @@ import {
 } from "./image-service";
 import {
   detectEditors,
+  expandTilde,
   openFileInEditor,
   openWorkspaceInEditor,
 } from "./external-editor";
@@ -698,11 +699,12 @@ function registerRemoteMethods(config: AppConfig): MethodTable {
       editorId ||
       ((getPref(config, "externalEditor") as string | undefined) ??
         "intellij-idea");
-    const ws = workspaceForFile(filePath, config.workspaces);
-    const line = findLatestEditLine(filePath);
+    const resolvedPath = expandTilde(filePath);
+    const ws = workspaceForFile(resolvedPath, config.workspaces);
+    const line = findLatestEditLine(resolvedPath);
     openFileInEditor(
       resolvedEditorId,
-      filePath,
+      resolvedPath,
       ws ?? undefined,
       line ?? undefined,
     );
@@ -713,7 +715,7 @@ function registerRemoteMethods(config: AppConfig): MethodTable {
     const editorId =
       (getPref(config, "externalEditor") as string | undefined) ??
       "intellij-idea";
-    openWorkspaceInEditor(editorId, workspacePath);
+    openWorkspaceInEditor(editorId, expandTilde(workspacePath));
     return true;
   });
   t.register("ping", () => ({ pong: true }));
