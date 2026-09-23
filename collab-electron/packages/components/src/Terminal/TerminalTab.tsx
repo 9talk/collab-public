@@ -19,6 +19,8 @@ import "./TerminalTab.css";
 // processing many small sequential writes.
 const DATA_BUFFER_FLUSH_MS = 5;
 const MAX_WEBGL_RETRIES = 3;
+// alt 屏(Claude Code 全屏)数据静默后补一次纹理清理的延迟(见 flushData)
+const ALT_IDLE_CLEANUP_MS = 250;
 const IS_MAC = window.api.getPlatform() === "darwin";
 
 // cmd+c 复制键在"无 xterm 原生选中"时（如 Claude Code 等鼠标接管 TUI）
@@ -737,6 +739,19 @@ function TerminalTab({
       window.api.ptyWrite(sessionId, forwarded);
     });
 
+    // alt 屏(Claude Code 全屏)的数据流期间不清理纹理(见 flushData:每帧清会
+    // 放大滚动卡顿),但 WebGL 增量渲染在滚动时可能残留旧行像素(表现为输入
+    // 栏上方多一行,持续到下次重绘才消失)。流停止后补一次清理:去抖窗口内
+    // 持续有数据则一直顺延,流中止时清一次,既避开滚动高峰又覆盖残影。
+    let altIdleCleanupTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleAltIdleCleanup = () => {
+      if (altIdleCleanupTimer) clearTimeout(altIdleCleanupTimer);
+      altIdleCleanupTimer = setTimeout(() => {
+        altIdleCleanupTimer = null;
+        term.clearTextureAtlas();
+      }, ALT_IDLE_CLEANUP_MS);
+    };
+
     const flushData = () => {
       if (dataBufferRef.current.length === 0) {
         flushTimerRef.current = undefined;
@@ -804,6 +819,8 @@ function TerminalTab({
       }
       if (!isAlt) {
         term.clearTextureAtlas();
+      } else {
+        scheduleAltIdleCleanup();
       }
     };
     flushDataRef.current = flushData;
@@ -1004,6 +1021,10 @@ function TerminalTab({
       if (resizePushTimer) {
         clearTimeout(resizePushTimer);
         resizePushTimer = null;
+      }
+      if (altIdleCleanupTimer) {
+        clearTimeout(altIdleCleanupTimer);
+        altIdleCleanupTimer = null;
       }
       pushResizeRef.current = null;
       if (flushTimerRef.current !== undefined) {
