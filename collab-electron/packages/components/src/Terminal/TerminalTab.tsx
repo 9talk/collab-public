@@ -285,6 +285,13 @@ function TerminalTab({
     if (textarea) {
       textarea.addEventListener("compositionstart", () => {
         isComposingRef.current = true;
+        // xterm 取上屏文本用 textarea.value.substring(compositionstart 时的长度),
+        // 隐含"光标恒在末尾"这一前提。实测 Chromium/IME 会把隐藏 textarea 的光标
+        // 退回旧偏移(最多落后几十字符), 输入法据此把新上屏的字插到中间, 切片便取到
+        // 上一段旧文本 —— 上屏「里面」却发出重复的旧片段。钉光标回末尾, 保证切片
+        // 窗口与实际插入点一致。
+        const len = textarea.value.length;
+        textarea.setSelectionRange(len, len);
       });
 
       textarea.addEventListener("compositionend", () => {
