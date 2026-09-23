@@ -16,7 +16,7 @@ export const COLLAB_END = "<!-- COLLAB_END -->";
 // 默认正文仅在文件缺失/损坏时回退。
 export const DEFAULT_BLOCK_BODY = `## Collaborator
 
-- **服务管理 MCP**（when available）：用 \`devtool_start\`、\`devtool_restart\`、\`devtool_stop\`、\`devtool_check\`、\`devtool_list\` 管理项目后台服务。启动要求项目目录存在 \`start.sh\`（须为后台型：启动服务进程后立即退出，通过 stdout 上报 \`COLLAB_PID:\` 等约定标记，否则判定失败），服务独立运行（运行超过 24 小时会被自动关闭），日志在 \`~/.collab/services-logs/\`
+- **服务管理 MCP**（when available）：用 \`devtool_start\`、\`devtool_restart\`、\`devtool_stop\`、\`devtool_check\`、\`devtool_list\` 管理项目后台服务。启动要求项目目录存在 \`start.sh\`（启动过程中脚本前台阻塞监听，启动完成后脚本退出、服务转为后台形式独立运行，通过 stdout 上报 \`COLLAB_PID:\` 等约定标记，未上报或超时判定失败），服务独立运行（运行超过 24 小时会被自动关闭），日志在 \`~/.collab/services-logs/\`
 
 需要管理项目服务时，优先使用以上能力。`;
 

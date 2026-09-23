@@ -35,7 +35,7 @@ function writeStartSh(dir: string, body: string, rel = "start.sh"): void {
   writeFileSync(join(dir, rel), body, "utf-8");
 }
 
-// 后台型成功脚本：后台拉起 sleep 后上报其真实 pid，脚本自身退出
+// 成功脚本：后台拉起 sleep 后上报其真实 pid，脚本自身退出
 const SUCCESS_SH =
   '#!/bin/bash\nnohup sleep 30 >/dev/null 2>&1 &\necho "COLLAB_PID:$!"\nexit 0\n';
 const FAIL_SH = '#!/bin/bash\necho "COLLAB_ERROR:port in use"\nexit 1\n';
