@@ -1619,7 +1619,7 @@ body.platform-win {
   justify-content: center;
   z-index: 9400;
   background: color-mix(in srgb, var(--bg) 55%, transparent);
-  backdrop-filter: blur(6px);
+  /* 勿加 backdrop-filter:全屏模糊叠 webview + spinner 动画会逐帧重算致整机卡顿 */
 }
 
 #remote-overlay.visible {

@@ -71,6 +71,10 @@ Translations live in `collab-electron/src/windows/settings/src/translations/`:
 
 The settings UI (`App.tsx`) reads the `locale` preference via `api.getPref("locale")` and passes a `t()` function down to all pane components. Language selector is in the Appearance pane.
 
+## 渲染性能约束
+
+**不要在覆盖 webview 的全屏 overlay 上使用 `backdrop-filter`。** tile 是 `<webview>`（独立进程合成层），全屏模糊需逐帧跨进程捕获背景重算，叠加无限旋转动画（如 loading spinner）后 GPU / WindowServer 直接满载，表现为**整机**卡顿而非仅应用内卡顿。`shell.css` 的 `#remote-overlay`（remote 端「连接已断开」弹窗）已因此移除 `blur(6px)`；`34a09a1` 也曾因同样原因移除 terminal tile 的 blur。改用半透明背景即可，视觉差异极小。
+
 ## Key Commands
 
 All run from `collab-electron/`:
