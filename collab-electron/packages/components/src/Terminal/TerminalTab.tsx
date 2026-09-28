@@ -5,6 +5,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { getTheme } from "./theme";
+import { createDisposableSlot, repaintAfterData } from "./renderer-lifecycle";
 import {
   isCodeFile,
   matchesPattern,
@@ -322,6 +323,11 @@ function TerminalTab({
     // After MAX_WEBGL_RETRIES, falls back to DOM renderer.
     webglRetriesRef.current = 0;
 
+    // WebGL addon 单实例槽:重建前释放旧实例。xterm 的 RenderService.setRenderer
+    // 只替换引用不回收,不释放会泄漏整套 GL 资源(纹理/上下文)并让旧 addon
+    // 永久滞留 AddonManager,进而累积触发 context loss。
+    const webglSlot = createDisposableSlot<WebglAddon>();
+
     /**
      * Create a WebglAddon with automatic recovery on GPU context loss.
      * On context loss the addon is disposed and a fresh one is created
@@ -331,9 +337,12 @@ function TerminalTab({
      */
     function createWebglRenderer(): void {
       try {
-        const webgl = new WebglAddon();
+        // replace() 先释放旧实例再创建新的;loadAddon 必须在释放之后 ——
+        // WebglAddon.dispose() 会把 renderer 重置回默认 DOM 渲染器,
+        // 反序会把刚装上的新实例顶掉。
+        const webgl = webglSlot.replace(() => new WebglAddon());
         webgl.onContextLoss(() => {
-          webgl.dispose();
+          webglSlot.release(webgl);
           webglRetriesRef.current++;
           console.warn(
             `[TerminalTab] WebGL context lost (retry ${webglRetriesRef.current}/${MAX_WEBGL_RETRIES})`,
@@ -746,10 +755,13 @@ function TerminalTab({
       window.api.ptyWrite(sessionId, forwarded);
     });
 
-    // alt 屏(Claude Code 全屏)的数据流期间不清理纹理(见 flushData:每帧清会
-    // 放大滚动卡顿),但 WebGL 增量渲染在滚动时可能残留旧行像素(表现为输入
-    // 栏上方多一行,持续到下次重绘才消失)。流停止后补一次清理:去抖窗口内
-    // 持续有数据则一直顺延,流中止时清一次,既避开滚动高峰又覆盖残影。
+    // alt 屏(Claude Code 全屏)的数据流期间不做清理(见 flushData:滚动高峰
+    // 清理会放大卡顿),但 WebGL 增量渲染可能残留旧行像素(表现为输入栏上方
+    // 多一行,持续到下次重绘才消失)。流停止后补一次清理:去抖窗口内持续有
+    // 数据则一直顺延,流中止时清一次,既避开滚动高峰又覆盖残影。
+    // 仍用 clearTextureAtlas 而非 refresh:refresh 的逐 cell 短路会跳过内容
+    // 未变的 cell,修不了"纹理与顶点 UV 不一致"这类残影,而它是当前唯一的
+    // 纹理层恢复手段(代价:清空跨终端共享的字形图集,在此低频场景可接受)。
     let altIdleCleanupTimer: ReturnType<typeof setTimeout> | null = null;
     const scheduleAltIdleCleanup = () => {
       if (altIdleCleanupTimer) clearTimeout(altIdleCleanupTimer);
@@ -816,19 +828,17 @@ function TerminalTab({
       }
 
       term.write(merged);
-      // Claude Code 全屏(alternate screen)时跳过全量重绘:其滚动由 Claude Code
-      // 的 DECSTBM 补丁驱动,走 WebGL 增量渲染即可;全量重绘在大视口下反而放大
-      // 滚动卡顿。normal 主屏仍清纹理以防高刷屏 ghosting。
+      // Claude Code 全屏(alternate screen)时跳过立即重绘:其滚动由 Claude Code
+      // 的 DECSTBM 补丁驱动,走 WebGL 增量渲染即可;滚动高峰重绘会放大卡顿。
+      // normal 主屏立即标脏全视口重绘以防高刷屏 ghosting —— 用 refresh 而非
+      // clearTextureAtlas:后者清的字形图集按 (font,theme,dpr) 跨终端共享,
+      // 高频清空会破坏其他终端的顶点 UV 并把全部字形拖入重栅格化。
       const isAlt = term.buffer.active === term.buffer.alternate;
       if (lastAltScreenRef.current !== isAlt) {
         lastAltScreenRef.current = isAlt;
         console.log(`[alt-debug] alternate screen=${isAlt ? "ON" : "OFF"}`);
       }
-      if (!isAlt) {
-        term.clearTextureAtlas();
-      } else {
-        scheduleAltIdleCleanup();
-      }
+      repaintAfterData(term, isAlt, scheduleAltIdleCleanup);
     };
     flushDataRef.current = flushData;
 
@@ -1051,6 +1061,7 @@ function TerminalTab({
       offShellBlur();
       offTerminalClear();
       term.dispose();
+      webglSlot.clear();
       termRef.current = null;
       fitRef.current = null;
       createWebglRef.current = null;
