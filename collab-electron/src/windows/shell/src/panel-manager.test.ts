@@ -2,8 +2,9 @@ import { describe, it, expect, mock, beforeEach } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 // panel-manager 直接操作 document/window, 需要 DOM 环境(happy-dom)。
-// 注册须早于各用例里对 ./panel-manager.js 的动态 import。
-GlobalRegistrator.register();
+// 注册须早于各用例里对 ./panel-manager.js 的动态 import; 同进程可能已由
+// 其他用例注册过(全局注册不可重复), 幂等处理。
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 // Minimal DOM stub
 function makePanel(id) {

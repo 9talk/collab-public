@@ -186,7 +186,6 @@ export function createViewport(canvasEl, gridCanvas, tilesRef) {
   }
 
   function applyZoom(deltaY, focalX, focalY) {
-    notifyManualView();
     if (zoomSnapRaf) {
       cancelAnimationFrame(zoomSnapRaf);
       zoomSnapRaf = null;
@@ -231,7 +230,6 @@ export function createViewport(canvasEl, gridCanvas, tilesRef) {
     "wheel",
     (e) => {
       e.preventDefault();
-      notifyManualView();
 
       if (shouldZoom(e)) {
         const rect = canvasEl.getBoundingClientRect();
