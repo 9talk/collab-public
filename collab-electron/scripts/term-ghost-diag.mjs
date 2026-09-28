@@ -183,11 +183,14 @@ if (cmd === "state") {
   mkdirSync(dir, { recursive: true });
   const settle = () => new Promise((r) => setTimeout(r, 500));
 
+  // 抢在 state/dump 之前截图: 残影本身可能被 alt 屏 250ms 空闲兜底清掉,
+  // 存档慢一步就只剩干净画面。
+  await cdpScreenshot(port, "Terminal Tile", `${dir}/0-before.png`);
+
   const state = await evalExpr(STATE_EXPR);
   const dump = await evalExpr(DUMP_EXPR);
   writeFileSync(`${dir}/state.json`, JSON.stringify(state, null, 2));
   writeFileSync(`${dir}/buffer.txt`, (dump.lines ?? []).join("\n"));
-  await cdpScreenshot(port, "Terminal Tile", `${dir}/0-before.png`);
 
   await evalExpr(REFRESH_EXPR);
   await settle();
