@@ -75,6 +75,40 @@ The settings UI (`App.tsx`) reads the `locale` preference via `api.getPref("loca
 
 **不要在覆盖 webview 的全屏 overlay 上使用 `backdrop-filter`。** tile 是 `<webview>`（独立进程合成层），全屏模糊需逐帧跨进程捕获背景重算，叠加无限旋转动画（如 loading spinner）后 GPU / WindowServer 直接满载，表现为**整机**卡顿而非仅应用内卡顿。`shell.css` 的 `#remote-overlay`（remote 端「连接已断开」弹窗）已因此移除 `blur(6px)`；`34a09a1` 也曾因同样原因移除 terminal tile 的 blur。改用半透明背景即可，视觉差异极小。
 
+**`clearTextureAtlas()` 代价极高**：它清空**跨 Terminal 实例共享**的字形图集（按 font/theme/dpr 共享，见 `CharAtlasCache`）并触发全屏重绘，反复调用等于让所有终端重新栅格化全部字形（实测单页 version 累计上千次）。常规强制重绘应改用 `term.refresh(0, rows-1)`（VS Code 即如此），`clearTextureAtlas()` 只留给字体/主题/DPR 变化这类真正需要重建字形的时机。
+
+## 终端残影(ghosting)诊断
+
+**现象**：Claude Code 全屏（alt 屏）滚动输出时，输入框上方的分隔线附近残留一行旧像素，持续到下次重绘才消失。
+
+**三种来源，修法完全不同，必须先判别**：
+
+| 来源 | 判别特征 |
+| --- | --- |
+| **buffer 层** —— Claude Code 自己写错内容（差分渲染器光标列计算；iTerm2 上同样复现，与终端无关） | buffer 文本本身就是错的，任何重绘都无效 |
+| **刷新层** —— 刷新请求被吞：webview `_isPaused`，或 DEC 2026 `synchronizedOutput` 把 `refreshRows` 缓冲进 `_syncOutputHandler` | `term.refresh()` 能恢复 |
+| **纹理层** —— atlas 陈旧或 page merge 记账 bug | `clearTextureAtlas()` 能恢复 |
+
+**抓现场（免重启；前提：设置 → 开发者 → CDP 端口 > 0，且 app 已带该端口重启）**：
+
+```bash
+cd collab-electron
+bun scripts/term-ghost-diag.mjs capture   # 残影出现时执行：截图 + 缓冲全文 + 渲染状态
+```
+
+产物写到 `/tmp/term-ghost-<时间戳>/`：`shot.png`（画面）、`buffer.txt`（缓冲全文，`行号|内容`）、`state.json`。**比对 shot.png 与 buffer.txt 即可判定层级**，再用下面两条锁定具体层：
+
+```bash
+bun scripts/term-ghost-diag.mjs refresh   # 能恢复 → 刷新层
+bun scripts/term-ghost-diag.mjs atlas     # 能恢复 → 纹理层
+```
+
+`state.json` 关键字段：`syncOutput`（非空 = 正处 DEC 2026 同步输出缓冲期）、`isPaused`、`atlasPages` / `atlasMaxPages`（达到上限即触发 page merge）、`atlasMergedEver`（true = 本会话已发生页合并，直指上游 bug）。
+
+**已知上游 bug**：`@xterm/addon-webgl@0.19.0`（当前版本）有 atlas page merge 记账缺陷——`_requestClearModel` 置位后永不复位、纹理重绑被 version 比较漏掉（[issue #5847](https://github.com/xtermjs/xterm.js/issues/5847)），修复只进了 `0.20.0-beta.x`。若 `atlasMergedEver` 为 true，升级 beta 线是唯一根治途径。
+
+**Cmd+R 是最彻底的交叉验证**：tile 聚焦时 Cmd+R → `refreshTerminalTile` → webview 收到 `terminal:refresh` → **重建整个 WebglAddon**（全新 GL 上下文资源，强于 `clearTextureAtlas()`，并清空 dataBuffer 重放）。若 Cmd+R 都清不掉残影，基本可排除渲染层。注意有 5s 冷却。
+
 ## Key Commands
 
 All run from `collab-electron/`:
