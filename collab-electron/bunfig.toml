@@ -1,5 +1,8 @@
 [test]
 root = "."
+# sidecar 集成测试起真实 PTY(node-pty 需要 node 的 libuv), bun 下无法运行,
+# 必须用 node: bun run test:sidecar。排除以免污染 bun test 结果。
+pathIgnorePatterns = ["src/main/sidecar/**"]
 
 [resolve.alias]
 # Mirror the aliases from electron.vite.config.ts so bun test can resolve them

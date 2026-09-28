@@ -1,4 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, mock, beforeEach } from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+
+// panel-manager 直接操作 document/window, 需要 DOM 环境(happy-dom)。
+// 注册须早于各用例里对 ./panel-manager.js 的动态 import。
+GlobalRegistrator.register();
 
 // Minimal DOM stub
 function makePanel(id) {
@@ -57,8 +62,8 @@ describe("createPanel", () => {
 
     // Stub shellApi
     window.shellApi = {
-      setPref: vi.fn(),
-      getPref: vi.fn().mockResolvedValue(null),
+      setPref: mock(),
+      getPref: mock(() => Promise.resolve(null)),
     };
   });
 
@@ -92,8 +97,8 @@ describe("createPanel", () => {
     mgr.toggle();
     expect(mgr.isVisible()).toBe(false);
     expect(window.shellApi.setPref).toHaveBeenCalledWith(
-      "panel-visible-nav",
-      false,
+      "sidebar-mode",
+      "closed",
     );
   });
 

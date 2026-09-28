@@ -28,13 +28,9 @@ beforeEach(() => {
 // -- defaultSize --
 
 describe("defaultSize", () => {
-  test("returns correct size for each tile type", () => {
-    expect(defaultSize("term")).toEqual({ width: 400, height: 500 });
-    expect(defaultSize("note")).toEqual({ width: 440, height: 540 });
-    expect(defaultSize("code")).toEqual({ width: 440, height: 540 });
-    expect(defaultSize("image")).toEqual({ width: 280, height: 280 });
-    expect(defaultSize("graph")).toEqual({ width: 600, height: 500 });
-    expect(defaultSize("browser")).toEqual({ width: 800, height: 650 });
+  // TileType 现仅有 'term'(canvas-state.js 的 @typedef), 其余类型已随架构移除
+  test("term 返回当前默认尺寸", () => {
+    expect(defaultSize("term")).toEqual({ width: 1196, height: 739 });
   });
 
   test("returns a copy, not the original object", () => {
@@ -42,7 +38,7 @@ describe("defaultSize", () => {
     const b = defaultSize("term");
     expect(a).toEqual(b);
     a.width = 999;
-    expect(defaultSize("term").width).toBe(400);
+    expect(defaultSize("term").width).toBe(1196);
   });
 });
 

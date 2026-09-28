@@ -137,11 +137,21 @@ describe("positionTile", () => {
     expect(container.style.zIndex).toBe("7");
   });
 
-  test("sets transformOrigin to top left", () => {
+  test("zoom 非 1 时设 transformOrigin 为 top left", () => {
     const container = mockContainer();
     const tile = { x: 0, y: 0, width: 100, height: 100, zIndex: 1 };
-    positionTile(container, tile, 0, 0, 1);
+    positionTile(container, tile, 0, 0, 2);
     expect(container.style.transformOrigin).toBe("top left");
+  });
+
+  test("zoom 为 1 时清空 transformOrigin, 坐标取整避免子像素残影", () => {
+    const container = mockContainer();
+    const tile = { x: 0, y: 0, width: 100, height: 100, zIndex: 1 };
+    positionTile(container, tile, 0.4, 0.6, 1);
+    expect(container.style.transformOrigin).toBe("");
+    expect(container.style.transform).toBe("");
+    expect(container.style.left).toBe("0px");
+    expect(container.style.top).toBe("1px");
   });
 
   test("handles negative pan offset", () => {
