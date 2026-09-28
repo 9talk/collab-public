@@ -154,6 +154,26 @@ describe("positionTile", () => {
     expect(container.style.top).toBe("1px");
   });
 
+  test("zoom 非 1 时坐标同样取整, 避免缩放态下 webview 子像素重影", () => {
+    const container = mockContainer();
+    const tile = { x: 100, y: 200, width: 400, height: 500, zIndex: 1 };
+    positionTile(container, tile, 12.3456, -7.8912, 0.6376);
+    // 未取整时 100*0.6376+12.3456 = 76.1056 → 76; 200*0.6376-7.8912 = 119.6288 → 120
+    expect(container.style.left).toBe("76px");
+    expect(container.style.top).toBe("120px");
+    expect(container.style.transform).toBe("scale(0.6376)");
+    expect(container.style.transformOrigin).toBe("top left");
+  });
+
+  test("zoom 非 1 时的取整对负坐标同样成立", () => {
+    const container = mockContainer();
+    const tile = { x: -100, y: -200, width: 400, height: 500, zIndex: 1 };
+    positionTile(container, tile, 0.6, 0.5, 0.6376);
+    // -100*0.6376+0.6 = -63.16 → -63; -200*0.6376+0.5 = -127.02 → -127
+    expect(container.style.left).toBe("-63px");
+    expect(container.style.top).toBe("-127px");
+  });
+
   test("handles negative pan offset", () => {
     const container = mockContainer();
     const tile = { x: 100, y: 100, width: 100, height: 100, zIndex: 1 };

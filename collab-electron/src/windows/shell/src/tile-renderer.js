@@ -305,11 +305,13 @@ export function positionTile(container, tile, panX, panY, zoom) {
   } else {
     container.style.transform = "";
     container.style.transformOrigin = "";
-    // Round to integer pixels to avoid sub-pixel rendering that
-    // causes text ghosting in webview tiles (e.g. xterm).
-    sx = Math.round(sx);
-    sy = Math.round(sy);
   }
+  // Round to integer pixels to avoid sub-pixel rendering that
+  // causes text ghosting in webview tiles (e.g. xterm).缩放态同样需要:
+  // transform 的原点就落在这对坐标上, 小数会让 guest 内容的合成位置
+  // 落在像素边界之间, 重建 webview 后表现为残留行。
+  sx = Math.round(sx);
+  sy = Math.round(sy);
   container.style.left = `${sx}px`;
   container.style.top = `${sy}px`;
   container.style.zIndex = String(tile.zIndex);
