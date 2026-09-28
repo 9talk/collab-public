@@ -93,15 +93,12 @@ The settings UI (`App.tsx`) reads the `locale` preference via `api.getPref("loca
 
 ```bash
 cd collab-electron
-bun scripts/term-ghost-diag.mjs capture   # 残影出现时执行：截图 + 缓冲全文 + 渲染状态
+bun scripts/term-ghost-diag.mjs diagnose  # 残影出现时执行：三段式取证，一键定位层级
 ```
 
-产物写到 `/tmp/term-ghost-<时间戳>/`：`shot.png`（画面）、`buffer.txt`（缓冲全文，`行号|内容`）、`state.json`。**比对 shot.png 与 buffer.txt 即可判定层级**，再用下面两条锁定具体层：
+产物写到 `/tmp/term-ghost-<时间戳>/`：`0-before.png`（原始残影）、`1-after-refresh.png`、`2-after-atlas.png` 三张逐步截图，外加 `buffer.txt`（缓冲全文，`行号|内容`）与 `state.json`。**判别**：`1` 已修好 → 刷新层；仅 `2` 修好 → 纹理层；都无效 → buffer 层（对照 `buffer.txt` 确认该行文本本身是否已错）。
 
-```bash
-bun scripts/term-ghost-diag.mjs refresh   # 能恢复 → 刷新层
-bun scripts/term-ghost-diag.mjs atlas     # 能恢复 → 纹理层
-```
+想先存档、不动渲染状态时用 `capture`（只截图 + 存缓冲/状态）；单独复现某一步用 `refresh` / `atlas`。
 
 `state.json` 关键字段：`syncOutput`（非空 = 正处 DEC 2026 同步输出缓冲期）、`isPaused`、`atlasPages` / `atlasMaxPages`（达到上限即触发 page merge）、`atlasMergedEver`（true = 本会话已发生页合并，直指上游 bug）。
 

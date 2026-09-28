@@ -8,6 +8,7 @@
  *
  * 用法(在 collab-electron/ 下执行):
  *   bun scripts/term-ghost-diag.mjs capture   # 一键抓现场:渲染状态 + 缓冲全文 + 截图
+ *   bun scripts/term-ghost-diag.mjs diagnose  # 三段式取证:before/refresh 后/atlas 后各一图
  *   bun scripts/term-ghost-diag.mjs refresh   # term.refresh(0, rows-1) 强制重绘
  *   bun scripts/term-ghost-diag.mjs atlas     # term.clearTextureAtlas() 清字形图集
  *   bun scripts/term-ghost-diag.mjs state     # 仅打印渲染状态
@@ -173,7 +174,43 @@ if (cmd === "state") {
   );
   console.log("缓冲末尾 12 行:");
   console.log((dump.lines ?? []).slice(-12).join("\n"));
+} else if (cmd === "diagnose") {
+  // 三段式取证: 存档现场 → refresh 后 → clearTextureAtlas 后, 各截一图。
+  // 比对三张图即可定层: 1 修好 = model/dirty 层; 仅 2 修好 = 纹理层;
+  // 都无效 = buffer 层(应用侧写入问题, 与渲染无关)。
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const dir = `/tmp/term-ghost-${stamp}`;
+  mkdirSync(dir, { recursive: true });
+  const settle = () => new Promise((r) => setTimeout(r, 500));
+
+  const state = await evalExpr(STATE_EXPR);
+  const dump = await evalExpr(DUMP_EXPR);
+  writeFileSync(`${dir}/state.json`, JSON.stringify(state, null, 2));
+  writeFileSync(`${dir}/buffer.txt`, (dump.lines ?? []).join("\n"));
+  await cdpScreenshot(port, "Terminal Tile", `${dir}/0-before.png`);
+
+  await evalExpr(REFRESH_EXPR);
+  await settle();
+  await cdpScreenshot(port, "Terminal Tile", `${dir}/1-after-refresh.png`);
+
+  await evalExpr(ATLAS_EXPR);
+  await settle();
+  await cdpScreenshot(port, "Terminal Tile", `${dir}/2-after-atlas.png`);
+
+  console.log(`三段式取证 → ${dir}`);
+  console.log(`  0-before.png        残影原始画面`);
+  console.log(`  1-after-refresh.png refresh(0, rows-1) 之后`);
+  console.log(`  2-after-atlas.png   clearTextureAtlas() 之后`);
+  console.log(`  buffer.txt          缓冲全文(判 buffer 层)`);
+  console.log(`  state.json          渲染状态`);
+  console.log();
+  console.log(
+    "判别: 1 已修好 → model 层; 仅 2 修好 → 纹理层; 都无效 → buffer 层",
+  );
+  console.log("state:", JSON.stringify(state));
 } else {
-  console.error(`未知命令: ${cmd}(可用: capture | state | refresh | atlas)`);
+  console.error(
+    `未知命令: ${cmd}(可用: capture | diagnose | state | refresh | atlas)`,
+  );
   process.exit(1);
 }
