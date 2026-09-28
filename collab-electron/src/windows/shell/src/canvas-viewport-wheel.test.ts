@@ -37,7 +37,16 @@ function makeCanvasEl(): HTMLElement {
   Object.defineProperty(el, "clientWidth", { value: W });
   Object.defineProperty(el, "clientHeight", { value: H });
   el.getBoundingClientRect = () =>
-    ({ left: 0, top: 0, right: W, bottom: H, width: W, height: H, x: 0, y: 0 }) as DOMRect;
+    ({
+      left: 0,
+      top: 0,
+      right: W,
+      bottom: H,
+      width: W,
+      height: H,
+      x: 0,
+      y: 0,
+    }) as DOMRect;
   return el;
 }
 
