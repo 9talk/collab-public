@@ -1076,6 +1076,24 @@ ipcMain.on("settings:toggle", () => setSettingsOpen(!settingsOpen));
 // External editor
 bindIpc("external-editor:list", "handle", () => detectEditors());
 
+/**
+ * Obsidian 只认已注册 vault 内的路径(见 external-editor 的 vault 匹配),
+ * 打不开时 Obsidian 自身的提示很轻, 且窗口未必可见 —— 这里补一条明确反馈。
+ */
+function notifyNotInObsidianVault(targetPath: string): void {
+  const zh = currentMenuLocale() === "zh";
+  const opts = {
+    type: "info" as const,
+    message: zh
+      ? `该位置不在任何 Obsidian vault 内，Obsidian 无法打开。\n\n可先在 Obsidian 中把所在目录添加为 vault：\n${targetPath}`
+      : `This location is not inside any Obsidian vault, so Obsidian cannot open it.\n\nAdd its folder as a vault in Obsidian first:\n${targetPath}`,
+    buttons: [zh ? "好" : "OK"],
+  };
+  const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
+  if (win) void dialog.showMessageBox(win, opts);
+  else void dialog.showMessageBox(opts);
+}
+
 bindIpc(
   "external-editor:open-file",
   "on",
@@ -1091,12 +1109,13 @@ bindIpc(
     const ws = workspaceForFile(resolvedPath, config.workspaces);
     const line = findLatestEditLine(resolvedPath);
     console.log("[external-editor] open-file: line =", line);
-    openFileInEditor(
+    const result = openFileInEditor(
       resolvedEditorId,
       resolvedPath,
       ws ?? undefined,
       line ?? undefined,
     );
+    if (!result.ok) notifyNotInObsidianVault(resolvedPath);
   },
 );
 
@@ -1112,7 +1131,8 @@ bindIpc(
       editorId,
       workspacePath: resolvedPath,
     });
-    openWorkspaceInEditor(editorId, resolvedPath);
+    const result = openWorkspaceInEditor(editorId, resolvedPath);
+    if (!result.ok) notifyNotInObsidianVault(resolvedPath);
   },
 );
 
