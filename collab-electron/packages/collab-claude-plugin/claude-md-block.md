@@ -2,18 +2,18 @@
 
 本机已启用 Collaborator 的 Claude Code 深度集成，提供 `devtool` 服务管理能力。
 
-### devtool
+用于启动、停止、重启、检查项目服务（应用）。当你说「启动应用」「启动服务」「启动前端应用」「启动前端」「启动后端服务」「启动后端」时，优先使用以下 MCP 工具：
 
-用于启动、停止、重启、检查项目服务（应用）。当你说「启动应用」「启动服务」「启动前端应用」「启动前端」「启动后端服务」「启动后端」时，优先使用本工具集，包含以下工具：
+- `mcp__plugin_collaborator_devtool__devtool_list`：列出服务
+- `mcp__plugin_collaborator_devtool__devtool_start`：启动项目服务
+- `mcp__plugin_collaborator_devtool__devtool_restart`：重启项目服务
+- `mcp__plugin_collaborator_devtool__devtool_stop`：停止项目服务
+- `mcp__plugin_collaborator_devtool__devtool_check`：检查服务存活状态
+- `mcp__plugin_collaborator_devtool__devtool_logs`：查询服务日志
 
-- `devtool_list`：列出当前存活的（running）服务；每次调用会先清理超过 1 天的已退出记录
-- `devtool_start`：启动项目服务；启动过程中脚本前台阻塞监听（等待服务就绪），启动完成后脚本退出（exit 0），服务转为后台形式独立运行，并通过 stdout 上报 `COLLAB_PID:` 等约定标记（未上报或超时判定失败）；启动成功后，在回复中向用户提示浏览器访问地址（如 `http://localhost:[port]`）；服务运行超过 24 小时会被自动关闭（防止遗忘的服务长期占用内存）
-- `devtool_restart`：重启项目服务（先停止整个进程组，再重新启动）；脚本要求同 `devtool_start`，重启成功后同样提示浏览器访问地址（如 `http://localhost:[port]`）
-- `devtool_stop`：停止项目服务（终止整个进程组）
-- `devtool_check`：检查指定项目服务的存活状态
-- `devtool_logs`：查询项目服务的运行日志（默认返回末尾 200 行）
+各工具的参数与详细约定（启动脚本要求、超时、上报标记、返回值等）以工具自身的说明为准。
 
-使用条件：
+使用提示：
 
-- 通过 `projectPath` 参数传入实际项目路径；使用 `.gitworktree` 时应传递 worktree 的路径
-- 项目目录下必须存在 `start.sh`
+- 启动/重启成功后，若工具返回了访问地址，在回复中告知用户
+- `projectPath` 传项目实际路径；使用 `.gitworktree` 时传递 worktree 的路径

@@ -204,3 +204,20 @@ describe("backup before write", () => {
     expect(lastBackup()).toBeNull();
   });
 });
+
+describe("DEFAULT_BLOCK_BODY sync", () => {
+  test("matches packaged claude-md-block.md verbatim", () => {
+    const packaged = readFileSync(
+      join(
+        __dirname,
+        "..",
+        "..",
+        "packages",
+        "collab-claude-plugin",
+        "claude-md-block.md",
+      ),
+      "utf-8",
+    ).trim();
+    expect(DEFAULT_BLOCK_BODY).toBe(packaged);
+  });
+});

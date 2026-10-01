@@ -13,12 +13,26 @@ export const COLLAB_START = "<!-- COLLAB_START -->";
 export const COLLAB_END = "<!-- COLLAB_END -->";
 
 // 正文模板存于插件目录（随插件打包），用户可直接编辑该 md 文件。
-// 默认正文仅在文件缺失/损坏时回退。
+// 默认正文仅在文件缺失/损坏时回退，且须与 md 文件逐字一致（测试守护）。
 export const DEFAULT_BLOCK_BODY = `## Collaborator
 
-- **服务管理 MCP**（when available）：用 \`devtool_start\`、\`devtool_restart\`、\`devtool_stop\`、\`devtool_check\`、\`devtool_list\` 管理项目后台服务。启动要求项目目录存在 \`start.sh\`（启动过程中脚本前台阻塞监听，启动完成后脚本退出、服务转为后台形式独立运行，通过 stdout 上报 \`COLLAB_PID:\` 等约定标记，未上报或超时判定失败），服务独立运行（运行超过 24 小时会被自动关闭），日志在 \`~/.collab/services-logs/\`
+本机已启用 Collaborator 的 Claude Code 深度集成，提供 \`devtool\` 服务管理能力。
 
-需要管理项目服务时，优先使用以上能力。`;
+用于启动、停止、重启、检查项目服务（应用）。当你说「启动应用」「启动服务」「启动前端应用」「启动前端」「启动后端服务」「启动后端」时，优先使用以下 MCP 工具：
+
+- \`mcp__plugin_collaborator_devtool__devtool_list\`：列出服务
+- \`mcp__plugin_collaborator_devtool__devtool_start\`：启动项目服务
+- \`mcp__plugin_collaborator_devtool__devtool_restart\`：重启项目服务
+- \`mcp__plugin_collaborator_devtool__devtool_stop\`：停止项目服务
+- \`mcp__plugin_collaborator_devtool__devtool_check\`：检查服务存活状态
+- \`mcp__plugin_collaborator_devtool__devtool_logs\`：查询服务日志
+
+各工具的参数与详细约定（启动脚本要求、超时、上报标记、返回值等）以工具自身的说明为准。
+
+使用提示：
+
+- 启动/重启成功后，若工具返回了访问地址，在回复中告知用户
+- \`projectPath\` 传项目实际路径；使用 \`.gitworktree\` 时传递 worktree 的路径`;
 
 let blockFile: string | null = null;
 
