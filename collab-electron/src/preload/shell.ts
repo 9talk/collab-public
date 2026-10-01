@@ -149,6 +149,10 @@ contextBridge.exposeInMainWorld("shellApi", {
   closeSettings: () => ipcRenderer.send("settings:close"),
   toggleSettings: () => ipcRenderer.send("settings:toggle"),
 
+  // webview guest 持焦时宿主文档失焦,页面内 focus() 不生效;
+  // 由主进程把浏览器级焦点收回 shell 页(webContents.focus)。
+  focusWindow: () => ipcRenderer.send("shell:focus-window"),
+
   logFromWebview: (
     panel: string,
     level: number,

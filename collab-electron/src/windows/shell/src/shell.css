@@ -489,6 +489,90 @@ body.platform-win {
   height: 100%;
 }
 
+/* ── Recent workspaces popup (Cmd+E) ──
+   遮罩刻意不用 backdrop-filter:覆盖 webview 的全屏模糊要逐帧跨进程
+   重算背景(GPU/WindowServer 满载),视觉差异不大(参见 CLAUDE.md)。 */
+
+#recent-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9400;
+}
+
+#recent-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+#recent-panel {
+  position: relative;
+  margin: 15vh auto 0;
+  width: min(520px, calc(100vw - 96px));
+  max-height: min(420px, 60vh);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+#recent-input {
+  flex-shrink: 0;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  font-size: 14px;
+  padding: 12px 16px;
+  outline: none;
+}
+
+#recent-input::placeholder {
+  color: var(--muted);
+}
+
+#recent-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.recent-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.recent-item.selected {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+}
+
+.recent-item-name {
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.recent-item-subtitle {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#recent-empty {
+  padding: 14px 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 /* ── Canvas skill dialog ── */
 
 #canvas-skill-dialog {

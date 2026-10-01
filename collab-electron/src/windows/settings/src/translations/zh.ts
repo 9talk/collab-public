@@ -123,6 +123,7 @@ export const zh: Record<TranslationKey, string> = {
   "shortcut.toggleNavigator": "切换导航器",
   "shortcut.toggleTerminalList": "切换终端列表",
   "shortcut.openWorkspace": "打开工作区",
+  "shortcut.recentWorkspaces": "最近使用的 Workspace",
   "shortcut.zoomIn": "放大",
   "shortcut.zoomOut": "缩小",
   "shortcut.actualSize": "实际大小",

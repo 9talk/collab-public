@@ -13,6 +13,7 @@ export interface MenuLabels {
   newTile: string;
   closeTile: string;
   openWorkspace: string;
+  recentWorkspaces: string;
   edit: string;
   undo: string;
   redo: string;
@@ -52,6 +53,7 @@ export const menuLabels: Record<MenuLocale, MenuLabels> = {
     newTile: "New Tile",
     closeTile: "Close Tile",
     openWorkspace: "Open Workspace…",
+    recentWorkspaces: "Recent Workspaces…",
     edit: "Edit",
     undo: "Undo",
     redo: "Redo",
@@ -88,6 +90,7 @@ export const menuLabels: Record<MenuLocale, MenuLabels> = {
     newTile: "新建 Tile",
     closeTile: "关闭 Tile",
     openWorkspace: "打开工作区…",
+    recentWorkspaces: "最近使用的 Workspace…",
     edit: "编辑",
     undo: "撤销",
     redo: "重做",

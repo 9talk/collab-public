@@ -473,6 +473,7 @@ function ControlsPane({ t }: { t: (key: TranslationKey) => string }) {
     { label: t("shortcut.toggleNavigator"), keys: `${MOD} \\` },
     { label: t("shortcut.toggleTerminalList"), keys: `${MOD} \`` },
     { label: t("shortcut.openWorkspace"), keys: `${SHIFT} ${MOD} O` },
+    { label: t("shortcut.recentWorkspaces"), keys: `${MOD} E` },
     { label: t("shortcut.zoomIn"), keys: `${MOD} =` },
     { label: t("shortcut.zoomOut"), keys: `${MOD} -` },
     { label: t("shortcut.actualSize"), keys: `${MOD} 0` },

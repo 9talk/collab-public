@@ -419,6 +419,13 @@ export function registerMiscHandlers(ctx: IpcContext): void {
     shell.openPath(expandTilde(path));
   });
 
+  // 宿主 DOM(如 Cmd+E 弹窗输入框)抢回浏览器级焦点:webview guest 持焦
+  // 时宿主文档整体失焦,页面内 focus() 只改 activeElement 不移交焦点,
+  // 须由主进程对该窗口 webContents 调 focus() 把焦点收回宿主页。
+  bindIpc("shell:focus-window", "on", (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.webContents.focus();
+  });
+
   // Git replay
   if (!DISABLE_GIT_REPLAY) {
     gitReplay.setNotifyFn((msg) => {

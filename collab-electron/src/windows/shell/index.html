@@ -154,6 +154,22 @@
       <div id="settings-modal"></div>
     </div>
 
+    <!-- Cmd+E 最近使用 workspace 快速切换弹窗 -->
+    <div id="recent-overlay" class="hidden">
+      <div id="recent-backdrop"></div>
+      <div id="recent-panel">
+        <input
+          id="recent-input"
+          type="text"
+          placeholder="Search workspaces"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <div id="recent-list"></div>
+        <div id="recent-empty" class="hidden">No matching workspaces</div>
+      </div>
+    </div>
+
     <div id="canvas-skill-dialog" class="hidden">
       <div id="canvas-skill-backdrop"></div>
       <div id="canvas-skill-modal">

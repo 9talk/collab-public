@@ -55,6 +55,7 @@ import {
   workspaceForFile,
   updateFrontmatter,
 } from "./ipc-workspace";
+import { getRecentOrder, noteWorkspaceUse } from "./workspace-recent";
 import { readFolderTable } from "./ipc-filesystem";
 import { saveWorkspaceConfig } from "./workspace-config";
 import {
@@ -371,7 +372,11 @@ function registerRemoteMethods(config: AppConfig): MethodTable {
       const cfg = getWsConfig(ws);
       if (cfg.alias) aliases[ws] = cfg.alias;
     }
-    return { workspaces: config.workspaces, aliases };
+    return {
+      workspaces: config.workspaces,
+      aliases,
+      recent: getRecentOrder(config),
+    };
   });
   t.register("workspace:read-tree", (params) => {
     const [{ root }] = params as [{ root: string }];
@@ -477,6 +482,12 @@ function registerRemoteMethods(config: AppConfig): MethodTable {
       p?.target as TerminalTarget | undefined,
       p?.tileId,
     );
+    // 控制端在 Host 开终端同样计入 Host 的最近使用(Cmd+E 排序依据)
+    const usedWorkspace = workspaceForFile(
+      result?.cwdHostPath ?? p?.cwd ?? "",
+      config.workspaces,
+    );
+    if (noteWorkspaceUse(config, usedWorkspace)) saveConfig(config);
     // 通知 A 端 shell 创建镜像 tile（B 端新建的终端在 A 端同屏显示）。
     // 广播标注 origin=client：B 端据 origin 丢弃自身回声(本地已建 tile)，
     // 不再依赖 tileId 幂等去重；A 端本地分发照常建镜像。

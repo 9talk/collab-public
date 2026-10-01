@@ -24,6 +24,7 @@ import * as watcher from "./watcher";
 import * as wikilinkIndex from "./wikilink-index";
 import { trackEvent } from "./analytics";
 import { bindIpc, markForward } from "./ipc-registry";
+import { getRecentOrder } from "./workspace-recent";
 import type { TreeNode } from "@collab/shared/types";
 
 export interface IpcWorkspaceContext {
@@ -342,7 +343,11 @@ export function registerWorkspaceHandlers(
       const cfg = getWsConfig(ws);
       if (cfg.alias) aliases[ws] = cfg.alias;
     }
-    return { workspaces: appConfig.workspaces, aliases };
+    return {
+      workspaces: appConfig.workspaces,
+      aliases,
+      recent: getRecentOrder(appConfig),
+    };
   });
 
   bindIpc("workspace:add", "handle", async () => {

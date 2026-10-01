@@ -118,6 +118,7 @@ export const en = {
   "shortcut.toggleNavigator": "Toggle Navigator",
   "shortcut.toggleTerminalList": "Toggle Terminal List",
   "shortcut.openWorkspace": "Open Workspace",
+  "shortcut.recentWorkspaces": "Recent Workspaces",
   "shortcut.zoomIn": "Zoom In",
   "shortcut.zoomOut": "Zoom Out",
   "shortcut.actualSize": "Actual Size",

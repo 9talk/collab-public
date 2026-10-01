@@ -29,6 +29,11 @@ import { createCanvasRpc } from "./canvas-rpc.js";
 import { createCanvasNotifications } from "./canvas-notification.tsx";
 import { createTileManager } from "./tile-manager.js";
 import { updateTileTitle, getTileLabel } from "./tile-renderer.js";
+import {
+  buildWorkspaceItems,
+  filterWorkspaceItems,
+  moveSelection,
+} from "./recent-popup.js";
 
 const CANVAS_DBLCLICK_SUPPRESS_MS = 500;
 const IS_WINDOWS = window.shellApi.getPlatform() === "win32";
@@ -194,6 +199,8 @@ async function init() {
 
   let dragCounter = 0;
   let settingsModalOpen = false;
+  // 声明在 State 区而非弹窗区块:window focus 监听(早于声明处注册)要读它
+  let recentPopupOpen = false;
   let activeSurface = "canvas";
   let lastNonModalSurface = "canvas";
   let shiftHeld = false;
@@ -936,6 +943,12 @@ async function init() {
   // -- Window + canvas focus listeners --
 
   window.addEventListener("focus", () => {
+    // Cmd+E 弹窗打开期间:焦点归弹窗输入框。抢回宿主焦点(blur guest /
+    // webContents.focus)都会触发本监听,若不拦截会把光标从输入框夺回 tile。
+    if (recentPopupOpen) {
+      recentInput.focus();
+      return;
+    }
     // 窗口失焦再激活:恢复最近聚焦的 tile(ring + 键盘焦点),而不是清空。
     // 若清空,任何窗口 focus 事件(如 dblclick 新建 tile 后 dom-ready 的
     // autoFocus 与窗口激活交错)都会把 tile 聚焦打断——新 tile 无黑框、
@@ -1223,13 +1236,45 @@ async function init() {
 
   // -- Shortcuts --
 
+  /** FILES nav 的 "Open in terminal" 语义:已有同 cwd 终端则聚焦,否则新建。 */
+  function openTerminalAt(cwd) {
+    console.log(`[open-terminal] cwd="${cwd}"`);
+    setLastTerminalCwd(cwd);
+    const existing = tiles.find((t) => t.type === "term" && t.cwd === cwd);
+    if (existing) {
+      edgeIndicators.panToTile(existing);
+      tileManager.focusCanvasTile(existing.id);
+      return;
+    }
+    const size = filesNavTileSize || defaultSize("term");
+    const pos = findAutoPlacementForTerminal(cwd, size);
+    const tile = tileManager.createCanvasTile("term", pos.x, pos.y, {
+      cwd,
+      ...size,
+    });
+    tileManager.spawnTerminalWebview(tile, true);
+    tileManager.saveCanvasImmediate();
+    minimap.update();
+    edgeIndicators.panToTile(tile);
+  }
+
   function handleShortcut(action) {
     if (settingsModalOpen && action !== "toggle-settings") {
       focusSurface("settings");
       return;
     }
+    if (
+      recentPopupOpen &&
+      action !== "recent-workspaces" &&
+      action !== "toggle-settings"
+    ) {
+      return;
+    }
     if (action === "toggle-settings") {
+      closeRecentPopup();
       window.shellApi.toggleSettings();
+    } else if (action === "recent-workspaces") {
+      toggleRecentPopup();
     } else if (action === "sidebar-files") {
       panelManager.toggle();
     } else if (action === "sidebar-tiles") {
@@ -1394,6 +1439,177 @@ async function init() {
     }
   });
 
+  // -- Recent workspaces popup (Cmd+E) --
+
+  const recentOverlay = document.getElementById("recent-overlay");
+  const recentBackdrop = document.getElementById("recent-backdrop");
+  const recentPanel = document.getElementById("recent-panel");
+  const recentInput = document.getElementById("recent-input");
+  const recentListEl = document.getElementById("recent-list");
+  const recentEmptyEl = document.getElementById("recent-empty");
+  let recentItems = [];
+  let recentVisible = [];
+  let recentSelectedIndex = -1;
+
+  function openRecentPopup() {
+    recentPopupOpen = true;
+    recentOverlay.classList.remove("hidden");
+    recentInput.value = "";
+    recentSelectedIndex = -1;
+    // webview guest(终端/Nav)持焦时宿主文档整体失焦,页面内 focus() 只改
+    // activeElement 不移交浏览器级焦点 —— 先同帧 blur 持焦 webview 并在宿主
+    // 文档占好 focused element,再经主进程 webContents.focus() 收回焦点。
+    const active = document.activeElement;
+    if (active && active !== recentInput && active.tagName === "WEBVIEW") {
+      try {
+        active.blur();
+      } catch {
+        /* noop */
+      }
+    }
+    recentInput.focus();
+    window.shellApi.focusWindow?.();
+    window.shellApi
+      .workspaceList()
+      .then((data) => {
+        if (!recentPopupOpen) return;
+        const workspaces = Array.isArray(data?.workspaces)
+          ? data.workspaces
+          : [];
+        // 与 FILES nav 同源:全局 pref 别名打底,per-workspace 别名覆盖
+        const aliases = {
+          ...(window.__tileAliases ?? {}),
+          ...(data?.aliases && typeof data.aliases === "object"
+            ? data.aliases
+            : {}),
+        };
+        const recent = Array.isArray(data?.recent) ? data.recent : [];
+        recentItems = buildWorkspaceItems(workspaces, aliases, recent);
+        applyRecentFilter();
+      })
+      .catch((err) => {
+        console.error("[recent-popup] workspace:list failed:", err);
+        // Remote Client 断线时列表拉取失败:落到空态而非白屏
+        if (recentPopupOpen) applyRecentFilter();
+      });
+  }
+
+  function closeRecentPopup({ restoreFocus = true } = {}) {
+    if (!recentPopupOpen) return;
+    recentPopupOpen = false;
+    recentOverlay.classList.add("hidden");
+    recentInput.blur();
+    if (restoreFocus) focusSurface(lastNonModalSurface);
+  }
+
+  function toggleRecentPopup() {
+    if (recentPopupOpen) {
+      closeRecentPopup();
+    } else {
+      openRecentPopup();
+    }
+  }
+
+  function applyRecentFilter() {
+    recentVisible = filterWorkspaceItems(recentItems, recentInput.value);
+    recentSelectedIndex = recentVisible.length > 0 ? 0 : -1;
+    renderRecentList();
+  }
+
+  function selectRecentIndex(index) {
+    if (recentVisible.length === 0) return;
+    recentSelectedIndex = index;
+    const rows = recentListEl.children;
+    for (let i = 0; i < rows.length; i++) {
+      rows[i].classList.toggle("selected", i === index);
+    }
+    rows[index]?.scrollIntoView({ block: "nearest" });
+  }
+
+  function openRecentItem(item) {
+    // 焦点交给 openTerminalAt(聚焦已有/新建终端);恢复旧 surface 的
+    // rAF 会与之抢焦点,故跳过。
+    closeRecentPopup({ restoreFocus: false });
+    openTerminalAt(item.path);
+  }
+
+  function activateRecentSelection() {
+    const item = recentVisible[recentSelectedIndex];
+    if (item) openRecentItem(item);
+  }
+
+  function renderRecentList() {
+    recentListEl.textContent = "";
+    recentEmptyEl.classList.toggle("hidden", recentVisible.length > 0);
+    recentVisible.forEach((item, index) => {
+      const row = document.createElement("div");
+      row.className =
+        "recent-item" + (index === recentSelectedIndex ? " selected" : "");
+
+      const name = document.createElement("div");
+      name.className = "recent-item-name";
+      name.textContent = item.name;
+
+      const subtitle = document.createElement("div");
+      subtitle.className = "recent-item-subtitle";
+      subtitle.textContent = item.subtitle;
+
+      row.appendChild(name);
+      row.appendChild(subtitle);
+      row.addEventListener("mouseenter", () => {
+        recentSelectedIndex = index;
+        const rows = recentListEl.children;
+        for (let i = 0; i < rows.length; i++) {
+          rows[i].classList.toggle("selected", i === index);
+        }
+      });
+      row.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        openRecentItem(item);
+      });
+      recentListEl.appendChild(row);
+    });
+  }
+
+  recentInput.addEventListener("input", () => {
+    applyRecentFilter();
+  });
+
+  recentInput.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      selectRecentIndex(
+        moveSelection(
+          recentSelectedIndex,
+          e.key === "ArrowDown" ? 1 : -1,
+          recentVisible.length,
+        ),
+      );
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      activateRecentSelection();
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (recentPopupOpen && e.key === "Escape") {
+      e.preventDefault();
+      closeRecentPopup();
+    }
+  });
+
+  recentPanel.addEventListener("mousedown", (e) => {
+    if (recentListEl.contains(e.target)) return;
+    // 点击面板空白处不夺走输入框焦点(否则方向键失效)
+    e.preventDefault();
+    recentInput.focus();
+  });
+
+  recentBackdrop.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    closeRecentPopup();
+  });
+
   // -- IPC forwarding --
 
   window.shellApi.onForwardToWebview((target, channel, ...args) => {
@@ -1552,25 +1768,7 @@ async function init() {
       templatesInstance.send(channel, ...args);
     } else if (target === "canvas") {
       if (channel === "open-terminal") {
-        const cwd = args[0];
-        console.log(`[open-terminal] cwd="${cwd}"`);
-        setLastTerminalCwd(cwd);
-        const existing = tiles.find((t) => t.type === "term" && t.cwd === cwd);
-        if (existing) {
-          edgeIndicators.panToTile(existing);
-          tileManager.focusCanvasTile(existing.id);
-          return;
-        }
-        const size = filesNavTileSize || defaultSize("term");
-        const pos = findAutoPlacementForTerminal(cwd, size);
-        const tile = tileManager.createCanvasTile("term", pos.x, pos.y, {
-          cwd,
-          ...size,
-        });
-        tileManager.spawnTerminalWebview(tile, true);
-        tileManager.saveCanvasImmediate();
-        minimap.update();
-        edgeIndicators.panToTile(tile);
+        openTerminalAt(args[0]);
       }
       if (channel === "locate-terminal") {
         const folderPath = args[0];

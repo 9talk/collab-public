@@ -80,6 +80,7 @@ import {
   openWorkspaceInEditor,
 } from "./external-editor";
 import { workspaceForFile } from "./ipc-workspace";
+import { noteWorkspaceUse } from "./workspace-recent";
 import { readSessionMeta } from "./session-meta";
 import * as canvasPersistence from "./canvas-persistence";
 import {
@@ -267,6 +268,7 @@ const TOGGLE_SHORTCUTS: Record<string, ShortcutEntry[]> = {
   Comma: [{ modifier: cmdOrCtrl, action: "toggle-settings" }],
   KeyO: [{ modifier: shiftCmdOrCtrl, action: "add-workspace" }],
   KeyK: [{ modifier: cmdOrCtrl, action: "focus-file-search" }],
+  KeyE: [{ modifier: cmdOrCtrl, action: "recent-workspaces" }],
   KeyN: [{ modifier: cmdOrCtrl, action: "new-tile" }],
   KeyW: [{ modifier: cmdOrCtrl, action: "close-tile" }],
   KeyR: [{ modifier: cmdOrCtrl, action: "refresh-terminal" }],
@@ -286,6 +288,7 @@ const TOGGLE_SHORTCUT_KEYS: Record<string, ShortcutEntry[]> = {
   ",": TOGGLE_SHORTCUTS.Comma!,
   o: TOGGLE_SHORTCUTS.KeyO!,
   k: TOGGLE_SHORTCUTS.KeyK!,
+  e: TOGGLE_SHORTCUTS.KeyE!,
   n: TOGGLE_SHORTCUTS.KeyN!,
   w: TOGGLE_SHORTCUTS.KeyW!,
   r: TOGGLE_SHORTCUTS.KeyR!,
@@ -433,6 +436,12 @@ function buildAppMenu(): void {
           accelerator: "CommandOrControl+Shift+O",
           registerAccelerator: false,
           click: () => sendShortcut("add-workspace"),
+        },
+        {
+          label: L.recentWorkspaces,
+          accelerator: "CommandOrControl+E",
+          registerAccelerator: false,
+          click: () => sendShortcut("recent-workspaces"),
         },
       ],
     },
@@ -857,6 +866,12 @@ bindIpc(
       params?.target,
       params?.tileId,
     );
+    // 终端(在 workspace 下)开到哪里,哪里就是最近使用(Cmd+E 排序依据)
+    const usedWorkspace = workspaceForFile(
+      result?.cwdHostPath ?? params?.cwd ?? "",
+      config.workspaces,
+    );
+    if (noteWorkspaceUse(config, usedWorkspace)) saveConfig(config);
     // Host 本地新建终端(tile webview 发起,带 tileId)→ 镜像给控制端
     // (与远端 rpc 版 pty:create 的 remote:pty-opened 广播一致;本地 Host
     // shell 幂等跳过已建 tile,经 origin=host 帧控制端建镜像)。
