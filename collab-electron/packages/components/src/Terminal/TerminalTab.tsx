@@ -6,6 +6,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { getTheme } from "./theme";
 import { createDisposableSlot, repaintAfterData } from "./renderer-lifecycle";
+import { installOscLinkFilter } from "./osc-link-filter";
 import {
   isCodeFile,
   matchesPattern,
@@ -317,6 +318,10 @@ function TerminalTab({
       { urlRegex: URL_RE },
     );
     term.loadAddon(webLinks);
+
+    // 丢弃上游误检的 OSC 8 链接(http(s) URI 含非 ASCII), 交由 URL_RE 兜底,
+    // 详见 osc-link-filter.ts
+    installOscLinkFilter(term);
 
     // WebGL retry counter: tracks consecutive context losses.
     // Reset to 0 on successful creation; incremented on each loss.
