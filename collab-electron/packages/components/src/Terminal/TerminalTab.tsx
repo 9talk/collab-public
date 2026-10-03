@@ -7,6 +7,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { getTheme } from "./theme";
 import { createDisposableSlot, repaintAfterData } from "./renderer-lifecycle";
 import { installOscLinkFilter } from "./osc-link-filter";
+import { URL_RE } from "./url-link-regex";
 import {
   isCodeFile,
   matchesPattern,
@@ -66,16 +67,6 @@ const createHostSelState = (): HostSelState => ({
 const ARMED_WINDOW_MS = 2000;
 // SGR 鼠标事件: CSI < btn ; col ; row M(按下/移动) 或 m(松开)。col/row 1-indexed。
 const SGR_MOUSE_RE = /\x1b\[<(\d+);(\d+);(\d+)([Mm])/g;
-
-// URL regex based on xterm's default strictUrlRegex, with CJK punctuation
-// (U+3000-U+303F, U+FF00-U+FFEF) added to BOTH the middle and trailing
-// exclusion sets. The middle [^\s"'!*(){}|\\\^<>`]* clause is greedy and
-// would otherwise swallow fullwidth punctuation like ，。 (only the
-// trailing clause excludes it), pulling trailing CJK punctuation and
-// following ASCII chars into the URL.
-// xterm default: /(https?|HTTPS?):[/]{2}[^\s"'!*(){}|\\\^<>`]*[^\s"':,.!?{}|\\\^~\[\]`()<>]/
-const URL_RE =
-  /(https?|HTTPS?):[/]{2}[^\s"'!*(){}|\\\^<>`　-〿＀-￯]*[^\s"':,.!?{}|\\\^~\[\]`()<>　-〿＀-￯]/;
 
 interface TerminalTabProps {
   sessionId: string;
