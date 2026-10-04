@@ -11,7 +11,6 @@ import { dirname, join } from "node:path";
 import { execSync } from "node:child_process";
 import { atomicWriteFileSync } from "./files";
 import { DEFAULT_CLAUDE_SOUNDS } from "@collab/shared/claude-sounds";
-import { removeClaudeMdBlock } from "./claude-md";
 
 export type AgentId = "claude" | "codex" | "gemini";
 
@@ -159,12 +158,6 @@ export function applyClaudeDeepIntegration(
         if (Object.keys(plugins).length === 0) {
           delete data.enabledPlugins;
         }
-      }
-      // 深度集成关闭时同步移除 ~/.claude/CLAUDE.md 中的 COLLAB 段落
-      try {
-        removeClaudeMdBlock();
-      } catch (err) {
-        console.error("[integrations] Failed to remove CLAUDE.md block:", err);
       }
     }
 

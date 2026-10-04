@@ -39,16 +39,7 @@ import {
 } from "./ipc";
 import { registerCanvasRpc } from "./canvas-rpc";
 import { loadHistory } from "./navigation-history-store";
-import {
-  registerIntegrationsIpc,
-  isClaudeDeepIntegrationEnabled,
-  claudePluginPath,
-} from "./integrations";
-import {
-  syncClaudeMdBlock,
-  removeClaudeMdBlock,
-  setClaudeMdBlockFile,
-} from "./claude-md";
+import { registerIntegrationsIpc } from "./integrations";
 import { registerClaudeIpc } from "./claude-rpc";
 import { registerClaudeEditsRpc, findLatestEditLine } from "./claude-edits-rpc";
 import { registerDebugMouseRpc } from "./debug-mouse-rpc";
@@ -1155,30 +1146,6 @@ function sendLoadingDone(): void {
   mainWindow?.webContents.send("shell:loading-done");
 }
 
-/**
- * 应用启动时同步 ~/.claude/CLAUDE.md 的 COLLAB 段落：
- * 深度集成开启则插入/更新一次，关闭则移除。
- */
-function syncClaudeMdOnLaunch(): void {
-  try {
-    // 正文模板在插件目录（随插件打包），用户可直接编辑该 md 文件
-    setClaudeMdBlockFile(join(claudePluginPath(), "claude-md-block.md"));
-    if (isClaudeDeepIntegrationEnabled()) {
-      const result = syncClaudeMdBlock();
-      if (result === "inserted" || result === "updated") {
-        console.log(`[claude-md] COLLAB block ${result}`);
-      }
-    } else {
-      const result = removeClaudeMdBlock();
-      if (result === "removed") {
-        console.log("[claude-md] COLLAB block removed (deep integration off)");
-      }
-    }
-  } catch (err) {
-    console.error("[claude-md] sync failed:", err);
-  }
-}
-
 async function shutdownBackgroundServices(): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
@@ -1282,7 +1249,6 @@ app.whenReady().then(async () => {
   });
   if (!isRemoteFlavor()) {
     registerIntegrationsIpc();
-    syncClaudeMdOnLaunch();
     registerClaudeIpc();
     registerClaudeEditsRpc();
     registerTemplatesIpc({
