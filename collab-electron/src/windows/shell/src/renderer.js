@@ -31,7 +31,8 @@ import { createTileManager } from "./tile-manager.js";
 import { updateTileTitle, getTileLabel } from "./tile-renderer.js";
 import {
   buildWorkspaceItems,
-  filterWorkspaceItems,
+  buildTileItems,
+  filterPopupItems,
   moveSelection,
 } from "./recent-popup.js";
 
@@ -399,6 +400,8 @@ async function init() {
       status,
       x: tile.x,
       y: tile.y,
+      // 有自定义名时列表显示 title(userTitle),跳过后缀的 workspace alias 匹配
+      userTitle: tile.userTitle ?? "",
     };
   }
 
@@ -1480,6 +1483,8 @@ async function init() {
   let recentItems = [];
   let recentVisible = [];
   let recentSelectedIndex = -1;
+  /** @type {HTMLElement[]} 列表中的条目行（不含组头），与 recentVisible 对齐 */
+  let recentRows = [];
 
   function openRecentPopup() {
     recentPopupOpen = true;
@@ -1514,7 +1519,17 @@ async function init() {
             : {}),
         };
         const recent = Array.isArray(data?.recent) ? data.recent : [];
-        recentItems = buildWorkspaceItems(workspaces, aliases, recent);
+        // Tiles 组在前（当前画布上下文优先，最近聚焦的排最上），
+        // workspace 组在后。
+        recentItems = [
+          ...buildTileItems(
+            tiles,
+            aliases,
+            workspaces,
+            tileManager.getTerminalFocusOrder(),
+          ),
+          ...buildWorkspaceItems(workspaces, aliases, recent),
+        ];
         applyRecentFilter();
       })
       .catch((err) => {
@@ -1541,7 +1556,7 @@ async function init() {
   }
 
   function applyRecentFilter() {
-    recentVisible = filterWorkspaceItems(recentItems, recentInput.value);
+    recentVisible = filterPopupItems(recentItems, recentInput.value);
     recentSelectedIndex = recentVisible.length > 0 ? 0 : -1;
     renderRecentList();
   }
@@ -1549,17 +1564,23 @@ async function init() {
   function selectRecentIndex(index) {
     if (recentVisible.length === 0) return;
     recentSelectedIndex = index;
-    const rows = recentListEl.children;
-    for (let i = 0; i < rows.length; i++) {
-      rows[i].classList.toggle("selected", i === index);
-    }
-    rows[index]?.scrollIntoView({ block: "nearest" });
+    recentRows.forEach((row, i) => {
+      row.classList.toggle("selected", i === index);
+    });
+    recentRows[index]?.scrollIntoView({ block: "nearest" });
   }
 
   function openRecentItem(item) {
-    // 焦点交给 openTerminalAt(聚焦已有/新建终端);恢复旧 surface 的
-    // rAF 会与之抢焦点,故跳过。
+    // 焦点交给 openTerminalAt / focusCanvasTile(聚焦已有或新建);恢复旧
+    // surface 的 rAF 会与之抢焦点,故跳过。
     closeRecentPopup({ restoreFocus: false });
+    if (item.kind === "tile") {
+      const tile = tileManager.getTile(item.tileId);
+      if (!tile) return;
+      edgeIndicators.panToTile(tile, { targetZoom: 1 });
+      tileManager.focusCanvasTile(item.tileId);
+      return;
+    }
     openTerminalAt(item.path);
   }
 
@@ -1570,34 +1591,56 @@ async function init() {
 
   function renderRecentList() {
     recentListEl.textContent = "";
+    recentRows = [];
     recentEmptyEl.classList.toggle("hidden", recentVisible.length > 0);
+    let lastKind = null;
     recentVisible.forEach((item, index) => {
+      if (item.kind !== lastKind) {
+        lastKind = item.kind;
+        const header = document.createElement("div");
+        header.className = "recent-group-header";
+        header.textContent = item.kind === "tile" ? "Tiles" : "Workspaces";
+        recentListEl.appendChild(header);
+      }
       const row = document.createElement("div");
-      row.className =
-        "recent-item" + (index === recentSelectedIndex ? " selected" : "");
+      row.classList.add("recent-item");
+      row.classList.add(
+        item.kind === "tile" ? "recent-item-tile" : "recent-item-workspace",
+      );
+      if (index === recentSelectedIndex) row.classList.add("selected");
+
+      // 类型徽标:左缘色点区分 tile(绿)/workspace(灰)
+      const badge = document.createElement("span");
+      badge.className = "recent-kind-badge";
+      row.appendChild(badge);
+
+      const textCol = document.createElement("div");
+      textCol.className = "recent-item-text";
 
       const name = document.createElement("div");
       name.className = "recent-item-name";
       name.textContent = item.name;
+      textCol.appendChild(name);
 
-      const subtitle = document.createElement("div");
-      subtitle.className = "recent-item-subtitle";
-      subtitle.textContent = item.subtitle;
-
-      row.appendChild(name);
-      row.appendChild(subtitle);
+      if (item.subtitle) {
+        const subtitle = document.createElement("div");
+        subtitle.className = "recent-item-subtitle";
+        subtitle.textContent = item.subtitle;
+        textCol.appendChild(subtitle);
+      }
+      row.appendChild(textCol);
       row.addEventListener("mouseenter", () => {
         recentSelectedIndex = index;
-        const rows = recentListEl.children;
-        for (let i = 0; i < rows.length; i++) {
-          rows[i].classList.toggle("selected", i === index);
-        }
+        recentRows.forEach((r, i) => {
+          r.classList.toggle("selected", i === index);
+        });
       });
       row.addEventListener("mousedown", (e) => {
         e.preventDefault();
         openRecentItem(item);
       });
       recentListEl.appendChild(row);
+      recentRows.push(row);
     });
   }
 

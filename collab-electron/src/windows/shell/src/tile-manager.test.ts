@@ -37,11 +37,19 @@ function makeManager(): Manager {
       onSaveImmediate: (state: SavedState) => {
         savedStates.push(state);
       },
+      onNoteSurfaceFocus: () => {},
       onTileTitleCommitted: (tile: unknown) => {
         commitCalls.push(tile);
       },
     },
   );
+}
+
+/** focusCanvasTile 走「webview 已存在」的常路径:预置 webview 元素,
+ *  避免落入 save-mem 重建分支(需真实 term config / spawn 依赖)。 */
+function seedWebview(manager: Manager, id: string) {
+  const dom = manager.getTileDOMs().get(id);
+  if (dom) dom.webview = document.createElement("webview");
 }
 
 function makeTile(manager: Manager, id: string) {
@@ -63,6 +71,7 @@ beforeEach(() => {
   /** @type {any} */ window.shellApi = {
     trackEvent: () => {},
     focusWindow: () => focusWindowCalls.push(performance.now()),
+    navigationPush: () => {},
   };
 });
 
@@ -251,5 +260,35 @@ describe("beginRename (内联输入触发)", () => {
     // 初始 1 次 + 至多 3 次重试；无限重试会随干扰次数线性增长
     expect(focusWindowCalls.length - baseline).toBeLessThanOrEqual(4);
     removeTile("t-blur-limit");
+  });
+});
+
+// -- getTerminalFocusOrder（终端聚焦 MRU，末尾=最近；Cmd+E Tiles 排序用） --
+
+describe("getTerminalFocusOrder", () => {
+  test("tracks most recent focus at the end; re-focus moves it there", () => {
+    const manager = makeManager();
+    makeTile(manager, "t-mru-1");
+    makeTile(manager, "t-mru-2");
+    seedWebview(manager, "t-mru-1");
+    seedWebview(manager, "t-mru-2");
+    manager.focusCanvasTile("t-mru-1");
+    manager.focusCanvasTile("t-mru-2");
+    expect(manager.getTerminalFocusOrder()).toEqual(["t-mru-1", "t-mru-2"]);
+    manager.focusCanvasTile("t-mru-1");
+    expect(manager.getTerminalFocusOrder()).toEqual(["t-mru-2", "t-mru-1"]);
+    removeTile("t-mru-1");
+    removeTile("t-mru-2");
+  });
+
+  test("returns a copy — mutating it does not affect internal state", () => {
+    const manager = makeManager();
+    makeTile(manager, "t-mru-copy");
+    seedWebview(manager, "t-mru-copy");
+    manager.focusCanvasTile("t-mru-copy");
+    const order = manager.getTerminalFocusOrder();
+    order.push("junk");
+    expect(manager.getTerminalFocusOrder()).toEqual(["t-mru-copy"]);
+    removeTile("t-mru-copy");
   });
 });

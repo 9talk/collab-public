@@ -8,6 +8,7 @@ import {
   Image,
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { matchWorkspaceAlias } from "@collab/shared/workspace-alias";
 import "./App.css";
 
 type TileType = "term" | "note" | "code" | "image" | "graph" | "browser";
@@ -20,6 +21,8 @@ interface TileEntry {
   status: "running" | "exited" | "idle" | null;
   x: number;
   y: number;
+  /** 用户自定义名（非空时 title 即其值，且不再以 workspace alias 覆盖显示） */
+  userTitle?: string;
 }
 
 /** Sort tiles top-to-bottom, left-to-right to match canvas layout. */
@@ -36,31 +39,6 @@ function isTileEntry(value: unknown): value is TileEntry {
     typeof e.title === "string" &&
     typeof e.description === "string"
   );
-}
-
-/**
- * Match the tile's description (cwd / folderPath) against workspace paths,
- * and return the matched workspace path if it has an alias.
- */
-function resolveAliasWorkspace(
-  entry: TileEntry,
-  aliases: Record<string, string>,
-  workspacePaths: string[],
-): { workspacePath: string; alias: string } | null {
-  const path = entry.description;
-  if (!path || path === "~" || workspacePaths.length === 0) return null;
-  const normalized = path.replace(/\\/g, "/");
-  // Use longest prefix match: sort by path length descending so the most
-  // specific (longest) match wins, not the first in array order.
-  const matched = [...workspacePaths]
-    .sort((a, b) => b.length - a.length)
-    .find((wp) => {
-      const w = wp.replace(/\\/g, "/");
-      return normalized === w || normalized.startsWith(w + "/");
-    });
-  if (!matched) return null;
-  const alias = aliases[matched];
-  return alias ? { workspacePath: matched, alias } : null;
 }
 
 const TYPE_ICONS: Record<TileType, { icon: Icon; color: string }> = {
@@ -292,7 +270,13 @@ function App() {
           focused={entry.id === focusedId}
           isRenaming={entry.id === renamingId}
           renameValue={entry.id === renamingId ? renameValue : ""}
-          aliasWorkspace={resolveAliasWorkspace(entry, aliases, workspacePaths)}
+          // 有自定义名时以 title(userTitle) 呈现——与画布标题栏一致,
+          // 不再被 workspace alias 遮蔽。
+          aliasWorkspace={
+            entry.userTitle
+              ? null
+              : matchWorkspaceAlias(entry.description, aliases, workspacePaths)
+          }
           onClick={() => handleClick(entry.id)}
           onDoubleClick={() => handleDoubleClick(entry.id)}
           onContextMenu={(e) => handleContextMenu(entry.id, e)}

@@ -541,13 +541,50 @@ body.platform-win {
   padding: 6px;
 }
 
+.recent-group-header {
+  padding: 10px 10px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.recent-group-header:first-child {
+  padding-top: 4px;
+}
+
 .recent-item {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  align-items: center;
+  gap: 8px;
   padding: 8px 10px;
   border-radius: 8px;
   cursor: pointer;
+}
+
+/* 类型徽标:左缘色点区分 tile(绿)/workspace(灰) */
+.recent-kind-badge {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.recent-item-tile .recent-kind-badge {
+  background: #7aab6e;
+}
+
+.recent-item-workspace .recent-kind-badge {
+  background: var(--muted);
+}
+
+.recent-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
 }
 
 .recent-item.selected {

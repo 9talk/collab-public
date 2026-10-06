@@ -987,6 +987,8 @@ export function createTileManager({
     getTileDOMs: () => tileDOMs,
     getTile,
     getFocusedTileId: () => focusedTileId,
+    /** 终端聚焦 MRU(旧→新,末尾最近);Cmd+E Tiles 排序用,返回拷贝。 */
+    getTerminalFocusOrder: () => [...terminalFocusOrder],
     setFocusedTileId: (id) => {
       focusedTileId = id;
     },
