@@ -202,6 +202,11 @@ async function init() {
   let settingsModalOpen = false;
   // 声明在 State 区而非弹窗区块:window focus 监听(早于声明处注册)要读它
   let recentPopupOpen = false;
+  // Cmd+E 弹窗:指针未真实移动(≥6px)前忽略悬停改选中——打开瞬间指针恰
+  // 悬在某行上时,微观鼠标事件会把选中从第一个条目挪走(定位看着不对)。
+  let lastMousePos = null;
+  let recentHoverAnchor = null;
+  let recentHoverArmed = false;
   let activeSurface = "canvas";
   let lastNonModalSurface = "canvas";
   let shiftHeld = false;
@@ -1491,6 +1496,12 @@ async function init() {
     recentOverlay.classList.remove("hidden");
     recentInput.value = "";
     recentSelectedIndex = -1;
+    // 打开瞬间先回顶:数据异步到达重建前的间隙期,旧内容也显示在顶部,
+    // 不残留上次翻动的位置(重建后 applyRecentFilter 再把选中行滚入)。
+    recentListEl.scrollTop = 0;
+    // 悬停改选中在指针真实移动后才启用(锚点为打开前的最后指针位置)
+    recentHoverAnchor = lastMousePos;
+    recentHoverArmed = false;
     // webview guest(终端/Nav)持焦时宿主文档整体失焦,页面内 focus() 只改
     // activeElement 不移交浏览器级焦点 —— 先同帧 blur 持焦 webview 并在宿主
     // 文档占好 focused element,再经主进程 webContents.focus() 收回焦点。
@@ -1559,6 +1570,9 @@ async function init() {
     recentVisible = filterPopupItems(recentItems, recentInput.value);
     recentSelectedIndex = recentVisible.length > 0 ? 0 : -1;
     renderRecentList();
+    // 重建列表后把选中行滚入视口:重开弹窗时滚动位置可能残留上次的
+    // 位置(选中=第一条却在视口外,视觉上不对);过滤时同理。
+    recentRows[recentSelectedIndex]?.scrollIntoView({ block: "nearest" });
   }
 
   function selectRecentIndex(index) {
@@ -1629,7 +1643,21 @@ async function init() {
         textCol.appendChild(subtitle);
       }
       row.appendChild(textCol);
-      row.addEventListener("mouseenter", () => {
+      row.addEventListener("mouseenter", (e) => {
+        if (!recentHoverArmed) {
+          // 悬停坐标须离锚点 ≥6px 才算"用户真实移动过来";锚点优先取
+          // 打开时的指针快照,其次实时最后位置;两者皆无(无指针历史)
+          // 时保守忽略——静止指针因列表出现而补发的 enter(坐标≈锚点)
+          // 不得夺走"第一个条目"的定位。
+          const anchor = recentHoverAnchor ?? lastMousePos;
+          if (
+            !anchor ||
+            Math.hypot(e.clientX - anchor.x, e.clientY - anchor.y) < 6
+          ) {
+            return;
+          }
+          recentHoverArmed = true;
+        }
         recentSelectedIndex = index;
         recentRows.forEach((r, i) => {
           r.classList.toggle("selected", i === index);
@@ -1643,6 +1671,16 @@ async function init() {
       recentRows.push(row);
     });
   }
+
+  // 指针位置跟踪:弹窗打开时取最后位置作锚点(见 openRecentPopup 与
+  // 行 mouseenter 的 arm 判定)。
+  document.addEventListener(
+    "mousemove",
+    (e) => {
+      lastMousePos = { x: e.clientX, y: e.clientY };
+    },
+    { passive: true },
+  );
 
   recentInput.addEventListener("input", () => {
     applyRecentFilter();
