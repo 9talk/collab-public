@@ -572,6 +572,22 @@ async function init() {
   }
 
   /**
+   * 单 tile userTitle 提交上报（rename 落定后）：
+   *   - Full 版(Host)：经主进程 sink 镜像给控制端 Client
+   *   - Remote 版(Client)：经转发层走 Host rpc canvas:update-tile-title，
+   *     由 Host 应用并保存（持久化权威在 Host）
+   * userTitle 为空串表示重置（回退自动标题），语义与本地一致。
+   * @param {import("./canvas-state.js").Tile} tile
+   */
+  function reportTileTitle(tile) {
+    window.shellApi
+      .updateTileTitle({ tileId: tile.id, userTitle: tile.userTitle ?? "" })
+      .catch((err) => {
+        console.log("[tile-title] report failed:", err?.message ?? err);
+      });
+  }
+
+  /**
    * 应用对端提交的几何（Host 主进程 mirror 推送）。网格与对端一致，
    * snap 幂等；不触发上报、不本地存档（对端应用时已存档）。
    * @param {import("./canvas-state.js").Tile} tile
@@ -632,6 +648,9 @@ async function init() {
     onTileGeometryCommitted(tile) {
       reportTileGeometry(tile);
     },
+    onTileTitleCommitted(tile) {
+      reportTileTitle(tile);
+    },
     onLocate(cwd) {
       if (panelManager.getMode() !== "files") {
         panelManager.setMode("files");
@@ -689,6 +708,7 @@ async function init() {
         .showContextMenu([
           { id: "screenshot", label: "Screenshot" },
           { id: "line-count", label: "行数统计" },
+          { id: "rename", label: "Rename" },
         ])
         .then((selected) => {
           if (selected === "screenshot") {
@@ -714,6 +734,8 @@ async function init() {
               detail: `缓冲区总行数：${totalLines}（含滚动区 ${scrollbackLines} 行）\n视口行数：${viewportRows}`,
               buttons: ["OK"],
             });
+          } else if (selected === "rename") {
+            tileManager.beginRename(tileId);
           }
         });
     },
@@ -947,6 +969,14 @@ async function init() {
     // webContents.focus)都会触发本监听,若不拦截会把光标从输入框夺回 tile。
     if (recentPopupOpen) {
       recentInput.focus();
+      return;
+    }
+    // 改名输入框打开期间同理:窗口重获焦点(如右键菜单关闭)时若按
+    // focusedTile 恢复,webview.focus() 会把键盘焦点抢回终端 guest,
+    // 输入框收不到按键(表现为输入框在但打字进终端)。
+    const activeEl = document.activeElement;
+    if (activeEl?.classList?.contains("tile-rename-input")) {
+      activeEl.focus();
       return;
     }
     // 窗口失焦再激活:恢复最近聚焦的 tile(ring + 键盘焦点),而不是清空。
@@ -1662,6 +1692,18 @@ async function init() {
         const tile = tileManager.getTile(payload.tileId);
         if (!tile) return;
         applyRemoteTileGeometry(tile, payload);
+        return;
+      }
+      if (channel === "remote:tile-title") {
+        // 对端 rename 提交后的标题镜像 → 本地静默应用（tile + DOM + 侧栏）。
+        // 走 applyTileTitle（非 renameTile 提交路径）→ 不回推（回声抑制）。
+        const payload = args[0];
+        if (!payload || typeof payload.tileId !== "string") return;
+        if (!tileManager.getTile(payload.tileId)) return;
+        tileManager.applyTileTitle(
+          payload.tileId,
+          typeof payload.userTitle === "string" ? payload.userTitle : "",
+        );
         return;
       }
       if (channel === "remote:tile-focused") {

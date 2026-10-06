@@ -64,6 +64,10 @@ contextBridge.exposeInMainWorld("shellApi", {
     ipcRenderer.invoke("remote:client-disconnect"),
   updateTileGeometry: (payload: unknown): Promise<unknown> =>
     ipcRenderer.invoke("canvas:update-tile-geometry", payload),
+  // 单 tile userTitle 提交：Host 本地实现经 sink 镜像给 Client；
+  // Client(remote 模式)经转发走 Host rpc 应用+存档。
+  updateTileTitle: (payload: unknown): Promise<unknown> =>
+    ipcRenderer.invoke("canvas:update-tile-title", payload),
   // Client 端聚焦(tile 点击/Cmd+方向键)→ Host 镜像跟随
   focusRemoteTile: (tileId: string): Promise<unknown> =>
     ipcRenderer.invoke("canvas:focus-tile", tileId),

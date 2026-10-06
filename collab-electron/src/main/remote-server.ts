@@ -36,7 +36,9 @@ import {
 import {
   setTileFocusSink,
   setTileGeometrySink,
+  setTileTitleSink,
   type TileGeometryPayload,
+  type TileTitlePayload,
 } from "./ipc-canvas";
 import { randomUUID } from "node:crypto";
 import { setRemotePtyConsumers } from "./pty";
@@ -603,6 +605,21 @@ function registerRemoteMethods(config: AppConfig): MethodTable {
       params: p,
     });
   });
+  // Client 端 rename 落定 → Host 应用 userTitle + 存档（持久化权威在 Host）。
+  // 落点 canvas-rpc tileSetTitle 为静默应用，不回推 Client（Client 已乐观
+  // 应用本地值），与几何同款回声抑制。
+  t.register("canvas:update-tile-title", async (params) => {
+    const [p] = params as [TileTitlePayload | undefined];
+    if (!p || typeof p.tileId !== "string") {
+      throw new Error("tileId required");
+    }
+    console.log(`[remote] rpc canvas:update-tile-title ${JSON.stringify(p)}`);
+    return forwardCanvasRpcRequest({
+      requestId: randomUUID(),
+      method: "tileSetTitle",
+      params: p,
+    });
+  });
   // Client 端聚焦(tile 点击/Cmd+方向键)→ Host 镜像跟随。落点 tileFocus
   // 与本地快捷键一致:聚焦 + bringToFront + pan 到可视区。
   t.register("canvas:focus-tile", (params) => {
@@ -782,6 +799,10 @@ function attachHooks(): void {
   setTileGeometrySink((payload) => {
     pushEvent("shell:forward", ["shell", "remote:tile-geometry", payload]);
   });
+  // Host 端本地 rename 提交 → 镜像给 Client（shell 静默应用 tile 标题，不回推）
+  setTileTitleSink((payload) => {
+    pushEvent("shell:forward", ["shell", "remote:tile-title", payload]);
+  });
   // Host 端本地聚焦 → 镜像给 Client（shell 视觉跟随聚焦，不回推）
   setTileFocusSink((tileId) => {
     pushEvent("shell:forward", ["shell", "remote:tile-focused", tileId]);
@@ -793,6 +814,7 @@ function detachHooks(): void {
   setRemoteEventMirror(null);
   setCanvasRpcResponseMirror(null);
   setTileGeometrySink(null);
+  setTileTitleSink(null);
   setTileFocusSink(null);
 }
 

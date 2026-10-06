@@ -472,6 +472,116 @@ async function s14(ctx) {
   );
 }
 
+async function s15(ctx) {
+  // rename(userTitle) 双向实时同步：
+  //   B(Client) 改名 → 经 relay rpc 提交 A(Host) 应用 + 存档（持久化权威在 A）
+  //   A(Host) 改名 → 镜像推送给 B 随动；空串重置同样双向同步
+  // 驱动点：对 tile-list webview 调 window.api.sendToHost("tile-list:rename-tile")——
+  // 与侧栏改名 UI 提交后走的通道逐字一致，覆盖 shell 侧 renameTile 提交链。
+  // 前置场景 s14 已确保双 tile + 双方连接；本场景后 s07 触发重连全量重放。
+  const state0 = await waitAState(ctx, (st) => st.tiles.length >= 1);
+  if (!state0) throw new Error("A 端 canvas 存档无 tile");
+  const tileId = state0.tiles[0].id;
+
+  const titleExpr = `(() => {
+    const el = document.querySelector('.canvas-tile[data-tile-id="${tileId}"] .tile-title-text');
+    return el ? el.textContent : null;
+  })()`;
+
+  async function waitDomTitle(port, expect, label, timeoutMs = 15_000) {
+    const deadline = Date.now() + timeoutMs;
+    let text = null;
+    while (Date.now() < deadline) {
+      text = await cdpEvalShell(port, titleExpr);
+      if (text === expect) return;
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    throw new Error(`${label}: tile 标题未变为 "${expect}"（当前 "${text}"）`);
+  }
+
+  async function renameVia(port, label, name) {
+    // 侧栏切到 tiles 模式，确保 tile-list webview 存在
+    await cdpEvalShell(
+      port,
+      `(() => {
+        const btn = document.querySelector('.mode-btn[data-mode="tiles"]');
+        if (btn) btn.click();
+        return true;
+      })()`,
+    );
+    const wsUrl = await cdpWaitTarget(port, "tile-list", 15_000);
+    if (!wsUrl) throw new Error(`${label}: tile-list webview 未就绪`);
+    // webview preload 就绪后 window.api 才可用，轮询重试
+    const deadline = Date.now() + 10_000;
+    for (;;) {
+      try {
+        await cdpEval(
+          wsUrl,
+          `window.api.sendToHost("tile-list:rename-tile", ${JSON.stringify(tileId)}, ${JSON.stringify(name)})`,
+        );
+        return;
+      } catch (err) {
+        if (Date.now() > deadline) throw err;
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+  }
+
+  // 1) B 改名 → A 应用 + 存档 + 两端 DOM 标题更新
+  const markA = statSync(ctx.aLog).size;
+  await renameVia(ctx.cdpPortB, "15/rename-b2a", "E2E-B-Name");
+  await waitDomTitle(ctx.cdpPortB, "E2E-B-Name", "15/rename-b2a B 本地");
+  const st1 = await waitAState(ctx, (st) =>
+    st.tiles.some((t) => t.id === tileId && t.userTitle === "E2E-B-Name"),
+  );
+  if (!st1) throw new Error("B 改名后 A 端存档未见 userTitle");
+  await waitDomTitle(ctx.cdpPortA, "E2E-B-Name", "15/rename-b2a A 应用");
+  const rpc = await waitForLog(
+    ctx.aLog,
+    "rpc canvas:update-tile-title",
+    5_000,
+    markA,
+  );
+  if (!rpc) throw new Error("A 端未见 rpc canvas:update-tile-title");
+  console.log(
+    "  [info] 15/rename-b2a — B 改名已同步至 A（rpc 转发 + 存档 + DOM）",
+  );
+
+  // 2) A 改名 → B 镜像随动（Host 本地提交经 sink 推送，不走 rpc）
+  await renameVia(ctx.cdpPortA, "15/rename-a2b", "E2E-A-Name");
+  await waitDomTitle(ctx.cdpPortB, "E2E-A-Name", "15/rename-a2b B 镜像");
+  const st2 = await waitAState(ctx, (st) =>
+    st.tiles.some((t) => t.id === tileId && t.userTitle === "E2E-A-Name"),
+  );
+  if (!st2) throw new Error("A 改名后 A 端存档未更新");
+  console.log("  [info] 15/rename-a2b — A 改名已镜像至 B（sink 推送 + DOM）");
+
+  // 3) 空串重置 → A 存档清除 userTitle，B 标题回退自动标题
+  await renameVia(ctx.cdpPortA, "15/rename-reset", "");
+  const st3 = await waitAState(ctx, (st) =>
+    st.tiles.some((t) => t.id === tileId && t.userTitle === undefined),
+  );
+  if (!st3) throw new Error("重置后 A 端存档 userTitle 未清除");
+  const deadline = Date.now() + 15_000;
+  let bText = null;
+  while (Date.now() < deadline) {
+    bText = await cdpEvalShell(ctx.cdpPortB, titleExpr);
+    if (bText && bText !== "E2E-A-Name") break;
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  if (!bText || bText === "E2E-A-Name") {
+    throw new Error(`重置未镜像到 B（当前 "${bText}"）`);
+  }
+  console.log(`  [info] 15/rename-reset — 重置已同步，B 标题回退为 "${bText}"`);
+  await shot(
+    ctx,
+    "15/rename-sync",
+    ctx.cdpPortB,
+    "/shell/",
+    "s15-b-rename.png",
+  );
+}
+
 async function s07(ctx) {
   // 杀 relay → 双方断开 → 重启 → 恢复（锚点断言：只匹配 kill 之后的新日志）
   const markADisc = statSync(ctx.aLog).size;
@@ -703,6 +813,7 @@ export const scenarios = [
   ["11", "geometry-a2b", s11],
   ["12", "fit-resize", s12],
   ["14", "focus-b2a", s14],
+  ["15", "rename-sync", s15],
   ["07", "reconnect", s07],
   ["08", "peer-disconnect", s08],
   ["09", "pair-rotation", s09],

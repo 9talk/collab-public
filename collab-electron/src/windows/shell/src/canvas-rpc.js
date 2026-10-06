@@ -175,6 +175,24 @@ export function createCanvasRpc({
           result = {};
           break;
         }
+        case "tileSetTitle": {
+          // 镜像标题同步专用：Host 应用 Client 提交的 userTitle 并存档
+          // （Host rpc canvas:update-tile-title 的落点）。静默应用，不触发
+          // 本地提交回调 → 不回推 Client（回声抑制）。空串 = 重置。
+          const tile = requireTile(requestId, params.tileId);
+          if (!tile) return;
+          if (tile.type !== "term") {
+            respondError(requestId, 4, "Tile is not a terminal");
+            return;
+          }
+          if (typeof params.userTitle !== "string") {
+            respondError(requestId, 4, "Invalid userTitle");
+            return;
+          }
+          tileManager.applyTileTitle(tile.id, params.userTitle);
+          result = {};
+          break;
+        }
         case "viewportGet": {
           result = {
             pan: {

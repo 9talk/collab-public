@@ -1,5 +1,10 @@
-import { describe, test, expect } from "bun:test";
-import { findAutoPlacement } from "./canvas-rpc.js";
+import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { findAutoPlacement, createCanvasRpc } from "./canvas-rpc.js";
+import { addTile, removeTile } from "./canvas-state.js";
+
+// handleCanvasRpc 经 window.shellApi.canvasRpcResponse 回包, 需要 DOM 环境。
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 interface Tile {
   x: number;
@@ -78,5 +83,118 @@ describe("findAutoPlacement", () => {
     const pos = findAutoPlacement(existing, 100, 100);
     // Giant tile covers canvas, so fallback: last.x+40, last.y+40
     expect(pos).toEqual({ x: 40, y: 40 });
+  });
+});
+
+// -- tileSetTitle (远端 rename 同步落点) --
+
+describe("tileSetTitle", () => {
+  type Response = {
+    requestId: string;
+    result?: unknown;
+    error?: { code: number; message?: string };
+  };
+  let responses: Response[] = [];
+  let applied: [string, string][] = [];
+  let prevShellApi: unknown;
+
+  const handle = createCanvasRpc({
+    tileManager: /** @type {any} */ {
+      applyTileTitle: (id: string, title: string) => {
+        applied.push([id, title]);
+      },
+    },
+    viewportState: /** @type {any} */ {},
+  });
+
+  function seedTile(id: string, type = "term"): void {
+    addTile(
+      /** @type {any} */ {
+        id,
+        type,
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+      },
+    );
+  }
+
+  beforeEach(() => {
+    responses = [];
+    applied = [];
+    prevShellApi = /** @type {any} */ window.shellApi;
+    /** @type {any} */ window.shellApi = {
+      canvasRpcResponse: (r: Response) => {
+        responses.push(r);
+      },
+    };
+  });
+
+  // 测试进程内 window 全局共享，stub 必须还原，避免污染其他测试文件
+  // （如 canvas-viewport.js 顶层读 shellApi.getPlatform）。
+  afterEach(() => {
+    if (prevShellApi === undefined) {
+      delete (/** @type {any} */ window.shellApi);
+    } else {
+      /** @type {any} */ window.shellApi = prevShellApi;
+    }
+  });
+
+  test("applies userTitle via tileManager.applyTileTitle", async () => {
+    seedTile("tt-set");
+    await handle({
+      requestId: "r1",
+      method: "tileSetTitle",
+      params: { tileId: "tt-set", userTitle: "My Server" },
+    });
+    removeTile("tt-set");
+    expect(applied).toEqual([["tt-set", "My Server"]]);
+    expect(responses[0]).toEqual({ requestId: "r1", result: {} });
+  });
+
+  test("empty userTitle (reset) is forwarded as-is", async () => {
+    seedTile("tt-reset");
+    await handle({
+      requestId: "r2",
+      method: "tileSetTitle",
+      params: { tileId: "tt-reset", userTitle: "" },
+    });
+    removeTile("tt-reset");
+    expect(applied).toEqual([["tt-reset", ""]]);
+    expect(responses[0].error).toBeUndefined();
+  });
+
+  test("rejects non-string userTitle", async () => {
+    seedTile("tt-bad");
+    await handle({
+      requestId: "r3",
+      method: "tileSetTitle",
+      params: { tileId: "tt-bad", userTitle: 42 },
+    });
+    removeTile("tt-bad");
+    expect(applied).toEqual([]);
+    expect(responses[0].error?.code).toBe(4);
+  });
+
+  test("unknown tile → not found error", async () => {
+    await handle({
+      requestId: "r4",
+      method: "tileSetTitle",
+      params: { tileId: "tt-nope", userTitle: "x" },
+    });
+    expect(responses[0].error?.code).toBe(3);
+  });
+
+  test("non-term tile → rejected", async () => {
+    seedTile("tt-view", "viewer");
+    await handle({
+      requestId: "r5",
+      method: "tileSetTitle",
+      params: { tileId: "tt-view", userTitle: "x" },
+    });
+    removeTile("tt-view");
+    expect(applied).toEqual([]);
+    expect(responses[0].error?.code).toBe(4);
   });
 });

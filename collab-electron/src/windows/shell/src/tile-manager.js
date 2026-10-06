@@ -51,6 +51,8 @@ export function createTileManager({
   onTerminalTileResized,
   /** 拖拽/缩放提交回调（几何落定并保存后），参数为发生几何变更的 tile */
   onTileGeometryCommitted,
+  /** rename 提交回调（userTitle 落定并保存后），参数为发生改名/重置的 tile */
+  onTileTitleCommitted,
   onTileFocused,
   onTileDblClick,
   onTermContextMenu,
@@ -661,20 +663,7 @@ export function createTileManager({
         spawnTerminalWebview(newTile, true);
         saveCanvasImmediate();
       },
-      onRename: (id) => {
-        const t = getTile(id);
-        const d = tileDOMs.get(id);
-        if (!t || !d) return;
-        startInlineRename(d, t, (newTitle) => {
-          if (newTitle === "") {
-            delete t.userTitle;
-          } else {
-            t.userTitle = newTitle;
-          }
-          updateTileTitle(d, t);
-          saveCanvasImmediate();
-        });
-      },
+      onRename: (id) => beginRename(id),
       onRefresh: (id) => {
         refreshTerminalTile(id);
       },
@@ -930,7 +919,13 @@ export function createTileManager({
     }
   }
 
-  function renameTile(id, newTitle) {
+  /**
+   * 静默应用 userTitle：更新 tile + DOM + 存档，不触发提交回调。
+   * 对端同步的落点（canvas-rpc tileSetTitle / remote:tile-title 镜像）用它——
+   * 经过提交回调会把镜像应用当成本地提交回推，形成回声。
+   * 空串 = 清除 userTitle（回退自动标题）。
+   */
+  function applyTileTitle(id, newTitle) {
     const t = getTile(id);
     if (!t) return;
     if (newTitle === "") {
@@ -941,6 +936,24 @@ export function createTileManager({
     const d = tileDOMs.get(id);
     if (d) updateTileTitle(d, t);
     saveCanvasImmediate();
+  }
+
+  /** 本地用户 rename 提交：应用并上报（Host 镜像给 Client / Client 经 relay 提交 Host）。 */
+  function renameTile(id, newTitle) {
+    applyTileTitle(id, newTitle);
+    const t = getTile(id);
+    if (t) onTileTitleCommitted?.(t);
+  }
+
+  /**
+   * 打开内联重命名输入（标题栏右键菜单 / 终端内容区右键菜单共用的触发入口）。
+   * Enter/失焦提交走 renameTile（含上报）；Escape 取消。
+   */
+  function beginRename(id) {
+    const t = getTile(id);
+    const d = tileDOMs.get(id);
+    if (!t || !d) return;
+    startInlineRename(d, t, (newTitle) => renameTile(id, newTitle));
   }
 
   /**
@@ -979,6 +992,8 @@ export function createTileManager({
     },
     refreshTerminalTile,
     renameTile,
+    applyTileTitle,
+    beginRename,
     applyTileRunning,
     broadcastToTileWebviews,
     saveCanvasDebounced,

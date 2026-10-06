@@ -20,6 +20,12 @@ export interface TileGeometryPayload {
   height: number;
 }
 
+/** tile userTitle 提交载荷（rename 落定值, 空串 = 重置为自动标题） */
+export interface TileTitlePayload {
+  tileId: string;
+  userTitle: string;
+}
+
 // Host 激活时由 remote-server 注入（pushEvent 推给控制端 Client）；
 // 非 Host 角色（idle full / remote client 本地回落）为 null → no-op。
 let tileGeometrySink: ((p: TileGeometryPayload) => void) | null = null;
@@ -28,6 +34,15 @@ export function setTileGeometrySink(
   fn: ((p: TileGeometryPayload) => void) | null,
 ): void {
   tileGeometrySink = fn;
+}
+
+// Host 端本地 rename 提交 → 镜像给控制端 Client（同几何 sink）。
+let tileTitleSink: ((p: TileTitlePayload) => void) | null = null;
+
+export function setTileTitleSink(
+  fn: ((p: TileTitlePayload) => void) | null,
+): void {
+  tileTitleSink = fn;
 }
 
 // Host 本地聚焦上报 sink：Host shell 聚焦变化 → 主进程 → 镜像给控制端
@@ -71,6 +86,14 @@ export function registerCanvasHandlers(ctx: IpcContext): void {
       `[canvas] host update-tile-geometry ${JSON.stringify(payload)}`,
     );
     tileGeometrySink?.(payload as TileGeometryPayload);
+    return true;
+  });
+
+  // Tile userTitle commit (rename 落定后由 shell renderer 上报)，同几何：
+  // Host 本地经 sink 镜像；Client 远程模式经 ipc-registry 转发为 Host rpc。
+  bindIpc("canvas:update-tile-title", "handle", (_event, payload) => {
+    console.log(`[canvas] host update-tile-title ${JSON.stringify(payload)}`);
+    tileTitleSink?.(payload as TileTitlePayload);
     return true;
   });
 
@@ -130,6 +153,7 @@ export function registerCanvasHandlers(ctx: IpcContext): void {
     "canvas:load-state",
     "canvas:get-state-for-save",
     "canvas:update-tile-geometry",
+    "canvas:update-tile-title",
     "canvas:focus-tile",
     "canvas:refresh-tile",
     "canvas:relayout-tiles",

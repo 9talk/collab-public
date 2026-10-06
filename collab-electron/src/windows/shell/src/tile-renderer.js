@@ -249,26 +249,61 @@ export function startInlineRename(dom, tile, onCommit) {
   input.value = tile.userTitle ?? currentName;
   titleText.style.display = "none";
   titleText.parentNode.insertBefore(input, titleText);
-  input.select();
-  input.focus();
 
   let committed = false;
+  // 用户指针点击了输入框以外的位置（含点击终端）→ 离开意图,blur 即提交。
+  // 纯焦点翻转(guest 抢焦/焦点委托/焦点恢复)无指针动作,是干扰。
+  let pointerLeft = false;
+  const markPointer = (e) => {
+    pointerLeft = !input.contains(e.target);
+  };
+  document.addEventListener("mousedown", markPointer, true);
+
+  function cleanup() {
+    document.removeEventListener("mousedown", markPointer, true);
+    input.remove();
+    titleText.style.display = "";
+  }
 
   function commit() {
     if (committed) return;
     committed = true;
     const value = input.value.trim();
-    input.remove();
-    titleText.style.display = "";
+    cleanup();
     onCommit(value);
   }
 
   function cancel() {
     if (committed) return;
     committed = true;
-    input.remove();
-    titleText.style.display = "";
+    cleanup();
   }
+
+  // guest(终端)持键盘焦点时,页面内 focus() 只改宿主文档 activeElement,
+  // 浏览器级焦点不移交,且 webview 焦点委托 + guest 的 window focus→
+  // term.focus() 会把焦点抢回,输入框随即 blur。Cmd+E 弹窗同款协议:
+  // 先 blur 持焦 webview 占好宿主 activeElement,再 focus 输入框,最后
+  // 经主进程 webContents.focus() 收回焦点(shell:focus-window)。
+  function focusInput() {
+    const active = document.activeElement;
+    if (active && active !== input && active.tagName === "WEBVIEW") {
+      try {
+        active.blur();
+      } catch {
+        /* noop */
+      }
+    }
+    input.focus();
+    window.shellApi?.focusWindow?.();
+  }
+
+  // 干扰性 blur 的夺回重试上限:超限(如窗口切走夺不回)保留输入框不提交,
+  // 避免与持续抢焦的对手形成循环。
+  const MAX_REACQUIRE = 3;
+  let reacquired = 0;
+
+  input.select();
+  focusInput();
 
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
@@ -281,7 +316,16 @@ export function startInlineRename(dom, tile, onCommit) {
     }
     e.stopPropagation();
   });
-  input.addEventListener("blur", () => commit());
+  input.addEventListener("blur", () => {
+    if (committed) return;
+    const leftByPointer = pointerLeft;
+    pointerLeft = false;
+    if (leftByPointer) {
+      commit();
+      return;
+    }
+    if (reacquired++ < MAX_REACQUIRE) focusInput();
+  });
   input.addEventListener("mousedown", (e) => e.stopPropagation());
 }
 
