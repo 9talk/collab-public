@@ -278,6 +278,22 @@ export function registerCanvasRpc(win: BrowserWindow): void {
     },
   );
 
+  registerMethod(
+    "app.activate",
+    () => {
+      if (shellWindow) {
+        if (shellWindow.isMinimized()) shellWindow.restore();
+        shellWindow.show();
+        shellWindow.focus();
+      }
+      return {};
+    },
+    {
+      description: "Bring the Collaborator window to the front",
+      params: {},
+    },
+  );
+
   // Navigation history IPC（每次变更后落盘,重启时由 loadHistory 恢复）
   ipcMain.on("navigation:push", (_event, tileId: string) => {
     pushToHistory(tileId);

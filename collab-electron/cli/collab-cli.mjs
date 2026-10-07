@@ -527,6 +527,13 @@ async function cmdWorkspaceAdd(args) {
   console.log(pretty(result));
 }
 
+// --- app subcommands ---------------------------------------------------------
+
+async function cmdAppActivate() {
+  await rpcCall("app.activate");
+  console.log("activated");
+}
+
 // --- usage ----------------------------------------------------------------
 
 function usage() {
@@ -566,6 +573,7 @@ COMMANDS
   claude unbind <tileId>            Remove a Claude session binding
   workspace list                    List all workspaces
   workspace add <path>              Add a workspace by path
+  app activate                      Bring the Collaborator window to the front
   help, --help                       Show this help
 
 TILE CREATE OPTIONS
@@ -794,6 +802,20 @@ try {
           break;
         default:
           die(`unknown workspace subcommand: ${sub}`);
+      }
+      break;
+    }
+    case "app": {
+      if (argv.length < 2) {
+        die("app requires a subcommand (activate)");
+      }
+      const sub = argv[1];
+      switch (sub) {
+        case "activate":
+          await cmdAppActivate();
+          break;
+        default:
+          die(`unknown app subcommand: ${sub}`);
       }
       break;
     }
