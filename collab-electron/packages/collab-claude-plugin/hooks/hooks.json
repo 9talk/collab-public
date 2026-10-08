@@ -30,7 +30,7 @@
             "type": "command"
           },
           {
-            "command": "bash -c 'collab-canvas app activate; collab-canvas tile focus \"$COLLAB_TILE_ID\"' 2>/dev/null || true",
+            "command": "bash -c 'collab-canvas app activate \"$COLLAB_TILE_ID\"' 2>/dev/null || true",
             "type": "command"
           }
         ],

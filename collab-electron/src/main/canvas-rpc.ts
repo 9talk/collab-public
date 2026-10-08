@@ -280,17 +280,25 @@ export function registerCanvasRpc(win: BrowserWindow): void {
 
   registerMethod(
     "app.activate",
-    () => {
+    async (params) => {
+      const tileId = (params as { tileId?: string } | undefined)?.tileId;
+      if (!tileId) {
+        throw new Error("tileId required");
+      }
       if (shellWindow) {
         if (shellWindow.isMinimized()) shellWindow.restore();
         shellWindow.show();
         shellWindow.focus();
       }
+      await sendToShell("canvas.tileFocus", { tileIds: [tileId] });
       return {};
     },
     {
-      description: "Bring the Collaborator window to the front",
-      params: {},
+      description:
+        "Bring the Collaborator window to the front and focus a tile",
+      params: {
+        tileId: "Tile to focus after activating",
+      },
     },
   );
 
