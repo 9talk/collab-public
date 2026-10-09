@@ -75,3 +75,6 @@ export const COLLAB_DIR = process.env.COLLAB_DIR
 
 // 模板库:固定在应用数据目录下,随 COLLAB_DIR 一起做 dev/remote 隔离。
 export const TEMPLATES_DIR = join(COLLAB_DIR, "templates");
+
+/** 工作记录:Claude Code UserPromptSubmit 的按天 jsonl, 随 COLLAB_DIR 隔离 */
+export const WORKLOG_DIR = join(COLLAB_DIR, "worklog");
