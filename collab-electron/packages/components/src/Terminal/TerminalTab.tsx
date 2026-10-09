@@ -183,7 +183,6 @@ function TerminalTab({
     const linkHandler = {
       allowNonHttpProtocols: true,
       activate: async (event: MouseEvent, text: string) => {
-        console.log("[link-activate] text:", text, "meta:", event.metaKey);
         // Determine if the link is a file path (OSC 8 URI or bare absolute path)
         let filePath: string | null = null;
         if (text.startsWith("file://")) {
@@ -193,14 +192,12 @@ function TerminalTab({
         }
 
         if (!filePath) {
-          console.log("[link-activate] not a file path, openExternal");
           window.api.openExternal(text);
           return;
         }
 
         // Cmd+Click (macOS) / Ctrl+Click (other platforms): show editor picker
         if (IS_MAC ? event.metaKey : event.ctrlKey) {
-          console.log("[link-activate] metaKey, showEditorPicker:", filePath);
           await showEditorPicker(filePath);
           return;
         }
@@ -228,7 +225,6 @@ function TerminalTab({
         }
 
         if (matchedEditor) {
-          console.log("[link-activate] matched group editor:", matchedEditor);
           if (matchedEditor === "system-app") {
             window.api.openPath(filePath);
           } else {
@@ -246,7 +242,6 @@ function TerminalTab({
           const dot = filePath.lastIndexOf(".");
           const ext = dot >= 0 ? filePath.slice(dot).toLowerCase() : "";
           if (useExt && (isCodeFile(filePath) || !ext)) {
-            console.log("[link-activate] global editor (useExternalEditor)");
             window.api.openFileInExternalEditor(filePath);
             return;
           }
@@ -254,7 +249,6 @@ function TerminalTab({
           // Preference unavailable — fall through
         }
 
-        console.log("[link-activate] fallback openPath");
         // Fallback: open with system default application
         window.api.openPath(filePath);
       },
@@ -596,15 +590,6 @@ function TerminalTab({
         const col = parseInt(m[2]!, 10);
         const row = parseInt(m[3]!, 10);
         const terminator = m[4] === "M" ? "M" : "m";
-        if (
-          (button & 0x40) === 0 &&
-          (button & 0x03) === 0 &&
-          (button & 0x20) === 0
-        ) {
-          console.log(
-            `[sgr-click] btn=${button} col=${col} row=${row} ${terminator} viewportY=${term.buffer.active.viewportY} inLink=${isLinkCell(col, row)}`,
-          );
-        }
         if (
           m.index >= cachedLen &&
           (button & 0x40) === 0 &&

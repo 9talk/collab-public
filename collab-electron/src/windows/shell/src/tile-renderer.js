@@ -127,6 +127,9 @@ export function createTileDOM(tile, callbacks) {
   if (tile.type === "term") {
     const runIndicator = document.createElement("div");
     runIndicator.className = "tile-run-indicator";
+    const sweep = document.createElement("div");
+    sweep.className = "tile-run-indicator-sweep";
+    runIndicator.appendChild(sweep);
     container.insertBefore(runIndicator, contentArea);
   }
 

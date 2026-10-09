@@ -466,8 +466,8 @@ body.platform-win {
 #settings-backdrop {
   position: absolute;
   inset: 0;
+  /* 遮罩不用 backdrop-filter:覆盖 webview 的全屏模糊要逐帧跨进程重算 */
   background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(12px);
 }
 
 #settings-modal {
@@ -626,8 +626,8 @@ body.platform-win {
 #canvas-skill-backdrop {
   position: absolute;
   inset: 0;
+  /* 遮罩不用 backdrop-filter:覆盖 webview 的全屏模糊要逐帧跨进程重算 */
   background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(12px);
 }
 
 #canvas-skill-modal {
@@ -1249,6 +1249,19 @@ body.platform-win {
 
 .tile-run-indicator {
   height: 3px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+  /* 光带以 2 倍宽元素平移实现,出界部分在此裁剪 */
+  overflow: hidden;
+}
+/* 扫光用 transform 平移(合成器直接处理),不能动 background-position:
+ * 后者每帧触发宿主页面重绘,在 vibrancy 窗口 + webview 合成下会偶发
+ * 合成错误帧(tile 彩色噪点闪烁)。宽 200% 的渐变从 -2W 平移到 +2W,
+ * 与旧 background-position 版本几何完全一致。 */
+.tile-run-indicator-sweep {
+  height: 100%;
+  width: 200%;
   background: linear-gradient(
     90deg,
     transparent 0%,
@@ -1257,33 +1270,19 @@ body.platform-win {
     transparent 70%,
     transparent 100%
   );
-  background-size: 200% 100%;
-  opacity: 0;
-  transition: opacity 0.15s;
-  flex-shrink: 0;
 }
 .tile-run-indicator.active {
   opacity: 1;
-  animation: run-sweep 4s ease-in-out infinite;
 }
-@keyframes run-sweep {
-  from {
-    background-position: 100% 0;
-  }
-  to {
-    background-position: -100% 0;
-  }
-}
-.tile-run-indicator.active {
-  opacity: 1;
+.tile-run-indicator.active .tile-run-indicator-sweep {
   animation: run-sweep 3s linear infinite;
 }
 @keyframes run-sweep {
   from {
-    background-position: 200% 0;
+    transform: translateX(-100%);
   }
   to {
-    background-position: -200% 0;
+    transform: translateX(100%);
   }
 }
 

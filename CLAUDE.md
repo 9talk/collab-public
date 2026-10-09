@@ -73,7 +73,9 @@ The settings UI (`App.tsx`) reads the `locale` preference via `api.getPref("loca
 
 ## 渲染性能约束
 
-**不要在覆盖 webview 的全屏 overlay 上使用 `backdrop-filter`。** tile 是 `<webview>`（独立进程合成层），全屏模糊需逐帧跨进程捕获背景重算，叠加无限旋转动画（如 loading spinner）后 GPU / WindowServer 直接满载，表现为**整机**卡顿而非仅应用内卡顿。`shell.css` 的 `#remote-overlay`（remote 端「连接已断开」弹窗）已因此移除 `blur(6px)`；`34a09a1` 也曾因同样原因移除 terminal tile 的 blur。改用半透明背景即可，视觉差异极小。
+**不要在覆盖 webview 的全屏 overlay 上使用 `backdrop-filter`。** tile 是 `<webview>`（独立进程合成层），全屏模糊需逐帧跨进程捕获背景重算，叠加无限旋转动画（如 loading spinner）后 GPU / WindowServer 直接满载，表现为**整机**卡顿而非仅应用内卡顿。`shell.css` 的 `#remote-overlay`（remote 端「连接已断开」弹窗）已因此移除 `blur(6px)`；`34a09a1` 也曾因同样原因移除 terminal tile 的 blur。改用半透明背景即可，视觉差异极小。设置与技能对话框的全屏遮罩（`#settings-backdrop` / `#canvas-skill-backdrop`，原 `blur(12px)`）同样已按此移除。
+
+**无限循环动画不要动非合成器加速属性（`background-position`、`left`/`top`、`width`/`height` 等）。** tile 运行指示条的跑马灯（`run-sweep`）原先动 `background-position`，每帧强制宿主 shell 页面重绘；在 vibrancy 毛玻璃窗口（`vibrancy: "under-window"`）+ webview 独立合成层的组合下，**其他** tile 会偶发合成错误帧——表现为彩色噪点/花格子、一闪即恢复，且不产生任何 console / WebGL 日志（极易误判为 xterm 渲染层问题；曾整机排查 PTY 路由、共享 atlas 均无果）。已改为 `transform: translateX` 平移（200% 宽渐变元素，几何与原 `background-position` 版本等价，合成器直接处理、零重绘）。判别法：用调试端口在 shell 页面把该动画置 `animation: none` 对比即可定性；`spin` / `tile-refresh-spin` / `remote-spin` 用的是 `transform: rotate`，属安全模式。
 
 **`clearTextureAtlas()` 代价极高**：它清空**跨 Terminal 实例共享**的字形图集（按 font/theme/dpr 共享，见 `CharAtlasCache`）并触发全屏重绘，反复调用等于让所有终端重新栅格化全部字形（实测单页 version 累计上千次）。常规强制重绘应改用 `term.refresh(0, rows-1)`（VS Code 即如此），`clearTextureAtlas()` 只留给字体/主题/DPR 变化这类真正需要重建字形的时机。
 
