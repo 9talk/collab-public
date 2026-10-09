@@ -11,6 +11,7 @@ import * as net from "node:net";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import { StringDecoder } from "node:string_decoder";
 import { execFileSync } from "node:child_process";
 import { SidecarServer } from "./server";
 import { Terminal } from "@xterm/headless/lib-headless/xterm-headless.mjs";
@@ -120,6 +121,35 @@ function waitForOutput(
     }, timeoutMs);
     const onData = (chunk: Buffer) => {
       buf += chunk.toString();
+      if (buf.includes(marker)) {
+        clearTimeout(timer);
+        sock.off("data", onData);
+        resolve(buf);
+      }
+    };
+    sock.on("data", onData);
+  });
+}
+
+/** waitForOutput 的流式解码变体: 断言目标含多字节字符时不受 chunk 边界影响 */
+function waitForOutputUtf8(
+  sock: net.Socket,
+  marker: string,
+  timeoutMs = 5000,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const decoder = new StringDecoder("utf8");
+    let buf = "";
+    const timer = setTimeout(() => {
+      sock.off("data", onData);
+      reject(
+        new Error(
+          `Timed out waiting for "${marker}". Got: ${JSON.stringify(buf)}`,
+        ),
+      );
+    }, timeoutMs);
+    const onData = (chunk: Buffer) => {
+      buf += decoder.write(chunk);
       if (buf.includes(marker)) {
         clearTimeout(timer);
         sock.off("data", onData);
@@ -1209,6 +1239,145 @@ describe("Unknown RPC method returns error", () => {
     assert.equal(resp.error!.code, -32601);
     assert.ok(resp.error!.message.includes("nonexistent.method"));
 
+    ctrl.destroy();
+  });
+});
+
+describe("控制通道请求行跨 chunk 解码", () => {
+  it("含多字节字符的请求行跨 chunk 到达时完整解析", async () => {
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    // 探针: reconnect 未知会话的错误消息回显 sessionId(含中文)。
+    // 按 chunk 独立 toString 会把切在「中」字中间的两段各焊成 U+FFFD,
+    // 回显的 sessionId 即被破坏。
+    const req = makeRequest(1, "session.reconnect", {
+      sessionId: "中文会话",
+      cols: 80,
+      rows: 24,
+    });
+    const bytes = Buffer.from(req, "utf8");
+    // 在「中」(3 字节)的第一字节后切断: 两个 chunk 各自都不含完整字符
+    const cut = bytes.indexOf(Buffer.from("中", "utf8")) + 1;
+
+    const resp = await new Promise<JsonRpcResponse>((resolve) => {
+      let buf = "";
+      ctrl.on("data", (chunk: Buffer) => {
+        buf += chunk.toString();
+        const nl = buf.indexOf("\n");
+        if (nl !== -1) resolve(JSON.parse(buf.slice(0, nl)));
+      });
+      ctrl.write(bytes.subarray(0, cut));
+      setTimeout(() => ctrl.write(bytes.subarray(cut)), 20);
+    });
+
+    assert.ok(resp.error, "应返回错误");
+    assert.ok(
+      resp.error!.message.includes("中文会话"),
+      `错误消息应完整回显中文 sessionId: ${resp.error!.message}`,
+    );
+
+    ctrl.destroy();
+  });
+});
+
+describe("数据通道输入跨 chunk 解码", () => {
+  it("写入 PTY 的多字节字符跨 chunk 到达时完整送达", async (t) => {
+    if (process.platform === "win32") {
+      t.skip("cat 回显语义依赖 POSIX shell");
+      return;
+    }
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    const resp = await rpcCall(ctrl, 1, "session.create", {
+      command: "/bin/cat",
+      args: [],
+      displayName: "cat",
+      target: "shell",
+      cwdHostPath: TEST_CWD,
+      cwd: TEST_CWD,
+      cols: 80,
+      rows: 24,
+    });
+    const { socketPath } = resp.result as SessionCreateResult;
+
+    const data = await connectDataSocket(socketPath);
+    const bytes = Buffer.from("中文\n", "utf8");
+    // 在「中」(3 字节)的第一字节后切断: 两个 chunk 各自都不含完整字符。
+    // 按 chunk 独立 toString 会把两段各焊成 U+FFFD, PTY 收到的是乱码。
+    const cut = bytes.indexOf(Buffer.from("中", "utf8")) + 1;
+    data.write(bytes.subarray(0, cut));
+    await sleep(50);
+    data.write(bytes.subarray(cut));
+
+    const output = await waitForOutputUtf8(data, "文");
+    assert.ok(
+      output.includes("中文"),
+      `PTY 应收到完整字符(不得焊 U+FFFD): ${JSON.stringify(output)}`,
+    );
+
+    data.destroy();
+    ctrl.destroy();
+  });
+});
+
+describe("补发通道保留尾部半截多字节字符", () => {
+  it("剥离查询触发重编码时, 尾部半截字符字节原样透传不焊 U+FFFD", async (t) => {
+    if (process.platform === "win32") {
+      t.skip("printf 八进制转义依赖 POSIX shell");
+      return;
+    }
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    // 断连窗口内输出: ANCHOR 锚点 + 真实查询序列 \x1b[6n(补发时会被
+    // 剥离, 触发重编码) + 「中」的前两字节(半截字符, pty 输出 chunk
+    // 边界切在字符中间的自然形态)。
+    const resp = await rpcCall(ctrl, 1, "session.create", {
+      command: "/bin/sh",
+      args: [
+        "-lc",
+        "(sleep 1; printf 'ANCHOR\\n\\033[6n\\344\\270') & exec /bin/sh",
+      ],
+      displayName: "sh",
+      target: "shell",
+      cwdHostPath: TEST_CWD,
+      cwd: TEST_CWD,
+      cols: 80,
+      rows: 24,
+    });
+    const { sessionId, socketPath } = resp.result as SessionCreateResult;
+
+    // reconnect 开始排队, 等 sleep 1 的输出落入队列
+    await rpcCall(ctrl, 2, "session.reconnect", {
+      sessionId,
+      cols: 80,
+      rows: 24,
+    });
+    await sleep(1600);
+
+    const data = await connectDataSocket(socketPath);
+    const raw = await new Promise<Buffer>((resolve) => {
+      const parts: Buffer[] = [];
+      data.on("data", (c: Buffer) => parts.push(c));
+      setTimeout(() => resolve(Buffer.concat(parts)), 800);
+    });
+
+    assert.ok(raw.includes(Buffer.from("ANCHOR")), "锚点应补发");
+    assert.ok(
+      raw.includes(Buffer.from([0xe4, 0xb8])),
+      `半截字符字节应原样保留(hex): ${raw.toString("hex")}`,
+    );
+    assert.ok(
+      !raw.includes(Buffer.from([0xef, 0xbf, 0xbd])),
+      `补发不得焊入 U+FFFD(hex): ${raw.toString("hex")}`,
+    );
+
+    data.destroy();
     ctrl.destroy();
   });
 });

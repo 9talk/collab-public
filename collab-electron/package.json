@@ -19,7 +19,7 @@
     "package:unsigned": "bun format && bun ./scripts/package.mjs --no-sign",
     "release": "bun format && bun ./scripts/package.mjs --publish",
     "test": "bun format && bun test",
-    "test:sidecar": "npx tsx --test src/main/sidecar/client.test.ts src/main/sidecar/server.test.ts",
+    "test:sidecar": "npx tsx --test src/main/sidecar/client.test.ts src/main/sidecar/server.test.ts src/main/sidecar/session-emulator.test.ts",
     "test:updater": "bun format && bun test src/main/updater/github-release-fetcher.test.ts && bun test src/main/updater/downloader.test.ts && bun test src/main/updater/update-manager.test.ts",
     "test:remote": "bun run scripts/remote-e2e/run.mjs",
     "dev:remote": "bun format && bun ./scripts/dev.mjs --flavor remote",

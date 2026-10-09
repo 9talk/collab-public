@@ -4,6 +4,7 @@
 // 两端一致可用。类型经 xterm-esm.d.ts 转发包根 typings。
 import { Terminal } from "@xterm/headless/lib-headless/xterm-headless.mjs";
 import { SerializeAddon } from "@xterm/addon-serialize/lib/addon-serialize.mjs";
+import { Unicode11Addon } from "@xterm/addon-unicode11/lib/addon-unicode11.mjs";
 
 /**
  * 会话终端状态的常驻镜像(不渲染, 只解析): 把 pty 原始输出实时喂入
@@ -47,6 +48,12 @@ export class SessionEmulator {
     });
     this.addon = new SerializeAddon();
     this.term.loadAddon(this.addon);
+    // 与消费端(TerminalTab 的 Unicode11)同宽表: SerializeAddon 的行内
+    // 空洞用相对光标移动(\x1b[2C)编码, 偏移量按本端宽表计算——两端宽表
+    // 不一致时(如 emoji 按 Unicode 6 计 1 列、按 11 计 2 列), 重放端
+    // 落点整体偏移。
+    this.term.loadAddon(new Unicode11Addon());
+    this.term.unicode.activeVersion = "11";
   }
 
   write(data: Uint8Array): void {

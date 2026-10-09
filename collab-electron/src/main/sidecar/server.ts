@@ -2,11 +2,13 @@
 import * as net from "node:net";
 import * as fs from "node:fs";
 import * as crypto from "node:crypto";
+import { StringDecoder } from "node:string_decoder";
 import * as pty from "node-pty";
 import type { IDisposable } from "node-pty";
 import { displayCommandName } from "@collab/shared/path-utils";
 import { buildRebuildQueryRe } from "@collab/shared/terminal-queries";
 import { cleanupEndpoint, prepareEndpoint } from "../ipc-endpoint";
+import { countTrailingIncompleteUtf8Bytes } from "../utf8";
 import { SessionEmulator } from "./session-emulator";
 import {
   makeResponse,
@@ -100,7 +102,11 @@ export class SidecarServer {
    */
   private stripRebuildReportQueries(buf: Buffer): Buffer {
     if (buf.length === 0) return buf;
-    const s = buf.toString("utf-8");
+    // 尾部半截 UTF-8 序列不参与解码/重编码: toString 会把它们焊成
+    // U+FFFD, 消费端(pty.ts trailingUtf8Bytes)需要原始字节与后续输出
+    // 拼成完整字符。剥离未发生时原样返回整个 buf(含半截字节)。
+    const tail = countTrailingIncompleteUtf8Bytes(buf);
+    const s = buf.subarray(0, buf.length - tail).toString("utf-8");
     const cleaned = s
       // 剥离历史查询(DA/DSR/DECRQM/XTGETTCAP/XTVERSION, 清单见
       // @collab/shared/terminal-queries), 防全新 xterm / 主进程对过期查询
@@ -115,7 +121,11 @@ export class SidecarServer {
       // 剥离 XTVERSION 应答被 shell 回显后的纯文本残留(如 ">|xterm.js(6.0.0)",
       // 可后接 DECRQM 尾构成 ">|xterm.js(6.0.0)2026;2$y"), 防再次回放显示
       .replace(/>\|xterm\.js\([^)]*\)(?:[\d;]*\$y)?/g, "");
-    return cleaned === s ? buf : Buffer.from(cleaned, "utf-8");
+    if (cleaned === s) return buf;
+    const out = Buffer.from(cleaned, "utf-8");
+    return tail > 0
+      ? Buffer.concat([out, buf.subarray(buf.length - tail)])
+      : out;
   }
 
   private windowsPathKey(env: Record<string, string>): string | null {
@@ -265,9 +275,12 @@ export class SidecarServer {
   private handleControlClient(sock: net.Socket): void {
     this.controlClients.add(sock);
     let buf = "";
+    // StringDecoder 保留跨 chunk 的半截多字节字符(如含 CJK 的 cwd/
+    // sessionId 请求行), 按 chunk 独立 toString 会把字符切坏成 U+FFFD。
+    const decoder = new StringDecoder("utf8");
 
     sock.on("data", (chunk) => {
-      buf += chunk.toString();
+      buf += decoder.write(chunk);
       let nl: number;
       while ((nl = buf.indexOf("\n")) !== -1) {
         const line = buf.slice(0, nl);
@@ -496,9 +509,13 @@ export class SidecarServer {
         this.scheduleRepaintNudge(session);
       }
 
-      // Pipe client input to PTY
+      // Pipe client input to PTY. StringDecoder 保留跨 chunk 的半截
+      // 多字节字符(粘贴/输入含 CJK 时 socket chunk 边界可能切在字符
+      // 中间), 按 chunk 独立 toString 会把字符焊成 U+FFFD 写进 PTY。
+      const inputDecoder = new StringDecoder("utf8");
       client.on("data", (data) => {
-        ptyProcess.write(data.toString());
+        const text = inputDecoder.write(data);
+        if (text.length > 0) ptyProcess.write(text);
       });
 
       client.on("close", () => {

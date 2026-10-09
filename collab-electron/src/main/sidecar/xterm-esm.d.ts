@@ -8,3 +8,7 @@ declare module "@xterm/headless/lib-headless/xterm-headless.mjs" {
 declare module "@xterm/addon-serialize/lib/addon-serialize.mjs" {
   export * from "@xterm/addon-serialize";
 }
+
+declare module "@xterm/addon-unicode11/lib/addon-unicode11.mjs" {
+  export * from "@xterm/addon-unicode11";
+}

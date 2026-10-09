@@ -298,6 +298,59 @@ describe("SidecarClient", () => {
     }
   });
 
+  it("响应行中的多字节字符跨 chunk 到达时完整解码", async () => {
+    // server 的一次 write 在客户端不保证一次 data 事件到达; serialize
+    // 快照等大响应(含 CJK)必然跨 chunk。按 chunk 独立 toString 会把
+    // 切在字符中间的字节焊成 U+FFFD。
+    const fakeSockPath =
+      process.platform === "win32"
+        ? `\\\\.\\pipe\\cc-${process.pid}-utf8`
+        : path.join(TEST_DIR, "utf8.sock");
+    fs.mkdirSync(TEST_DIR, { recursive: true });
+
+    const fakeServer = net.createServer((conn) => {
+      conn.on("data", (data) => {
+        const line = data.toString().trim();
+        let msg: { id?: number; method?: string };
+        try {
+          msg = JSON.parse(line);
+        } catch {
+          return;
+        }
+        if (msg.method === "sidecar.ping") {
+          const bytes = Buffer.from(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: msg.id,
+              result: { pid: process.pid, uptime: 0, token: "中文令牌" },
+            }) + "\n",
+            "utf8",
+          );
+          // 在「中」(3 字节)的第一字节后切断: 两个 chunk 各自都不含完整字符
+          const cut = bytes.indexOf(Buffer.from("中", "utf8")) + 1;
+          conn.write(bytes.subarray(0, cut));
+          setTimeout(() => conn.write(bytes.subarray(cut)), 20);
+        }
+      });
+    });
+
+    await new Promise<void>((resolve) =>
+      fakeServer.listen(fakeSockPath, resolve),
+    );
+
+    let fakeClient: SidecarClient | null = null;
+    try {
+      fakeClient = new SidecarClient(fakeSockPath);
+      await fakeClient.connect();
+
+      const result = await fakeClient.ping();
+      assert.equal(result.token, "中文令牌");
+    } finally {
+      fakeClient?.disconnect();
+      await new Promise<void>((resolve) => fakeServer.close(() => resolve()));
+    }
+  });
+
   it("reconnects session: 历史经 serialize 快照交付, 数据通道只续新输出", async () => {
     await startServer();
     client = new SidecarClient(CONTROL_SOCK);

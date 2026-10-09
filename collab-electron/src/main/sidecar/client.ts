@@ -1,5 +1,6 @@
 // src/main/sidecar/client.ts
 import * as net from "node:net";
+import { StringDecoder } from "node:string_decoder";
 import {
   makeRequest,
   type JsonRpcResponse,
@@ -27,6 +28,10 @@ export class SidecarClient {
     }
   >();
   private buf = "";
+  // StringDecoder 保留跨 chunk 的半截多字节字符: 响应行(如 serialize
+  // 快照)含 CJK 时, socket chunk 边界可能切在字符中间, 按 chunk 独立
+  // toString 会把两侧各焊成 U+FFFD。
+  private decoder = new StringDecoder("utf8");
   private notificationHandler: NotificationHandler | null = null;
 
   constructor(private readonly controlSocketPath: string) {}
@@ -36,6 +41,7 @@ export class SidecarClient {
   }
 
   async connect(): Promise<void> {
+    this.decoder = new StringDecoder("utf8");
     return new Promise((resolve, reject) => {
       this.socket = net.createConnection(this.controlSocketPath, () => {
         // Replace the connect-time error handler with one that
@@ -67,7 +73,7 @@ export class SidecarClient {
   }
 
   private handleData(chunk: Buffer): void {
-    this.buf += chunk.toString();
+    this.buf += this.decoder.write(chunk);
     let nl: number;
     while ((nl = this.buf.indexOf("\n")) !== -1) {
       const line = this.buf.slice(0, nl);
