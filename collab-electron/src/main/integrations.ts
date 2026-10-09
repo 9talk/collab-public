@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -212,7 +213,7 @@ function skillInstallPath(id: AgentId): string {
   const home = homedir();
   switch (id) {
     case "claude":
-      return join(home, ".claude", "skills", "collab-canvas");
+      return join(home, ".claude", "skills");
     case "codex":
       return join(home, ".codex", "instructions", "collab-canvas.md");
     case "gemini":
@@ -223,7 +224,7 @@ function skillInstallPath(id: AgentId): string {
 function skillInstalled(id: AgentId): boolean {
   const target = skillInstallPath(id);
   if (id === "claude") {
-    return existsSync(join(target, "SKILL.md"));
+    return existsSync(join(target, "collab-canvas", "SKILL.md"));
   }
   return existsSync(target);
 }
@@ -235,13 +236,19 @@ export function installSkill(id: AgentId): void {
   const target = skillInstallPath(id);
 
   if (id === "claude") {
-    mkdirSync(target, { recursive: true });
-    const src = join(srcDir, "skills", "collab-canvas", "SKILL.md");
-    writeFileSync(
-      join(target, "SKILL.md"),
-      readFileSync(src, "utf-8"),
-      "utf-8",
-    );
+    // skills/ 下的每个 skill 目录都装到 ~/.claude/skills/<name>/
+    const skillsRoot = join(srcDir, "skills");
+    for (const name of readdirSync(skillsRoot)) {
+      const src = join(skillsRoot, name, "SKILL.md");
+      if (!existsSync(src)) continue;
+      const dest = join(target, name);
+      mkdirSync(dest, { recursive: true });
+      writeFileSync(
+        join(dest, "SKILL.md"),
+        readFileSync(src, "utf-8"),
+        "utf-8",
+      );
+    }
     return;
   }
 
@@ -258,7 +265,10 @@ export function installSkill(id: AgentId): void {
 export function uninstallSkill(id: AgentId): void {
   const target = skillInstallPath(id);
   if (id === "claude") {
-    rmSync(target, { recursive: true, force: true });
+    // 只删本应用的 skill 目录,不动用户在 ~/.claude/skills 下的其他 skill
+    for (const name of ["collab-canvas", "collab-worklog"]) {
+      rmSync(join(target, name), { recursive: true, force: true });
+    }
     return;
   }
   if (existsSync(target)) rmSync(target);

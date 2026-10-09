@@ -21,6 +21,13 @@ function setupSkillSource(baseDir: string) {
   const skillDir = join(baseDir, "skills", "collab-canvas");
   mkdirSync(skillDir, { recursive: true });
   writeFileSync(join(skillDir, "SKILL.md"), "# Test SKILL", "utf-8");
+  const worklogSkillDir = join(baseDir, "skills", "collab-worklog");
+  mkdirSync(worklogSkillDir, { recursive: true });
+  writeFileSync(
+    join(worklogSkillDir, "SKILL.md"),
+    "# Test Worklog SKILL",
+    "utf-8",
+  );
   writeFileSync(
     join(baseDir, "collab-canvas-codex.md"),
     "# Codex instructions",
@@ -124,6 +131,20 @@ describe("installSkill / uninstallSkill", () => {
       "SKILL.md",
     );
     expect(existsSync(installed)).toBe(true);
+  });
+
+  test("installs all skills under skills/ (collab-canvas + collab-worklog)", () => {
+    installSkill("claude");
+    expect(
+      existsSync(
+        join(FAKE_HOME, ".claude", "skills", "collab-canvas", "SKILL.md"),
+      ),
+    ).toBe(true);
+    expect(
+      existsSync(
+        join(FAKE_HOME, ".claude", "skills", "collab-worklog", "SKILL.md"),
+      ),
+    ).toBe(true);
   });
 
   test("installs Codex skill (copies collab-canvas-codex.md)", () => {
