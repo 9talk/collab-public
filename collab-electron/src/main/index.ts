@@ -40,6 +40,7 @@ import {
 import { registerCanvasRpc } from "./canvas-rpc";
 import { loadHistory } from "./navigation-history-store";
 import { registerIntegrationsIpc } from "./integrations";
+import { registerWorklogIpc } from "./worklog";
 import { registerClaudeIpc } from "./claude-rpc";
 import { registerClaudeEditsRpc, findLatestEditLine } from "./claude-edits-rpc";
 import { registerDebugMouseRpc } from "./debug-mouse-rpc";
@@ -70,7 +71,8 @@ import {
   openFileInEditor,
   openWorkspaceInEditor,
 } from "./external-editor";
-import { workspaceForFile } from "./ipc-workspace";
+import { workspaceForFile, getWsConfig } from "./ipc-workspace";
+import { matchWorkspaceAlias } from "@collab/shared/workspace-alias";
 import { noteWorkspaceUse } from "./workspace-recent";
 import { readSessionMeta } from "./session-meta";
 import * as canvasPersistence from "./canvas-persistence";
@@ -1052,6 +1054,16 @@ function setSettingsOpen(open: boolean): void {
   mainWindow.webContents.send("shell:settings", open ? "open" : "close");
 }
 
+/** 工作记录查看界面的 cwd → alias 解析(与 workspace:list 的 aliases 同源) */
+function resolveWorklogAlias(cwd: string): string | null {
+  const aliases: Record<string, string> = {};
+  for (const ws of config.workspaces) {
+    const cfg = getWsConfig(ws);
+    if (cfg.alias) aliases[ws] = cfg.alias;
+  }
+  return matchWorkspaceAlias(cwd, aliases, config.workspaces)?.alias ?? null;
+}
+
 ipcMain.on("settings:open", () => setSettingsOpen(true));
 
 ipcMain.on("settings:open-pane", (_event, pane: string) => {
@@ -1257,6 +1269,18 @@ app.whenReady().then(async () => {
       workspaces: () => config.workspaces,
       getPref: (key: string) => getPref(config, key),
       setPref: (key: string, value: unknown) => setPref(config, key, value),
+    });
+    registerWorklogIpc({ resolveAlias: resolveWorklogAlias });
+    ipcMain.on(
+      "worklog:resume",
+      (_event, params: { sessionId: string; cwd: string }) => {
+        if (!params?.sessionId || typeof params.sessionId !== "string") return;
+        // 恢复编排在 shell 侧(建 tile / 等就绪 / 写 clc --resume)
+        forwardToWebview("shell", "worklog:resume", params);
+      },
+    );
+    ipcMain.on("worklog:close-view", () => {
+      forwardToWebview("worklog", "worklog:close");
     });
   }
   setupUpdateIPC();
