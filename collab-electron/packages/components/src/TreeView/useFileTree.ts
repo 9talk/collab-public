@@ -16,12 +16,8 @@ export interface FlatItem {
   workspacePath?: string;
   isSymlink?: boolean;
   linkTarget?: string;
-  /** 链接指向模板库内时的来源模板名 */
-  templateName?: string;
   /** 悬空软链接（断链） */
   broken?: boolean;
-  /** 位于某个软链接节点内部（含其下所有层级）——禁止作为挂载放置目标 */
-  linkAncestor?: boolean;
 }
 
 export function saveExpandedDirs(
@@ -67,7 +63,6 @@ function copyLinkFields(item: FlatItem, node: TreeNode): FlatItem {
   if (!node.isSymlink) return item;
   item.isSymlink = true;
   if (node.linkTarget !== undefined) item.linkTarget = node.linkTarget;
-  if (node.templateName !== undefined) item.templateName = node.templateName;
   if (node.broken) item.broken = true;
   return item;
 }
@@ -78,7 +73,6 @@ export function flattenTree(
   level: number,
   sortMode: SortMode,
   levelOffset = 0,
-  insideLink = false,
 ): FlatItem[] {
   const effectiveLevel = level + levelOffset;
   const items: FlatItem[] = [];
@@ -99,7 +93,6 @@ export function flattenTree(
       },
       dir,
     );
-    if (insideLink) item.linkAncestor = true;
     items.push(item);
     if (isOpen && (dir.children ?? []).length > 0) {
       items.push(
@@ -109,7 +102,6 @@ export function flattenTree(
           level + 1,
           sortMode,
           levelOffset,
-          insideLink || !!dir.isSymlink,
         ),
       );
     }
@@ -129,7 +121,6 @@ export function flattenTree(
       },
       file,
     );
-    if (insideLink) item.linkAncestor = true;
     items.push(item);
   }
 

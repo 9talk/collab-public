@@ -85,7 +85,6 @@ export default defineConfig({
           ),
           todos: resolve(__dirname, "src/windows/todos/index.html"),
           connect: resolve(__dirname, "src/windows/connect/index.html"),
-          templates: resolve(__dirname, "src/windows/templates/index.html"),
           worklog: resolve(__dirname, "src/windows/worklog/index.html"),
         },
       },

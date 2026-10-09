@@ -33,7 +33,6 @@ import {
   matchesPattern,
   type FileTypeGroup,
 } from "@collab/shared/external-app";
-import { useTemplateDrop, isTemplateDropTarget } from "./useTemplateDrop";
 
 const PLATFORM = window.api.getPlatform();
 
@@ -43,23 +42,6 @@ const REVEAL_LABEL =
     : PLATFORM === "win32"
       ? "Reveal in Explorer"
       : "Reveal in File Manager";
-
-type TemplateMountOutcome = {
-  status:
-    | "created"
-    | "replaced"
-    | "renamed"
-    | "already"
-    | "cancelled"
-    | "error";
-  path?: string;
-  message?: string;
-};
-
-function errText(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err);
-  return raw.replace(/^Error invoking remote method '[^']*':\s*/, "");
-}
 
 async function isTyporaInstalled(): Promise<boolean> {
   try {
@@ -850,129 +832,24 @@ export default function App() {
     [dragDrop.handleDragStart],
   );
 
-  // ── 模板窗口 → nav 的拖拽挂载接收 ──
-
-  const [toast, setToast] = useState<{ text: string; error?: boolean } | null>(
-    null,
-  );
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showToast = useCallback((text: string, error = false) => {
-    setToast({ text, error });
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(
-      () => setToast(null),
-      error ? 5000 : 2600,
-    );
-  }, []);
-
-  const templateDropTargetsRef = useRef(new Map<string, FlatItem>());
-  const rebuildTemplateDropTargets = useCallback(() => {
-    const map = new Map<string, FlatItem>();
-    for (const p of workspacePathsRef.current) {
-      map.set(p, {
-        id: p,
-        kind: "workspace",
-        level: 0,
-        name: displayBasename(p),
-        path: p,
-      });
-    }
-    for (const item of getAllFlatItems()) map.set(item.path, item);
-    templateDropTargetsRef.current = map;
-  }, [getAllFlatItems]);
-
-  const isTemplateDropAllowed = useCallback(
-    (targetPath: string) =>
-      isTemplateDropTarget(templateDropTargetsRef.current.get(targetPath)),
-    [],
-  );
-
-  const applyMountOutcome = useCallback(
-    (result: TemplateMountOutcome | null | undefined) => {
-      switch (result?.status) {
-        case "created":
-        case "replaced":
-        case "renamed": {
-          showToast(
-            result.path ? `Linked → ${displayBasename(result.path)}` : "Linked",
-          );
-          if (result.path) {
-            const p = result.path;
-            // 等 fs 监听把新链接行渲染出来再做高亮闪烁
-            setTimeout(() => setHighlightPath(p), 400);
-          }
-          break;
-        }
-        case "already":
-          showToast("Already linked");
-          break;
-        case "cancelled":
-          break;
-        default:
-          showToast(result?.message || "Mount failed", true);
-      }
-    },
-    [showToast],
-  );
-
-  const handleTemplateDrop = useCallback(
-    (targetPath: string) => {
-      let ws: string | undefined;
-      let bestLen = 0;
-      for (const p of workspacePathsRef.current) {
-        if (isSubpath(p, targetPath) && p.length > bestLen) {
-          ws = p;
-          bestLen = p.length;
-        }
-      }
-      if (!ws) {
-        showToast("Drop target is not inside a workspace", true);
-        return;
-      }
-      const relPath = targetPath === ws ? "" : targetPath.slice(ws.length + 1);
-      window.api
-        .templatesDropMount({ workspace: ws, relPath })
-        .then((result) => applyMountOutcome(result as TemplateMountOutcome))
-        .catch((err) => showToast(errText(err), true));
-    },
-    [applyMountOutcome, showToast],
-  );
-
-  const templateDrop = useTemplateDrop({
-    isDropAllowed: isTemplateDropAllowed,
-    onDrop: handleTemplateDrop,
-  });
-
-  // 拖拽开始/结束时重建放置目标索引（以当前已渲染的树为准）
-  useEffect(() => {
-    if (templateDrop.payload) rebuildTemplateDropTargets();
-  }, [templateDrop.payload, rebuildTemplateDropTargets]);
+  // ── 树拖拽(文件拖入文件夹等) ──
 
   const handleTreeDragOver = useCallback(
     (e: React.DragEvent, folderPath: string) => {
-      if (templateDrop.active) {
-        templateDrop.handleDragOver(e, folderPath);
-        return;
-      }
       dragDrop.handleDragOver(e, folderPath);
     },
-    [templateDrop.active, templateDrop.handleDragOver, dragDrop.handleDragOver],
+    [dragDrop.handleDragOver],
   );
 
   const handleTreeDragLeave = useCallback(() => {
-    templateDrop.handleDragLeave();
     dragDrop.handleDragLeave();
-  }, [templateDrop.handleDragLeave, dragDrop.handleDragLeave]);
+  }, [dragDrop.handleDragLeave]);
 
   const handleTreeDrop = useCallback(
     (e: React.DragEvent, folderPath: string) => {
-      if (templateDrop.active) {
-        templateDrop.handleDrop(e, folderPath);
-        return;
-      }
       dragDrop.handleDrop(e, folderPath);
     },
-    [templateDrop.active, templateDrop.handleDrop, dragDrop.handleDrop],
+    [dragDrop.handleDrop],
   );
 
   const cycleSortMode = useCallback(() => {
@@ -1003,40 +880,6 @@ export default function App() {
     }
   }, []);
 
-  /** 节点相对所属 workspace 的 { workspace, relPath }（链接相关 IPC 用） */
-  const linkContextOf = useCallback(
-    (path: string): { workspace: string; relPath: string } | null => {
-      let best: string | undefined;
-      let bestLen = 0;
-      for (const p of workspacePathsRef.current) {
-        if (isSubpath(p, path) && p.length > bestLen) {
-          best = p;
-          bestLen = p.length;
-        }
-      }
-      if (!best) return null;
-      return {
-        workspace: best,
-        relPath: path === best ? "" : path.slice(best.length + 1),
-      };
-    },
-    [],
-  );
-
-  const fetchLinkInfo = useCallback(
-    async (path: string) => {
-      const ctx = linkContextOf(path);
-      if (!ctx) return null;
-      try {
-        const info = await window.api.templatesLinkInfo(ctx);
-        return info && info.isLink ? info : null;
-      } catch {
-        return null;
-      }
-    },
-    [linkContextOf],
-  );
-
   const handleContextMenu = useCallback(
     async (_e: React.MouseEvent, item: FlatItem | null) => {
       const ms = multiSelectRef.current;
@@ -1057,24 +900,11 @@ export default function App() {
           },
         ];
       } else if (item?.isSymlink) {
-        // 挂载节点（软链接）：菜单只提供链接相关操作，不出现新建/删除
-        const linkInfo = await fetchLinkInfo(item.path);
+        // 软链接节点：只提供链接相关操作，不出现新建/删除
         menuItems = [
           {
             id: "open-external-editor",
             label: "Open in External Editor",
-          },
-          ...(linkInfo?.template
-            ? [
-                {
-                  id: "show-template-source",
-                  label: "Show Source in Templates",
-                },
-              ]
-            : []),
-          {
-            id: "remove-link",
-            label: "Remove Link…",
           },
           { id: "separator", label: "" },
           {
@@ -1309,31 +1139,9 @@ export default function App() {
         case "open-in-typora":
           if (item) window.api.openFileInExternalEditor?.(item.path, "typora");
           break;
-        case "show-template-source": {
-          const ctx = item ? linkContextOf(item.path) : null;
-          if (ctx) {
-            await window.api
-              .templatesRevealSource(ctx)
-              .catch((err) => showToast(errText(err), true));
-          }
-          break;
-        }
-        case "remove-link": {
-          const ctx = item ? linkContextOf(item.path) : null;
-          if (ctx) {
-            const res = (await window.api
-              .templatesRemoveLink(ctx)
-              .catch((err) => {
-                showToast(errText(err), true);
-                return null;
-              })) as { ok?: boolean } | null;
-            if (res?.ok) showToast("Link removed");
-          }
-          break;
-        }
       }
     },
-    [expandFolder, fetchLinkInfo, linkContextOf, showToast],
+    [expandFolder],
   );
 
   // Workspace toggle (normal + alt-click recursive)
@@ -1628,9 +1436,7 @@ export default function App() {
                     onAliasChange={inlineAlias.setAliasValue}
                     onAliasConfirm={inlineAlias.confirmAlias}
                     onAliasCancel={inlineAlias.cancelAlias}
-                    dropTargetPath={
-                      templateDrop.dropTargetPath ?? dragDrop.dropTargetPath
-                    }
+                    dropTargetPath={dragDrop.dropTargetPath}
                     onDragStart={stableDragStart}
                     onDragOver={handleTreeDragOver}
                     onDragLeave={handleTreeDragLeave}
@@ -1658,11 +1464,6 @@ export default function App() {
             selectFile(filePath);
           }}
         />
-      )}
-      {toast && (
-        <div className={`nav-toast${toast.error ? " error" : ""}`}>
-          {toast.text}
-        </div>
       )}
     </div>
   );

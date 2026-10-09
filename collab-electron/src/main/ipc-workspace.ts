@@ -187,12 +187,10 @@ export async function readTreeRecursive(
 
     const isSymlink = entry.isSymbolicLink();
     let linkTarget: string | undefined;
-    let templateName: string | undefined;
     if (isSymlink) {
       try {
         linkTarget = await readlink(fullPath);
         const desc = describeSymlink(fullPath, linkTarget);
-        templateName = desc.templateName;
         broken = desc.broken;
       } catch {
         linkTarget = undefined;
@@ -212,7 +210,6 @@ export async function readTreeRecursive(
       if (isSymlink) {
         node.isSymlink = true;
         if (linkTarget !== undefined) node.linkTarget = linkTarget;
-        if (templateName !== undefined) node.templateName = templateName;
         if (broken) node.broken = true;
       }
       folders.push(node);
@@ -228,7 +225,6 @@ export async function readTreeRecursive(
       if (isSymlink) {
         node.isSymlink = true;
         if (linkTarget !== undefined) node.linkTarget = linkTarget;
-        if (templateName !== undefined) node.templateName = templateName;
         if (broken) node.broken = true;
       }
 

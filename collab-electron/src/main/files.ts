@@ -29,8 +29,6 @@ export interface DirEntry {
   isSymlink: boolean;
   /** 软链接的原始目标路径（readlink 结果，可能是相对路径）。仅 isSymlink 时有值。 */
   linkTarget?: string;
-  /** 链接指向模板库内时的来源模板名（nav 树 🔗 徽标） */
-  templateName?: string;
   /** 悬空软链接（nav 树 ⚠ 标识） */
   broken?: boolean;
   createdAt: string;

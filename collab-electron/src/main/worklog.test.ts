@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 // worklog.ts 顶层 import electron(仅注册 IPC 用);纯逻辑测试不触达 IPC,
-// 但模块加载需要 mock(与 templates.test.ts 同一模式)。
+// 但模块加载需要 mock。
 mock.module("electron", () => ({
   ipcMain: { on: () => {}, handle: () => {} },
 }));

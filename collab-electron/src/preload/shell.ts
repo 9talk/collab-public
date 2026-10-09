@@ -12,7 +12,7 @@ interface AllViewConfigs {
   terminalTile: ViewConfig;
   settings: ViewConfig;
   tileList: ViewConfig;
-  templates: ViewConfig;
+  worklog: ViewConfig;
 }
 
 const ALLOWED_PANELS = new Set([
@@ -22,7 +22,7 @@ const ALLOWED_PANELS = new Set([
   "terminalTile",
   "settings",
   "tile-list",
-  "templates",
+  "worklog",
 ]);
 
 // Buffer loading-done signal so it isn't lost if it arrives before

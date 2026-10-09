@@ -53,7 +53,6 @@ export function useWorkspaceFileTree(
               isDirectory: boolean;
               isSymlink: boolean;
               linkTarget?: string;
-              templateName?: string;
               broken?: boolean;
               createdAt: string;
               modifiedAt: string;
@@ -73,9 +72,6 @@ export function useWorkspaceFileTree(
                 node.isSymlink = true;
                 if (e.linkTarget !== undefined) {
                   node.linkTarget = e.linkTarget;
-                }
-                if (e.templateName !== undefined) {
-                  node.templateName = e.templateName;
                 }
                 if (e.broken) node.broken = true;
               }

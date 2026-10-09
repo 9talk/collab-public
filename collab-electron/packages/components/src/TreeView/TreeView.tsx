@@ -66,9 +66,6 @@ const LinkBadge = React.memo(function LinkBadge({ item }: { item: FlatItem }) {
       ) : (
         <LinkSimple size={11} weight="bold" />
       )}
-      {!item.broken && item.templateName && (
-        <span className="tree-link-source">{item.templateName}</span>
-      )}
     </span>
   );
 });
@@ -430,7 +427,6 @@ export const FileRow = React.memo(
     prev.item.ctime === next.item.ctime &&
     prev.item.isSymlink === next.item.isSymlink &&
     prev.item.linkTarget === next.item.linkTarget &&
-    prev.item.templateName === next.item.templateName &&
     prev.item.broken === next.item.broken &&
     prev.isSelected === next.isSelected &&
     prev.isMultiSelected === next.isMultiSelected &&

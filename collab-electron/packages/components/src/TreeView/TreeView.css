@@ -392,7 +392,7 @@
   min-width: 0;
 }
 
-/* 挂载软链接徽标：🔗 + 来源模板名（断链显示 ⚠） */
+/* 软链接徽标：🔗（断链显示 ⚠） */
 .tree-link-badge {
   display: inline-flex;
   align-items: center;
@@ -406,17 +406,6 @@
 .tree-link-badge.broken {
   color: var(--destructive, #ef4444);
   opacity: 1;
-}
-
-.tree-link-source {
-  font-family: var(--font-sans);
-  font-size: 0.65rem;
-  letter-spacing: 0.02em;
-  color: color-mix(in srgb, var(--muted-foreground) 70%, transparent);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 9em;
 }
 
 .collection-tree-count {

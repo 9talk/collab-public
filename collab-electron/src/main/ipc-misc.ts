@@ -381,7 +381,7 @@ export function registerMiscHandlers(ctx: IpcContext): void {
         enabled?: boolean;
       }>,
     ) => {
-      // 弹到调用方所在窗口（模板窗口的右键菜单不能弹到主窗口上）
+      // 弹到调用方所在窗口（webview 内的右键菜单不能弹到主窗口上）
       const win =
         BrowserWindow.fromWebContents(event.sender) ?? ctx.mainWindow();
       if (!win) return null;

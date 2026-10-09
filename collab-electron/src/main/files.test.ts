@@ -1,13 +1,8 @@
-import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
+import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { writeFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-
-mock.module("@collab/shared/image", () => ({
-  IMAGE_EXTENSIONS: new Set([".png", ".jpg"]),
-  isImageFile: (p: string) => /\.(png|jpg)$/i.test(p),
-}));
 
 const { fsWriteFile, atomicWriteFileSync } = await import("./files");
 
