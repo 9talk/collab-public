@@ -1,0 +1,148 @@
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--foreground);
+  background: var(--background);
+}
+
+.wl-app {
+  display: flex;
+  height: 100%;
+}
+
+.wl-side {
+  width: 220px;
+  flex: 0 0 auto;
+  border-right: 1px solid var(--border, rgba(128, 128, 128, 0.3));
+  overflow-y: auto;
+}
+
+.wl-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border, rgba(128, 128, 128, 0.3));
+}
+
+.wl-title {
+  font-weight: 500;
+}
+
+.wl-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.wl-btn {
+  border: 1px solid var(--border, rgba(128, 128, 128, 0.4));
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.wl-btn:hover {
+  background: rgba(128, 128, 128, 0.15);
+}
+
+.wl-day {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.wl-day.active {
+  background: rgba(128, 128, 128, 0.18);
+}
+
+.wl-sub {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.wl-empty {
+  padding: 12px;
+  opacity: 0.6;
+}
+
+.wl-main {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.wl-group {
+  border-bottom: 1px solid var(--border, rgba(128, 128, 128, 0.25));
+  padding: 10px 12px;
+}
+
+.wl-group-head {
+  margin-bottom: 8px;
+}
+
+.wl-group-name {
+  font-weight: 500;
+  margin-right: 8px;
+}
+
+.wl-session {
+  border: 1px solid var(--border, rgba(128, 128, 128, 0.3));
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.wl-session-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wl-prompts {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.wl-prompt {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 2px 0;
+  overflow: hidden;
+}
+
+.wl-time {
+  margin-right: 8px;
+}
+
+.wl-prompt-text {
+  white-space: pre-wrap;
+}
+
+.wl-prompt:not(.open) .wl-prompt-text {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -785,6 +785,7 @@ ipcMain.handle("shell:get-view-config", () => {
     tileList: { src: getRendererURL("tile-list"), preload },
     todos: { src: getRendererURL("todos"), preload },
     templates: { src: getRendererURL("templates"), preload },
+    worklog: { src: getRendererURL("worklog"), preload },
   };
 });
 

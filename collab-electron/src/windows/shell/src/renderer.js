@@ -183,6 +183,7 @@ async function init() {
   const panelNav = document.getElementById("panel-nav");
   const panelViewer = document.getElementById("panel-viewer");
   const panelTemplates = document.getElementById("panel-templates");
+  const panelWorklog = document.getElementById("panel-worklog");
   const navResizeHandle = document.getElementById("nav-resize");
   const navToggle = document.getElementById("nav-toggle");
   const settingsOverlay = document.getElementById("settings-overlay");
@@ -320,6 +321,7 @@ async function init() {
 
   function openTemplatesView() {
     // 先显示面板再创建 webview:在 display:none 容器里创建的 guest 不会合成
+    if (isWorklogVisible()) hideWorklogView();
     panelViewer.style.display = "none";
     panelTemplates.style.display = "flex";
     const v = ensureTemplatesView();
@@ -334,6 +336,65 @@ async function init() {
     hideTemplatesView();
     if (viewerInstance) {
       // 文件仍处于选中态:恢复查看器
+      focusSurface("viewer");
+    } else {
+      focusSurface();
+    }
+  }
+
+  // -- Embedded worklog view (lazily created on first open) --
+
+  let worklogInstance = null;
+
+  function ensureWorklogView() {
+    if (worklogInstance) return worklogInstance;
+    worklogInstance = createWebview(
+      "工作记录",
+      configs.worklog,
+      panelWorklog,
+      handleDndMessage,
+      "worklog",
+    );
+    worklogInstance.webview.addEventListener("focus", () => {
+      noteSurfaceFocus("worklog");
+    });
+    return worklogInstance;
+  }
+
+  function isWorklogVisible() {
+    return getComputedStyle(panelWorklog).display !== "none";
+  }
+
+  function hideWorklogView() {
+    if (!isWorklogVisible()) return;
+    worklogInstance?.webview.blur();
+    panelWorklog.style.display = "none";
+    panelViewer.style.display = "";
+    destroyWorklogView();
+  }
+
+  function destroyWorklogView() {
+    if (!worklogInstance) return;
+    worklogInstance.webview.remove();
+    worklogInstance = null;
+  }
+
+  function openWorklogView() {
+    // 先显示面板再创建 webview:在 display:none 容器里创建的 guest 不会合成
+    if (isTemplatesVisible()) hideTemplatesView();
+    panelViewer.style.display = "none";
+    panelWorklog.style.display = "flex";
+    const v = ensureWorklogView();
+    requestAnimationFrame(() => {
+      v.webview.focus();
+      noteSurfaceFocus("worklog");
+    });
+  }
+
+  function closeWorklogView() {
+    if (!isWorklogVisible()) return;
+    hideWorklogView();
+    if (viewerInstance) {
       focusSurface("viewer");
     } else {
       focusSurface();
@@ -504,6 +565,16 @@ async function init() {
   templatesBtn?.addEventListener("click", () => {
     if (isTemplatesVisible()) closeTemplatesView();
     else openTemplatesView();
+  });
+
+  const worklogBtn = document.getElementById("worklog-btn");
+  if (IS_REMOTE_APP) {
+    // 工作记录是 Host 本地功能,镜像端不提供入口
+    worklogBtn?.style.setProperty("display", "none");
+  }
+  worklogBtn?.addEventListener("click", () => {
+    if (isWorklogVisible()) closeWorklogView();
+    else openWorklogView();
   });
 
   const workspaceManager = createWorkspaceManager({
@@ -872,11 +943,15 @@ async function init() {
     if (surface === "templates" && !isTemplatesVisible()) {
       surface = null;
     }
+    if (surface === "worklog" && !isWorklogVisible()) {
+      surface = null;
+    }
     if (surface === "nav" && !panelManager.isVisible()) {
       surface = null;
     }
     if (surface === "viewer") return "viewer";
     if (surface === "templates") return "templates";
+    if (surface === "worklog") return "worklog";
     if (surface === "nav") return "nav";
     if (panelManager.isVisible()) return "nav";
     if (isViewerVisible()) return "viewer";
@@ -930,6 +1005,11 @@ async function init() {
         noteSurfaceFocus("templates");
         return;
       }
+      if (resolved === "worklog" && isWorklogVisible()) {
+        worklogInstance.webview.focus();
+        noteSurfaceFocus("worklog");
+        return;
+      }
       canvasEl.focus();
       noteSurfaceFocus("canvas");
     });
@@ -946,6 +1026,7 @@ async function init() {
     navToggle.blur();
     if (viewerInstance) viewerInstance.webview.blur();
     if (templatesInstance) templatesInstance.webview.blur();
+    if (worklogInstance) worklogInstance.webview.blur();
     workspaceManager.getNavWebview().webview.blur();
   }
 
@@ -1889,6 +1970,14 @@ async function init() {
       // 视图未打开时丢弃(reveal / mounts-changed / pref:changed 等)
       if (!templatesInstance) return;
       templatesInstance.send(channel, ...args);
+    } else if (target === "worklog") {
+      if (channel === "worklog:close") {
+        closeWorklogView();
+        return;
+      }
+      // 视图未打开时丢弃
+      if (!worklogInstance) return;
+      worklogInstance.send(channel, ...args);
     } else if (target === "canvas") {
       if (channel === "open-terminal") {
         openTerminalAt(args[0]);

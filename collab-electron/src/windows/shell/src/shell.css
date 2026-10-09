@@ -175,6 +175,22 @@ body.platform-win {
   position: relative;
 }
 
+/* 工作记录视图：与模板视图同构的主区域视图 */
+#panel-worklog {
+  display: none;
+  flex: 1 1 0;
+  min-width: 200px;
+  overflow: hidden;
+  position: relative;
+  padding-top: var(--toolbar-height);
+  background: rgb(var(--bg-rgb));
+}
+
+#panel-worklog webview {
+  flex: 1;
+  position: relative;
+}
+
 #grid-canvas {
   position: absolute;
   inset: 0;

@@ -348,6 +348,13 @@ contextBridge.exposeInMainWorld("api", {
     };
   },
   templatesCloseView: () => ipcRenderer.send("templates:close-view"),
+
+  // -- worklog --
+  worklogDays: () => ipcRenderer.invoke("worklog:days"),
+  worklogDay: (date: string) => ipcRenderer.invoke("worklog:day", date),
+  worklogResume: (params: { sessionId: string; cwd: string }) =>
+    ipcRenderer.send("worklog:resume", params),
+  worklogCloseView: () => ipcRenderer.send("worklog:close-view"),
   onTemplatesMountsChanged: (cb: () => void) => {
     const handler = () => cb();
     ipcRenderer.on("templates:mounts-changed", handler);
