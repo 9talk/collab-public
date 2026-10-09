@@ -585,6 +585,16 @@ export function createTileManager({
             onTerminalCwdChanged(cwd);
           }
         }
+        if (tile._pendingResume && !tile._resumeSent && tile.ptySessionId) {
+          // worklog 恢复:login shell 首个 OSC7 上报 = rc 完成/prompt 就绪,
+          // 此刻写入 resume 命令不会在 rc 期间被吞。
+          tile._resumeSent = true;
+          try {
+            window.shellApi.ptyWrite(tile.ptySessionId, tile._pendingResume);
+          } catch {
+            /* noop */
+          }
+        }
       }
       if (event.channel === "term:refreshed") {
         clearRefreshMask(tileDOMs.get(tile.id), tile);

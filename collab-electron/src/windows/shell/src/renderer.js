@@ -401,6 +401,41 @@ async function init() {
     }
   }
 
+  /**
+   * 从工作记录恢复一个 Claude Code 会话:新建 terminal tile(cwd 定为记录
+   * 目录), 待 login shell 首个 cwd 上报(OSC7, 即 rc 完成)后写入
+   * `clc --resume <sessionId>`。无 OSC7 的 shell 由 5s 兜底触发。
+   * 与 openTerminalAt 不同: 不查已有同 cwd tile —— 恢复语义是新建。
+   */
+  function handleWorklogResume(payload) {
+    const sessionId = payload?.sessionId;
+    const cwd = typeof payload?.cwd === "string" ? payload.cwd : "";
+    if (!sessionId || typeof sessionId !== "string") return;
+    closeWorklogView();
+    const size = defaultSize("term");
+    const pos = findAutoPlacementForTerminal(cwd, size);
+    const tile = tileManager.createCanvasTile("term", pos.x, pos.y, {
+      cwd,
+      ...size,
+    });
+    tile._pendingResume = `clc --resume ${sessionId}\r`;
+    tileManager.spawnTerminalWebview(tile, true);
+    tileManager.saveCanvasImmediate();
+    minimap.update();
+    edgeIndicators.panToTile(tile);
+    // 兜底: 非 zsh/OSC7 未注入/上报丢失时, 5s 后仍写入
+    setTimeout(() => {
+      if (tile._pendingResume && !tile._resumeSent && tile.ptySessionId) {
+        tile._resumeSent = true;
+        try {
+          window.shellApi.ptyWrite(tile.ptySessionId, tile._pendingResume);
+        } catch {
+          /* noop */
+        }
+      }
+    }, 5000);
+  }
+
   // -- Singleton webviews (settings only; lazily created by onSettingsToggle) --
 
   const singletonWebviews = {};
@@ -1806,6 +1841,10 @@ async function init() {
 
   window.shellApi.onForwardToWebview((target, channel, ...args) => {
     if (target === "shell") {
+      if (channel === "worklog:resume") {
+        handleWorklogResume(args[0]);
+        return;
+      }
       if (channel === "remote:resynced") {
         // 连接/重连全量同步后：重读视觉类 pref 与 Host 对齐。
         // theme 已由主进程同步到 nativeTheme（prefers-color-scheme 自动随动）。
