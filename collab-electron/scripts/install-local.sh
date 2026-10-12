@@ -6,6 +6,11 @@
 # The script first QUITS any running instances (otherwise the replaced apps
 # keep running old code and hold single-instance locks / debug ports), then
 # builds, replaces and re-launches both apps. No need to quit manually.
+#
+# Both apps are signed with a stable, locally-trusted self-signed certificate
+# (scripts/ensure-dev-signing-cert.sh, created on first use) so macOS TCC
+# grants (screen recording, etc.) survive rebuilds. Ad-hoc signatures are
+# pinned to the CDHash, which changes every build and silently drops grants.
 # Usage:
 #   ./scripts/install-local.sh                         # auto-detect arch, removes old apps, cleans dists
 #   ./scripts/install-local.sh --keep                  # keeps old apps and dists
@@ -49,6 +54,18 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 BUILD_TIME="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 echo "Build time: $BUILD_TIME"
+
+# 确保本地开发签名证书存在：ad-hoc 签名应用的 TCC 授权绑定 CDHash，每次重建
+# 即失效（屏幕录制等需要重新授权）；改用固定证书签名后授权跨重建保留。
+# 证书创建失败时回退 ad-hoc 签名（并警告重启后授权会丢失）。
+DEV_SIGN_IDENTITY="Collaborator Local Dev"
+SIGN_ARGS=()
+if "$PROJECT_DIR/scripts/ensure-dev-signing-cert.sh"; then
+  SIGN_ARGS=(--sign-identity "$DEV_SIGN_IDENTITY")
+else
+  echo "WARN: dev signing identity unavailable — falling back to ad-hoc signing." >&2
+  echo "WARN: macOS permissions (screen recording, etc.) will reset on every rebuild." >&2
+fi
 
 # Step 0: 真实退出运行中的双应用。替换 app 包后仍在运行的旧进程会继续用
 # 旧代码(新版本无法生效),并持有单实例锁/调试端口 —— 必须先真正退出。
@@ -100,9 +117,10 @@ install_flavor() {
   echo "=== [$FLAVOR] $APP_NAME ==="
 
   # Step 2: Build + package with China-friendly electron mirror
+  # (${SIGN_ARGS[@]+...} keeps bash 3.2 + set -u happy when the array is empty)
   echo "Building and packaging..."
   ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" \
-    bun run --cwd "$PROJECT_DIR" "$PACKAGE_CMD" -- --arch "$ARCH" --no-zip
+    bun run --cwd "$PROJECT_DIR" "$PACKAGE_CMD" -- --arch "$ARCH" --no-zip ${SIGN_ARGS[@]+"${SIGN_ARGS[@]}"}
 
   # Step 3: Replace the installed app
   echo "Installing to /Applications..."

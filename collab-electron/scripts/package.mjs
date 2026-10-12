@@ -24,6 +24,19 @@ if (flavor === "remote") {
   builderArgs.push("-c", "electron-builder.remote.yml");
 }
 
+// Dev signing identity (only meaningful together with --no-sign): sign the
+// app with a stable, locally-trusted certificate instead of ad-hoc. macOS
+// TCC pins ad-hoc signatures to the CDHash, which changes on every rebuild
+// and silently invalidates previously granted permissions (screen recording).
+let signIdentity = null;
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === "--sign-identity") {
+    signIdentity = args[i + 1];
+    args.splice(i, 2);
+    break;
+  }
+}
+
 // Load .env.local (same approach as notarize.cjs) so GH_TOKEN and other
 // credentials are available without requiring a manual export.
 const envLocalPath = join(cwd, ".env.local");
@@ -54,9 +67,7 @@ const shouldPublish = args.includes("--publish");
 // on all platforms instead.
 
 if (args.includes("--no-sign")) {
-  env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
   env.SKIP_NOTARIZE = "true";
-  builderArgs.push("-c.mac.identity=null");
   builderArgs.push("-c.win.signAndEditExecutable=false");
 
   for (const key of [
@@ -67,6 +78,33 @@ if (args.includes("--no-sign")) {
     "WIN_CSC_KEY_PASSWORD",
   ]) {
     delete env[key];
+  }
+
+  if (signIdentity) {
+    if (process.platform === "darwin") {
+      const found =
+        spawnSync("security", ["find-identity", "-v", "-p", "codesigning"], {
+          encoding: "utf8",
+        }).stdout ?? "";
+      if (!found.includes(signIdentity)) {
+        console.error(`Signing identity not found: ${signIdentity}`);
+        console.error(
+          "Run scripts/ensure-dev-signing-cert.sh to create the dev identity.",
+        );
+        process.exit(1);
+      }
+    }
+    // Self-signed certs have no Team ID: with hardened runtime enabled,
+    // library validation rejects loading the Electron Framework
+    // ("different Team IDs") and the app aborts at launch (dyld). Hardened
+    // runtime matters for notarized distribution, not local dev, and TCC
+    // grant stability does not depend on it.
+    builderArgs.push("-c.mac.hardenedRuntime=false");
+    env.CSC_IDENTITY_AUTO_DISCOVERY = "true";
+    env.CSC_NAME = signIdentity;
+  } else {
+    env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
+    builderArgs.push("-c.mac.identity=null");
   }
 }
 

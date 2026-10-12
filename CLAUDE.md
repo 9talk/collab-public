@@ -51,13 +51,15 @@ This script handles:
 
 * Setting `ELECTRON_MIRROR` to npmmirror.com (China-friendly)
 
-* Running `bun run package:unsigned` (builds + packages, skips code signing)
+* Running `bun run package:unsigned` with `--sign-identity "Collaborator Local Dev"` — signs with a locally-trusted self-signed certificate (notarization still skipped)
 
 * Replacing `/Applications/Collaborator.app` with the new build
 
 * Opening the app
 
 Use this for every local rebuild + install. Do NOT manually copy from `dist/` unless the script fails.
+
+**Why a signing certificate:** ad-hoc signed apps pin macOS TCC grants (screen recording, etc.) to the CDHash, which changes on every rebuild — macOS then treats each reinstall as a brand-new app and re-prompts for permissions. A stable certificate changes the grant's designated requirement to "bundle id + certificate fingerprint", which survives rebuilds. The identity is created on first use by `scripts/ensure-dev-signing-cert.sh` (idempotent, macOS-only, lives in the login keychain); if it's unavailable the build falls back to ad-hoc signing and permissions reset on every rebuild. Switching from ad-hoc to the certificate prompts for re-authorization one final time.
 
 ## Settings i18n
 
