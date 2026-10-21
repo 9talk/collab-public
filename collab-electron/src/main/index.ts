@@ -1023,6 +1023,8 @@ for (const channel of [
   "pty:create",
   "pty:write",
   "pty:send-raw-keys",
+  "pty:ack",
+  "pty:detach",
   "pty:resize",
   "pty:kill",
   "pty:reconnect",

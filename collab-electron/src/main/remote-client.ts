@@ -384,6 +384,7 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
           nonce,
           clientNonce,
           signature,
+          features: ["ptyAck"],
         }),
       );
       break;

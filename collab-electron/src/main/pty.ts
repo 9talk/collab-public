@@ -126,7 +126,8 @@ const sessionRunningState = new Map<string, boolean>();
 // Remote-control consumers (registered by remote-server.ts when the host
 // remote mode is active). null = no remote consumer, zero overhead.
 export interface PtyRemoteConsumers {
-  onData: (sessionId: string, data: string) => void;
+  /** 返回实际发给远端的字符数；未发送/未认证返回 0 */
+  onData: (sessionId: string, data: string) => number;
   onExit: (payload: { sessionId: string; exitCode: number }) => void;
   onStatusChanged: (payload: { sessionId: string; foreground: string }) => void;
   /** OSC 9;4 运行态变化 → 镜像端同步 tile 指示条。 */
@@ -311,7 +312,10 @@ function processPtyData(sessionId: string, data: Buffer): void {
     );
   }
 
-  remotePtyConsumers?.onData(sessionId, enriched);
+  const remoteChars = remotePtyConsumers?.onData(sessionId, enriched) ?? 0;
+  if (remoteChars > 0) {
+    ptyFlowController.noteSent(sessionId, REMOTE_PTY_CONSUMER, remoteChars);
+  }
   const sentTo = sendToSenders(sessionId, "pty:data", {
     sessionId,
     data: enriched,
@@ -853,6 +857,22 @@ export function detachSessionSender(
   senderWebContentsId: number,
 ): void {
   removeSessionSender(sessionId, senderWebContentsId);
+}
+
+export function attachRemotePtyConsumer(sessionId: string): void {
+  ptyFlowController.attachConsumer(sessionId, REMOTE_PTY_CONSUMER);
+}
+
+export function detachRemotePtyConsumer(sessionId: string): void {
+  ptyFlowController.detachConsumer(sessionId, REMOTE_PTY_CONSUMER);
+}
+
+export function detachRemotePtyConsumers(): void {
+  ptyFlowController.detachConsumerFromAllSessions(REMOTE_PTY_CONSUMER);
+}
+
+export function ackRemotePty(sessionId: string, charCount: number): void {
+  ptyFlowController.ack(sessionId, REMOTE_PTY_CONSUMER, charCount);
 }
 
 export function sendRawKeys(sessionId: string, data: string): void {

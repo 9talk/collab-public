@@ -129,6 +129,8 @@ let peerInfo: RemoteHostStatus["peer"];
 let lastError: string | undefined;
 // 双向签名验证通过前不转发任何业务数据(握手帧除外)
 let peerVerified = false;
+// 客户端在 peer-auth-response 中声明的可选能力
+let peerFeatures = new Set<string>();
 // 身份密钥:host 启用时加载/生成,长期不变,重签不换
 let hostKeys: HostKeys | null = null;
 let authNonce: string | null = null; // 进行中的 client 挑战
@@ -222,9 +224,9 @@ export function broadcastRemotePtyOpened(payload: {
 // OSC 52 可被任意 PTY chunk 切分, 需按 session 缓存半截前缀跨 chunk 重组。
 const osc52Pending = new Map<string, string>(); // sessionId -> 未闭合的 \x1b]52 前缀
 
-function pushPtyData(sessionId: string, data: string): void {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  if (!peerVerified) return; // 握手完成前不泄漏任何业务数据
+function pushPtyData(sessionId: string, data: string): number {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return 0;
+  if (!peerVerified) return 0; // 握手完成前不泄漏任何业务数据
   const prev = osc52Pending.get(sessionId) ?? "";
   const { rest, copies, pending } = extractOsc52(prev, data);
   if (pending) osc52Pending.set(sessionId, pending);
@@ -232,8 +234,9 @@ function pushPtyData(sessionId: string, data: string): void {
   for (const text of copies) {
     if (text.length > 0) pushEvent("clipboard:copy", [text], "host");
   }
-  if (rest.length === 0) return;
+  if (rest.length === 0) return 0;
   ws.send(encodePtyBinary(sessionId, Buffer.from(rest, "utf-8")));
+  return rest.length;
 }
 
 function registerRemoteMethods(config: AppConfig): MethodTable {
@@ -494,6 +497,9 @@ function registerRemoteMethods(config: AppConfig): MethodTable {
     // 广播标注 origin=client：B 端据 origin 丢弃自身回声(本地已建 tile)，
     // 不再依赖 tileId 幂等去重；A 端本地分发照常建镜像。
     if (result?.sessionId) {
+      if (peerFeatures.has("ptyAck")) {
+        pty.attachRemotePtyConsumer(result.sessionId);
+      }
       forwardToWebviewOrigin("client", "shell", "remote:pty-opened", {
         tileId: p?.tileId,
         sessionId: result.sessionId,
@@ -527,13 +533,30 @@ function registerRemoteMethods(config: AppConfig): MethodTable {
   });
   t.register("pty:kill", (params) => {
     const [{ sessionId }] = params as [{ sessionId: string }];
+    pty.detachRemotePtyConsumer(sessionId);
     return pty.killSession(sessionId);
   });
-  t.register("pty:reconnect", (params) => {
+  t.register("pty:reconnect", async (params) => {
     const [{ sessionId, cols, rows }] = params as [
       { sessionId: string; cols: number; rows: number },
     ];
-    return pty.reconnectSession(sessionId, cols, rows, undefined);
+    const result = await pty.reconnectSession(sessionId, cols, rows, undefined);
+    if (peerFeatures.has("ptyAck")) {
+      pty.attachRemotePtyConsumer(sessionId);
+    }
+    return result;
+  });
+  t.register("pty:ack", (params) => {
+    const [{ sessionId, charCount }] = params as [
+      { sessionId: string; charCount: number },
+    ];
+    pty.ackRemotePty(sessionId, charCount);
+    return true;
+  });
+  t.register("pty:detach", (params) => {
+    const [{ sessionId }] = params as [{ sessionId: string }];
+    pty.detachRemotePtyConsumer(sessionId);
+    return true;
   });
   t.register("pty:discover", () => pty.discoverSessions());
   t.register("pty:read-meta", (params) =>
@@ -781,7 +804,10 @@ function registerRemoteMethods(config: AppConfig): MethodTable {
 function attachHooks(): void {
   setRemotePtyConsumers({
     onData: (sessionId, data) => pushPtyData(sessionId, data),
-    onExit: (payload) => pushEvent("pty:exit", [payload]),
+    onExit: (payload) => {
+      pty.detachRemotePtyConsumer(payload.sessionId);
+      pushEvent("pty:exit", [payload]);
+    },
     onStatusChanged: (payload) => pushEvent("pty:status-changed", [payload]),
     onProgressChanged: (payload) =>
       pushEvent("pty:progress-changed", [payload]),
@@ -860,6 +886,8 @@ function sendToPeer(payload: Record<string, unknown>): void {
 function rejectPeerAuth(code: "unauthorized"): void {
   clearAuthTimer();
   peerVerified = false;
+  peerFeatures = new Set();
+  pty.detachRemotePtyConsumers();
   sendToPeer({
     v: 1,
     type: "peer-auth-error",
@@ -887,6 +915,7 @@ function beginPeerAuth(): void {
     return;
   }
   peerVerified = false;
+  peerFeatures = new Set();
   authNonce = newNonce();
   console.log("[remote] challenging client");
   sendToPeer({ v: 1, type: "peer-auth-request", nonce: authNonce });
@@ -965,6 +994,12 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
         rejectPeerAuth("unauthorized");
         break;
       }
+      const features = frame.features;
+      peerFeatures = new Set(
+        Array.isArray(features)
+          ? features.filter((f): f is string => typeof f === "string")
+          : [],
+      );
       peerVerified = true;
       clearAuthTimer();
       console.log("[remote] client verified");
@@ -982,6 +1017,8 @@ function handleFrame(frame: { type: string; [key: string]: unknown }): void {
       peerConnected = false;
       peerInfo = undefined;
       peerVerified = false;
+      peerFeatures = new Set();
+      pty.detachRemotePtyConsumers();
       clearAuthTimer();
       console.log(
         `[remote] peer-disconnected reason=${frame.reason as string}`,
@@ -1091,6 +1128,8 @@ function connectOnce(): void {
     peerConnected = false;
     peerInfo = undefined;
     peerVerified = false;
+    peerFeatures = new Set();
+    pty.detachRemotePtyConsumers();
     clearAuthTimer();
     console.log("[remote] disconnected");
     emitStatus();
@@ -1117,6 +1156,7 @@ export async function startRemoteHost(o: HostOptions): Promise<void> {
   peerConnected = false;
   peerInfo = undefined;
   peerVerified = false;
+  peerFeatures = new Set();
   clearAuthTimer();
   lastError = undefined;
   table = registerRemoteMethods(o.config);
