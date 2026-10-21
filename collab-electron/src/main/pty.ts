@@ -23,6 +23,7 @@ import { COLLAB_DIR } from "./paths";
 import { resolveTerminalTarget } from "./terminal-target";
 import { countTrailingIncompleteUtf8Bytes } from "./utf8";
 import { PtyDataBatcher } from "./pty-data-batcher";
+import { PtyFlowController } from "./pty-flow-control";
 
 let shuttingDown = false;
 
@@ -48,7 +49,13 @@ function addSessionSender(
     set = new Set();
     sessionSenders.set(sessionId, set);
   }
+  if (set.has(senderId)) return;
   set.add(senderId);
+  ptyFlowController.attachConsumer(sessionId, localPtyConsumer(senderId));
+  const wc = getWebContents()?.fromId(senderId);
+  wc?.once("destroyed", () => {
+    removeSessionSender(sessionId, senderId);
+  });
 }
 
 function removeSessionSender(
@@ -58,11 +65,14 @@ function removeSessionSender(
   if (senderId == null) return;
   const set = sessionSenders.get(sessionId);
   if (!set) return;
-  set.delete(senderId);
+  if (set.delete(senderId)) {
+    ptyFlowController.detachConsumer(sessionId, localPtyConsumer(senderId));
+  }
   if (set.size === 0) sessionSenders.delete(sessionId);
 }
 
 function clearSessionSenders(sessionId: string): void {
+  ptyFlowController.clearSession(sessionId);
   sessionSenders.delete(sessionId);
 }
 
@@ -70,12 +80,14 @@ function sendToSenders(
   sessionId: string,
   channel: string,
   payload: unknown,
-): void {
+): number[] {
+  const sent: number[] = [];
   const set = sessionSenders.get(sessionId);
-  if (!set) return;
+  if (!set) return sent;
   for (const id of [...set]) {
-    sendToSender(id, channel, payload);
+    if (sendToSender(id, channel, payload)) sent.push(id);
   }
+  return sent;
 }
 
 /**
@@ -135,6 +147,31 @@ const ptyDataBatcher = new PtyDataBatcher({
   onFlush: processPtyData,
 });
 
+const REMOTE_PTY_CONSUMER = "remote";
+
+function localPtyConsumer(webContentsId: number): string {
+  return `local:${webContentsId}`;
+}
+
+const ptyFlowController = new PtyFlowController({
+  pause: (sessionId) => {
+    console.log(`[pty:flow] pause ${sessionId.slice(0, 8)}`);
+    void getSidecarClient()
+      .pauseSession(sessionId)
+      .catch((err) => {
+        console.log(`[pty:flow] pause failed: ${String(err)}`);
+      });
+  },
+  resume: (sessionId) => {
+    console.log(`[pty:flow] resume ${sessionId.slice(0, 8)}`);
+    void getSidecarClient()
+      .resumeSession(sessionId)
+      .catch((err) => {
+        console.log(`[pty:flow] resume failed: ${String(err)}`);
+      });
+  },
+});
+
 export function setRemotePtyConsumers(
   consumers: PtyRemoteConsumers | null,
 ): void {
@@ -162,18 +199,19 @@ function sendToSender(
   senderWebContentsId: number | undefined,
   channel: string,
   payload: unknown,
-): void {
-  if (senderWebContentsId == null) return;
+): boolean {
+  if (senderWebContentsId == null) return false;
   const wc = getWebContents();
-  if (!wc) return;
+  if (!wc) return false;
   const sender = wc.fromId(senderWebContentsId);
-  if (sender && !sender.isDestroyed()) {
-    try {
-      sender.send(channel, payload);
-    } catch {
-      // 渲染 frame 已处置（webview 被省内存回收或渲染进程崩溃）时
-      // 静默跳过，避免主进程日志被刷屏。
-    }
+  if (!sender || sender.isDestroyed()) return false;
+  try {
+    sender.send(channel, payload);
+    return true;
+  } catch {
+    // 渲染 frame 已处置（webview 被省内存回收或渲染进程崩溃）时
+    // 静默跳过，避免主进程日志被刷屏。
+    return false;
   }
 }
 
@@ -274,10 +312,17 @@ function processPtyData(sessionId: string, data: Buffer): void {
   }
 
   remotePtyConsumers?.onData(sessionId, enriched);
-  sendToSenders(sessionId, "pty:data", {
+  const sentTo = sendToSenders(sessionId, "pty:data", {
     sessionId,
     data: enriched,
   });
+  for (const senderId of sentTo) {
+    ptyFlowController.noteSent(
+      sessionId,
+      localPtyConsumer(senderId),
+      enriched.length,
+    );
+  }
   scheduleForegroundCheck(sessionId);
 }
 
@@ -783,10 +828,31 @@ export async function reconnectSession(
 }
 
 export function writeToSession(sessionId: string, data: string): void {
+  ptyDataBatcher.flush(sessionId);
+  ptyDataBatcher.markFastPath(sessionId);
   const dataSock = dataSockets.get(sessionId);
   if (dataSock && !dataSock.destroyed) {
     dataSock.write(data);
   }
+}
+
+export function ackLocalPty(
+  sessionId: string,
+  senderWebContentsId: number,
+  charCount: number,
+): void {
+  ptyFlowController.ack(
+    sessionId,
+    localPtyConsumer(senderWebContentsId),
+    charCount,
+  );
+}
+
+export function detachSessionSender(
+  sessionId: string,
+  senderWebContentsId: number,
+): void {
+  removeSessionSender(sessionId, senderWebContentsId);
 }
 
 export function sendRawKeys(sessionId: string, data: string): void {

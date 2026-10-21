@@ -312,6 +312,12 @@ contextBridge.exposeInMainWorld("api", {
   ptyWrite: (sessionId: string, data: string) => {
     ipcRenderer.send("pty:write", { sessionId, data });
   },
+  ptyAck: (sessionId: string, charCount: number) => {
+    ipcRenderer.send("pty:ack", { sessionId, charCount });
+  },
+  ptyDetach: (sessionId: string) => {
+    ipcRenderer.send("pty:detach", { sessionId });
+  },
   ptySendRawKeys: (sessionId: string, data: string) => {
     ipcRenderer.send("pty:send-raw-keys", { sessionId, data });
   },

@@ -770,7 +770,9 @@ function TerminalTab({
         );
       }
 
-      term.write(text);
+      term.write(text, () => {
+        window.api.ptyAck(sessionId, text.length);
+      });
       // Claude Code 全屏(alternate screen)时跳过立即重绘:其滚动由 Claude Code
       // 的 DECSTBM 补丁驱动,走 WebGL 增量渲染即可;滚动高峰重绘会放大卡顿。
       // normal 主屏立即标脏全视口重绘以防高刷屏 ghosting —— 用 refresh 而非
@@ -992,6 +994,7 @@ function TerminalTab({
       container.removeEventListener("dragover", handleDragOver);
       container.removeEventListener("drop", handleDrop);
       writePtyTextRef.current = null;
+      window.api.ptyDetach(sessionId);
       window.api.offPtyData(sessionId, handleData);
       offPrefChanged();
       offShellBlur();

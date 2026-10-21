@@ -909,6 +909,21 @@ bindIpc(
   },
 );
 
+bindIpc(
+  "pty:ack",
+  "on",
+  (
+    event,
+    { sessionId, charCount }: { sessionId: string; charCount: number },
+  ) => {
+    pty.ackLocalPty(sessionId, event.sender.id, charCount);
+  },
+);
+
+bindIpc("pty:detach", "on", (event, { sessionId }: { sessionId: string }) => {
+  pty.detachSessionSender(sessionId, event.sender.id);
+});
+
 function handlePtySendRawKeys(sessionId: string, data: string): void {
   pty.sendRawKeys(sessionId, data);
 }
