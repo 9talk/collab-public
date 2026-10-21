@@ -22,6 +22,7 @@ import { SIDECAR_SOCKET_PATH, SIDECAR_PID_PATH } from "./sidecar/protocol";
 import { COLLAB_DIR } from "./paths";
 import { resolveTerminalTarget } from "./terminal-target";
 import { countTrailingIncompleteUtf8Bytes } from "./utf8";
+import { PtyDataBatcher } from "./pty-data-batcher";
 
 let shuttingDown = false;
 
@@ -82,8 +83,8 @@ function sendToSenders(
  */
 const sidecarSessionIds = new Set<string>();
 const sidecarPowerShellSessionIds = new Set<string>();
-const pendingPtyData = new Map<string, Buffer[]>();
-const pendingPtyDataTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const PTY_DATA_FLUSH_MS = 5;
+const PTY_DATA_MAX_BATCH_BYTES = 32 * 1024;
 const WINDOWS_POWERSHELL_PTY_BATCH_MS = 16;
 
 /**
@@ -127,6 +128,12 @@ export interface PtyRemoteConsumers {
 }
 
 let remotePtyConsumers: PtyRemoteConsumers | null = null;
+
+const ptyDataBatcher = new PtyDataBatcher({
+  flushMs: PTY_DATA_FLUSH_MS,
+  maxBytes: PTY_DATA_MAX_BATCH_BYTES,
+  onFlush: processPtyData,
+});
 
 export function setRemotePtyConsumers(
   consumers: PtyRemoteConsumers | null,
@@ -177,35 +184,11 @@ function shouldBatchWindowsPowerShellOutput(sessionId: string): boolean {
 }
 
 function clearPendingPtyData(sessionId: string): void {
-  const timer = pendingPtyDataTimers.get(sessionId);
-  if (timer) {
-    clearTimeout(timer);
-    pendingPtyDataTimers.delete(sessionId);
-  }
-  pendingPtyData.delete(sessionId);
+  ptyDataBatcher.clear(sessionId);
   trailingUtf8Bytes.delete(sessionId);
   queryScanBuffers.delete(sessionId);
   progressScanPending.delete(sessionId);
   sessionRunningState.delete(sessionId);
-}
-
-function flushPendingPtyData(
-  sessionId: string,
-  senderWebContentsId: number | undefined,
-): void {
-  pendingPtyDataTimers.delete(sessionId);
-  const chunks = pendingPtyData.get(sessionId);
-  if (!chunks || chunks.length === 0) return;
-  pendingPtyData.delete(sessionId);
-
-  const data = chunks.length === 1 ? chunks[0]! : Buffer.concat(chunks);
-  const text = data.toString("utf-8");
-  remotePtyConsumers?.onData(sessionId, text);
-  sendToSenders(sessionId, "pty:data", {
-    sessionId,
-    data: text,
-  });
-  scheduleForegroundCheck(sessionId);
 }
 
 function respondToHostQueries(sessionId: string, text: string): void {
@@ -244,11 +227,7 @@ function trackTerminalProgress(sessionId: string, text: string): void {
   }
 }
 
-function forwardPtyData(
-  sessionId: string,
-  senderWebContentsId: number | undefined,
-  data: Buffer,
-): void {
+function processPtyData(sessionId: string, data: Buffer): void {
   // Prepend any incomplete UTF-8 bytes leftover from the previous chunk.
   const leftover = trailingUtf8Bytes.get(sessionId);
   const full = leftover ? Buffer.concat([leftover, data]) : data;
@@ -294,28 +273,26 @@ function forwardPtyData(
     );
   }
 
-  if (!shouldBatchWindowsPowerShellOutput(sessionId)) {
-    remotePtyConsumers?.onData(sessionId, enriched);
-    sendToSenders(sessionId, "pty:data", {
-      sessionId,
-      data: enriched,
-    });
-    scheduleForegroundCheck(sessionId);
-    return;
-  }
+  remotePtyConsumers?.onData(sessionId, enriched);
+  sendToSenders(sessionId, "pty:data", {
+    sessionId,
+    data: enriched,
+  });
+  scheduleForegroundCheck(sessionId);
+}
 
-  const queued = pendingPtyData.get(sessionId) ?? [];
-  queued.push(Buffer.from(enriched, "utf-8"));
-  pendingPtyData.set(sessionId, queued);
-  if (!pendingPtyDataTimers.has(sessionId)) {
-    pendingPtyDataTimers.set(
-      sessionId,
-      setTimeout(
-        () => flushPendingPtyData(sessionId, senderWebContentsId),
-        WINDOWS_POWERSHELL_PTY_BATCH_MS,
-      ),
-    );
-  }
+function forwardPtyData(sessionId: string, data: Buffer): void {
+  ptyDataBatcher.push(
+    sessionId,
+    data,
+    shouldBatchWindowsPowerShellOutput(sessionId)
+      ? WINDOWS_POWERSHELL_PTY_BATCH_MS
+      : undefined,
+  );
+}
+
+export function flushPtyData(sessionId: string): void {
+  ptyDataBatcher.flush(sessionId);
 }
 
 /**
@@ -428,6 +405,7 @@ async function doEnsureSidecar(): Promise<void> {
           sessionId: string;
           exitCode: number;
         };
+        flushPtyData(sessionId);
         clearPendingPtyData(sessionId);
         dataSockets.get(sessionId)?.destroy();
         dataSockets.delete(sessionId);
@@ -667,7 +645,7 @@ export async function createSession(
   const { sessionId, socketPath } = await client.createSession(createParams);
 
   const dataSock = await client.attachDataSocket(socketPath, (data) => {
-    forwardPtyData(sessionId, senderWebContentsId, data);
+    forwardPtyData(sessionId, data);
   });
   dataSockets.set(sessionId, dataSock);
   addSessionSender(sessionId, senderWebContentsId);
@@ -775,8 +753,9 @@ export async function reconnectSession(
     );
   }
 
+  ptyDataBatcher.clear(sessionId);
   const dataSock = await client.attachDataSocket(socketPath, (data) => {
-    forwardPtyData(sessionId, senderWebContentsId, data);
+    forwardPtyData(sessionId, data);
   });
 
   dataSockets.get(sessionId)?.destroy();
@@ -863,9 +842,7 @@ export function killAll(): void {
   dataSockets.clear();
   sidecarSessionIds.clear();
   sidecarPowerShellSessionIds.clear();
-  for (const sessionId of pendingPtyDataTimers.keys()) {
-    clearPendingPtyData(sessionId);
-  }
+  ptyDataBatcher.dispose();
 }
 
 const KILL_ALL_TIMEOUT_MS = 2000;
@@ -983,6 +960,7 @@ export async function captureSession(
 
 export async function clearBuffer(sessionId: string): Promise<void> {
   const client = getSidecarClient();
+  flushPtyData(sessionId);
   await client.clearBuffer(sessionId);
 }
 
