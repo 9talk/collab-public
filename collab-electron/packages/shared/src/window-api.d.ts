@@ -205,6 +205,7 @@ export interface CollabApi {
   ) => Promise<PtySession>;
   ptyWrite: (sessionId: string, data: string) => void;
   ptyAck: (sessionId: string, charCount: number) => void;
+  ptyAttach: (sessionId: string) => void;
   ptyDetach: (sessionId: string) => void;
   ptySendRawKeys: (sessionId: string, data: string) => void;
   ptyResize: (sessionId: string, cols: number, rows: number) => Promise<void>;

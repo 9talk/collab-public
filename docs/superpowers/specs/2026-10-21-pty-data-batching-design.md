@@ -233,6 +233,7 @@ renderer term.write(data, cb)
 **2a：本地闭环**
 
 - 新增 IPC `pty:ack`（renderer → 主进程），preload 暴露 `ptyAck(sessionId, charCount)`。
+- TerminalTab 挂载时 `ptyAttach`、卸载时 `ptyDetach`，与 effect 生命周期对称，StrictMode 的 mount/cleanup/remount 不会导致 sender 永久缺失。
 - `TerminalTab` 的实时 `term.write(data, cb)` 回调里发送 ack；scrollback/快照回放不 ack。
 - 主进程新增 `pty-flow-control.ts`：consumer 注册/注销、未确认计数、水位线回调。
 - sidecar 新增 RPC `session.pause` / `session.resume`，调用 node-pty `pause()` / `resume()`（node-pty ^1.1.0 已提供）。
@@ -240,8 +241,8 @@ renderer term.write(data, cb)
 
 **2b：远程闭环**
 
-- 远端 renderer 同样走 `ptyAck`；**复用现有 IPC 转发框架**：把 `pty:ack`、`pty:detach` 加入 `markForward` 白名单。客户端镜像 webview 的调用在远程模式下发为 relay RPC，直达 host 的 remote method table；不新增协议帧类型，也不需要 remote-client 手写事件通道。
-- host 端 `remote-server` 新增 `pty:ack`（喂 FlowController）与 `pty:detach`（摘除该会话的 remote consumer）方法；`pty:create` / `pty:reconnect` 成功且客户端支持 `ptyAck` 时注册 remote consumer，`pty:kill`、`session.exited`、relay 断线时摘除。
+- 远端 renderer 同样走 `ptyAck`；**复用现有 IPC 转发框架**：把 `pty:ack`、`pty:attach`、`pty:detach` 加入 `markForward` 白名单。客户端镜像 webview 的调用在远程模式下发为 relay RPC，直达 host 的 remote method table；不新增协议帧类型，也不需要 remote-client 手写事件通道。
+- host 端 `remote-server` 新增 `pty:ack`（喂 FlowController）、`pty:attach` 与 `pty:detach`（注册/摘除该会话的 remote consumer）方法。`pty:reconnect` 成功且客户端支持 `ptyAck` 时直接注册；`pty:create` 则由客户端在建立 owner 映射后调用 `pty:attach` 注册——避免 create 返回前 host 就开始计数、而客户端尚无可投递 owner 导致未确认字符泄漏。`pty:kill`、`session.exited`、relay 断线时摘除。
 - **能力协商**：客户端在 `peer-auth-response` 中携带可选 `features: ["ptyAck"]`（向后兼容）。未声明该能力的旧客户端不注册 remote consumer，不参与水位线计算——避免旧端永不 ack 导致 PTY 永久暂停；代价是旧客户端自身的内存无界增长风险不受本机制保护。
 - 镜像 TerminalTab 卸载时调用 `ptyDetach`，host 据此摘除该会话的 remote consumer，避免「无观众但仍计数」造成永久暂停。同一会话在远端存在多个镜像时按单 consumer 处理（已知边界）。
 - 多观众（本地 + 远程）同时参与水位线；远程慢时本地输出也会被暂停，这是「不丢弃数据」语义下的预期取舍。

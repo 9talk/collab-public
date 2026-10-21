@@ -497,9 +497,6 @@ function registerRemoteMethods(config: AppConfig): MethodTable {
     // 广播标注 origin=client：B 端据 origin 丢弃自身回声(本地已建 tile)，
     // 不再依赖 tileId 幂等去重；A 端本地分发照常建镜像。
     if (result?.sessionId) {
-      if (peerFeatures.has("ptyAck")) {
-        pty.attachRemotePtyConsumer(result.sessionId);
-      }
       forwardToWebviewOrigin("client", "shell", "remote:pty-opened", {
         tileId: p?.tileId,
         sessionId: result.sessionId,
@@ -551,6 +548,13 @@ function registerRemoteMethods(config: AppConfig): MethodTable {
       { sessionId: string; charCount: number },
     ];
     pty.ackRemotePty(sessionId, charCount);
+    return true;
+  });
+  t.register("pty:attach", (params) => {
+    const [{ sessionId }] = params as [{ sessionId: string }];
+    if (peerFeatures.has("ptyAck")) {
+      pty.attachRemotePtyConsumer(sessionId);
+    }
     return true;
   });
   t.register("pty:detach", (params) => {
@@ -837,6 +841,7 @@ function attachHooks(): void {
 
 function detachHooks(): void {
   setRemotePtyConsumers(null);
+  pty.detachRemotePtyConsumers();
   setRemoteEventMirror(null);
   setCanvasRpcResponseMirror(null);
   setTileGeometrySink(null);
@@ -916,6 +921,7 @@ function beginPeerAuth(): void {
   }
   peerVerified = false;
   peerFeatures = new Set();
+  pty.detachRemotePtyConsumers();
   authNonce = newNonce();
   console.log("[remote] challenging client");
   sendToPeer({ v: 1, type: "peer-auth-request", nonce: authNonce });
@@ -1157,6 +1163,7 @@ export async function startRemoteHost(o: HostOptions): Promise<void> {
   peerInfo = undefined;
   peerVerified = false;
   peerFeatures = new Set();
+  pty.detachRemotePtyConsumers();
   clearAuthTimer();
   lastError = undefined;
   table = registerRemoteMethods(o.config);

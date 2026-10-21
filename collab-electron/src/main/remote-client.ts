@@ -177,7 +177,7 @@ function sendToOwner(
     // owner webview 已销毁但 relay 仍在线：主动摘掉 host 侧 remote
     // consumer，避免无人 ack 的未确认字符把 PTY 永久暂停。
     if (ownerBySession.delete(sessionId)) {
-      void rpcInvoke("pty:detach", [{ sessionId }]);
+      void rpcInvoke("pty:detach", [{ sessionId }]).catch(() => {});
     }
     return;
   }
@@ -633,7 +633,12 @@ export async function startRemoteClient(o: ClientOptions): Promise<void> {
     if (channel === "pty:create") {
       const result = await rpcInvoke(channel, args);
       const sessionId = (result as { sessionId?: string } | null)?.sessionId;
-      if (sessionId) ownerBySession.set(sessionId, senderId);
+      if (sessionId) {
+        ownerBySession.set(sessionId, senderId);
+        // owner 映射建立后再让 host 注册 remote consumer；在 create 返回前
+        // 注册会让窗口期数据无 owner 可投递，永远无人 ack。
+        void rpcInvoke("pty:attach", [{ sessionId }]).catch(() => {});
+      }
       return result;
     }
     if (channel === "pty:reconnect") {

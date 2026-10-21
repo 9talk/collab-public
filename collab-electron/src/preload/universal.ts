@@ -327,6 +327,9 @@ contextBridge.exposeInMainWorld("api", {
   ptyAck: (sessionId: string, charCount: number) => {
     ipcRenderer.send("pty:ack", { sessionId, charCount });
   },
+  ptyAttach: (sessionId: string) => {
+    ipcRenderer.send("pty:attach", { sessionId });
+  },
   ptyDetach: (sessionId: string) => {
     ipcRenderer.send("pty:detach", { sessionId });
   },

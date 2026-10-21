@@ -34,9 +34,10 @@ export class PtyFlowController {
 
   attachConsumer(sessionId: string, consumerId: string): void {
     const state = this.ensure(sessionId);
-    if (!state.consumers.has(consumerId)) {
-      state.consumers.set(consumerId, 0);
-    }
+    // 重新附着(webview 重建/重连)时旧数据的 ack 不会再到达, 必须清零;
+    // 若会话正因此处于暂停态, evaluate 会及时恢复, 否则再无新数据可产生 ack。
+    state.consumers.set(consumerId, 0);
+    this.evaluate(sessionId, state);
   }
 
   detachConsumer(sessionId: string, consumerId: string): void {

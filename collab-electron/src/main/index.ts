@@ -920,6 +920,10 @@ bindIpc(
   },
 );
 
+bindIpc("pty:attach", "on", (event, { sessionId }: { sessionId: string }) => {
+  pty.attachSessionSender(sessionId, event.sender.id);
+});
+
 bindIpc("pty:detach", "on", (event, { sessionId }: { sessionId: string }) => {
   pty.detachSessionSender(sessionId, event.sender.id);
 });
@@ -1024,6 +1028,7 @@ for (const channel of [
   "pty:write",
   "pty:send-raw-keys",
   "pty:ack",
+  "pty:attach",
   "pty:detach",
   "pty:resize",
   "pty:kill",

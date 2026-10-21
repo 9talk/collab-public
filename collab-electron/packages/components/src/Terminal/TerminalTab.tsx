@@ -815,6 +815,7 @@ function TerminalTab({
       }
       writePtyText(chunk);
     };
+    window.api.ptyAttach(sessionId);
     window.api.onPtyData(sessionId, handleData);
 
     // PTY 回写收敛化:onResize 在动画/连续变化中逐帧触发,若每帧都 push,

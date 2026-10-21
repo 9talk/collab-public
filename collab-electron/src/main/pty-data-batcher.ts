@@ -90,7 +90,12 @@ export class PtyDataBatcher {
             : Buffer.concat(batch.chunks, batch.bytes);
         batch.chunks = [];
         batch.bytes = 0;
-        this.onFlush(sessionId, data);
+        try {
+          this.onFlush(sessionId, data);
+        } catch (err) {
+          // 单个批次的处理异常不应打断后续输出或主进程事件循环。
+          console.error(`[pty:batch] flush failed for ${sessionId}:`, err);
+        }
       }
     } finally {
       batch.flushing = false;

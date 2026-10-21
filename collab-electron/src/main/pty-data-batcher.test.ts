@@ -159,6 +159,30 @@ describe("PtyDataBatcher", () => {
     expect(flushes).toEqual(["a", "b"]);
   });
 
+  test("onFlush 抛错不阻断后续批次", () => {
+    const originalError = console.error;
+    console.error = () => {};
+    try {
+      let calls = 0;
+      const scheduler = new FakeScheduler();
+      const batcher = new PtyDataBatcher({
+        flushMs: 5,
+        scheduler,
+        onFlush: () => {
+          calls++;
+          if (calls === 1) throw new Error("boom");
+        },
+      });
+      batcher.push("s1", Buffer.from("a"));
+      batcher.flush("s1");
+      batcher.push("s1", Buffer.from("b"));
+      batcher.flush("s1");
+      expect(calls).toBe(2);
+    } finally {
+      console.error = originalError;
+    }
+  });
+
   test("per-push flushMs 覆盖默认值", () => {
     const { batcher, scheduler } = setup();
     batcher.push("s1", Buffer.from("a"), 16);

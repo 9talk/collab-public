@@ -49,13 +49,15 @@ function addSessionSender(
     set = new Set();
     sessionSenders.set(sessionId, set);
   }
-  if (set.has(senderId)) return;
-  set.add(senderId);
+  if (!set.has(senderId)) {
+    set.add(senderId);
+    const wc = getWebContents()?.fromId(senderId);
+    wc?.once("destroyed", () => {
+      removeSessionSender(sessionId, senderId);
+    });
+  }
+  // 重复 attach(重连/重挂载)同样要重置该 consumer 的未确认计数。
   ptyFlowController.attachConsumer(sessionId, localPtyConsumer(senderId));
-  const wc = getWebContents()?.fromId(senderId);
-  wc?.once("destroyed", () => {
-    removeSessionSender(sessionId, senderId);
-  });
 }
 
 function removeSessionSender(
@@ -157,19 +159,27 @@ function localPtyConsumer(webContentsId: number): string {
 const ptyFlowController = new PtyFlowController({
   pause: (sessionId) => {
     console.log(`[pty:flow] pause ${sessionId.slice(0, 8)}`);
-    void getSidecarClient()
-      .pauseSession(sessionId)
-      .catch((err) => {
-        console.log(`[pty:flow] pause failed: ${String(err)}`);
-      });
+    try {
+      void getSidecarClient()
+        .pauseSession(sessionId)
+        .catch((err) => {
+          console.log(`[pty:flow] pause failed: ${String(err)}`);
+        });
+    } catch (err) {
+      console.log(`[pty:flow] pause failed: ${String(err)}`);
+    }
   },
   resume: (sessionId) => {
     console.log(`[pty:flow] resume ${sessionId.slice(0, 8)}`);
-    void getSidecarClient()
-      .resumeSession(sessionId)
-      .catch((err) => {
-        console.log(`[pty:flow] resume failed: ${String(err)}`);
-      });
+    try {
+      void getSidecarClient()
+        .resumeSession(sessionId)
+        .catch((err) => {
+          console.log(`[pty:flow] resume failed: ${String(err)}`);
+        });
+    } catch (err) {
+      console.log(`[pty:flow] resume failed: ${String(err)}`);
+    }
   },
 });
 
@@ -857,6 +867,13 @@ export function detachSessionSender(
   senderWebContentsId: number,
 ): void {
   removeSessionSender(sessionId, senderWebContentsId);
+}
+
+export function attachSessionSender(
+  sessionId: string,
+  senderWebContentsId: number,
+): void {
+  addSessionSender(sessionId, senderWebContentsId);
 }
 
 export function attachRemotePtyConsumer(sessionId: string): void {

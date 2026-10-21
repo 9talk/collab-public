@@ -73,6 +73,17 @@ describe("PtyFlowController", () => {
     expect(events).toEqual(["pause:s1", "resume:s1"]);
   });
 
+  test("重新 attach 重置残留未确认数并恢复暂停", () => {
+    const { flow, events } = setup();
+    flow.attachConsumer("s1", "local");
+    flow.noteSent("s1", "local", 11);
+    expect(events).toEqual(["pause:s1"]);
+    flow.attachConsumer("s1", "local");
+    expect(events).toEqual(["pause:s1", "resume:s1"]);
+    flow.noteSent("s1", "local", 3);
+    expect(events).toEqual(["pause:s1", "resume:s1"]);
+  });
+
   test("clearSession 不触发 resume", () => {
     const { flow, events } = setup();
     flow.attachConsumer("s1", "local");
