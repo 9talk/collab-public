@@ -239,17 +239,18 @@ renderer term.write(data, cb)
 
 **2b：远程闭环**
 
-- 远端 renderer 同样走 `ptyAck`；客户端主进程把 ack 作为 relay event 发回 host（relay 只做透明转发，协议不新增二进制帧类型）。host 的 `handleFrame` 增加 client-origin `event` 分支，仅白名单处理 `pty:ack`，不透传给本地窗口。
-- host 端 `remote-server` 拦截 `pty:ack`，以 `remote` consumer 身份喂给 FlowController；连接断开时 detach。
-- **能力协商**：远端握手新增可选 `features: ["ptyAck"]`（向后兼容）。未声明该能力的旧客户端不注册为 ack consumer，不参与水位线计算——避免旧端永不 ack 导致 PTY 永久暂停；代价是旧客户端自身的内存无界增长风险不受本机制保护。
+- 远端 renderer 同样走 `ptyAck`；**复用现有 IPC 转发框架**：把 `pty:ack`、`pty:detach` 加入 `markForward` 白名单。客户端镜像 webview 的调用在远程模式下发为 relay RPC，直达 host 的 remote method table；不新增协议帧类型，也不需要 remote-client 手写事件通道。
+- host 端 `remote-server` 新增 `pty:ack`（喂 FlowController）与 `pty:detach`（摘除该会话的 remote consumer）方法；`pty:create` / `pty:reconnect` 成功且客户端支持 `ptyAck` 时注册 remote consumer，`pty:kill`、`session.exited`、relay 断线时摘除。
+- **能力协商**：客户端在 `peer-auth-response` 中携带可选 `features: ["ptyAck"]`（向后兼容）。未声明该能力的旧客户端不注册 remote consumer，不参与水位线计算——避免旧端永不 ack 导致 PTY 永久暂停；代价是旧客户端自身的内存无界增长风险不受本机制保护。
+- 镜像 TerminalTab 卸载时调用 `ptyDetach`，host 据此摘除该会话的 remote consumer，避免「无观众但仍计数」造成永久暂停。同一会话在远端存在多个镜像时按单 consumer 处理（已知边界）。
 - 多观众（本地 + 远程）同时参与水位线；远程慢时本地输出也会被暂停，这是「不丢弃数据」语义下的预期取舍。
-- 单测覆盖：远程 ack 路由、断线 detach、能力缺失回退、本地+远程混合水位线；手动验证慢镜像端触发 pause/resume。
+- 单测覆盖：远程 ack 路由、断线/卸载 detach、能力缺失回退、本地+远程混合水位线；手动验证慢镜像端触发 pause/resume。
 
 ### 10.3 阶段二风险
 
 - **ack 丢失**：页面冻结或 relay 抖动会长期暂停；依赖 detach/重连恢复，配合日志观测。
 - **远程暂停影响本地**：最慢消费者决定全局节奏；若体验不可接受，后续可改为按 consumer 丢弃/降级策略（不在本阶段）。
-- **协议面扩大**：新增 IPC、sidecar RPC、client→host event channel；旧客户端通过握手 `features` 能力协商排除在流控之外，不参与水位线。
+- **协议面扩大**：新增 IPC 与 sidecar RPC；远程 ack/detach 复用现有 relay RPC 转发，只扩展方法表，不新增帧类型。旧客户端通过 `peer-auth-response.features` 能力协商排除在流控之外。
 - **与批处理的交互**：ack 按批次字符数计，批次大小不影响正确性，只影响计数粒度。
 
 ### 10.4 阶段二验收
