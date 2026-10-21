@@ -173,7 +173,14 @@ function sendToOwner(
   const wcId = ownerBySession.get(sessionId);
   if (wcId === undefined) return;
   const wc = webContents.fromId(wcId);
-  if (!wc || wc.isDestroyed()) return;
+  if (!wc || wc.isDestroyed()) {
+    // owner webview 已销毁但 relay 仍在线：主动摘掉 host 侧 remote
+    // consumer，避免无人 ack 的未确认字符把 PTY 永久暂停。
+    if (ownerBySession.delete(sessionId)) {
+      void rpcInvoke("pty:detach", [{ sessionId }]);
+    }
+    return;
+  }
   wc.send(channel, ...args);
 }
 

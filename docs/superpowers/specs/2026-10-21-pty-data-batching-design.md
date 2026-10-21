@@ -144,7 +144,7 @@ export class PtyDataBatcher {
 - 宿主代答查询：flush 回调内调用 `writeToSession` 会标记快路径，但 flush 的重入保护保证不会递归。
 - 多观众：一个批次分别发往本地各 sender 和远端 consumer；远程 OSC 52 跨 chunk 提取逻辑继续工作（批次变大只会减少拆分概率）。
 - 远程 `remotePtyConsumers.onData` 与本地 `sendToSenders` 仍按同一批次顺序调用，不改变相对顺序。
-- preload 的 `MAX_BUFFERED_PTY_EVENTS = 32` 不修改；批处理减少了事件数，等于提高了订阅前可覆盖的时间窗口。
+- preload 的 `MAX_BUFFERED_PTY_EVENTS = 32` 不修改；批处理减少了事件数，等于提高了订阅前可覆盖的时间窗口。订阅前缓冲溢出的旧事件会立即回 `pty:ack`（阶段二），避免流控把未显示数据计入未确认字符。
 
 ## 6. 渲染端改动
 
@@ -223,7 +223,8 @@ renderer term.write(data, cb)
 - 以字符数计（与 xterm write 的 `data.length` 一致）。
 - **多观众策略**：每个 consumer 独立累计未确认字符数；`max(unacked) > HIGH` 时暂停，`max(unacked) < LOW` 时恢复。最慢的观众决定节奏，避免任一观众内存无界增长。
 - **ack 时机**：`term.write` 回调（解析完成），不是收到 IPC 时。远程端同样在解析完成后经 relay 回传 ack。
-- **detach 清理**：consumer 断开（webview 销毁、远端断线）立即移除计数并重新评估暂停状态；ack 减法用 `max(0, n)` 钳制，旧 ack 不会产生负数。
+- **detach 清理**：consumer 断开（webview 销毁、远端断线）立即移除计数并重新评估暂停状态；远端 owner webview 在 relay 在线期间销毁时，remote-client 主动发送 `pty:detach`。ack 减法用 `max(0, n)` 钳制，旧 ack 不会产生负数。
+- **缓冲溢出**：preload 在订阅前丢弃的 `pty:data` 立即回 ack，避免未显示数据被计入未确认字符导致永久暂停。
 - **重连**：附着新数据通道时重置该 consumer 计数；旧连接滞后的 ack 由钳制与 consumer 身份隔离兜住。
 - **防死锁**：暂停后若某 consumer 长时间无 ack，仅记录日志并保持暂停，直到 detach 或 ack；不为「恢复」而丢弃数据。应用退出时直接销毁，不等待 ack。
 

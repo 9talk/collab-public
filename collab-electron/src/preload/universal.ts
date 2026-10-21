@@ -88,7 +88,19 @@ ipcRenderer.on("pty:data", (_event, payload) => {
     const sessionBuffer = bufferedPtyData.get(payload.sessionId) ?? [];
     sessionBuffer.push(payload);
     if (sessionBuffer.length > MAX_BUFFERED_PTY_EVENTS) {
-      sessionBuffer.shift();
+      const dropped = sessionBuffer.shift();
+      if (dropped) {
+        const droppedText =
+          typeof dropped.data === "string"
+            ? dropped.data
+            : new TextDecoder().decode(dropped.data);
+        // 订阅前缓冲溢出的数据不会写入 xterm，但仍占主进程流控的未确认
+        // 字符数；不补 ack 会让水位线永久停在暂停态。
+        ipcRenderer.send("pty:ack", {
+          sessionId: dropped.sessionId,
+          charCount: droppedText.length,
+        });
+      }
     }
     bufferedPtyData.set(payload.sessionId, sessionBuffer);
   }
