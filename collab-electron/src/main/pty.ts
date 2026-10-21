@@ -447,6 +447,25 @@ export async function ensureSidecar(): Promise<void> {
   return sidecarStarting;
 }
 
+async function resumeRestoredSessions(client: SidecarClient): Promise<void> {
+  try {
+    const sessions = await client.listSessions();
+    if (sessions.length === 0) return;
+    console.log(`[pty:flow] resume ${sessions.length} restored session(s)`);
+    for (const session of sessions) {
+      try {
+        await client.resumeSession(session.sessionId);
+      } catch {
+        // 会话可能在列出后已退出
+      }
+    }
+  } catch {
+    // sidecar 已断开; 会话随 sidecar 一起消亡, 无需恢复
+  }
+}
+
+let sidecarTakeoverChecked = false;
+
 async function doEnsureSidecar(): Promise<void> {
   let needsSpawn = false;
   try {
@@ -461,6 +480,15 @@ async function doEnsureSidecar(): Promise<void> {
 
   if (needsSpawn) {
     await spawnSidecar();
+  }
+
+  // 仅本进程首次成功接管 sidecar 时检查: 此时本进程尚未创建任何会话,
+  // 仍存在的会话必然来自已消失的上一个主进程。旧渲染端已全部不在,
+  // 新流控状态为空, 但 sidecar 里的 PTY 可能残留暂停态; 不恢复会让
+  // 会话永久静默。对未暂停的 PTY, resume 是安全的 no-op。
+  if (sidecarClient && !sidecarTakeoverChecked) {
+    sidecarTakeoverChecked = true;
+    if (!needsSpawn) void resumeRestoredSessions(sidecarClient);
   }
 
   if (sidecarClient) {
