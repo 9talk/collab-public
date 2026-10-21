@@ -170,6 +170,14 @@ export class SidecarClient {
     await this.rpc("session.resize", { sessionId, cols, rows });
   }
 
+  async pauseSession(sessionId: string): Promise<void> {
+    await this.rpc("session.pause", { sessionId });
+  }
+
+  async resumeSession(sessionId: string): Promise<void> {
+    await this.rpc("session.resume", { sessionId });
+  }
+
   async killSession(sessionId: string): Promise<void> {
     await this.rpc("session.kill", { sessionId });
   }

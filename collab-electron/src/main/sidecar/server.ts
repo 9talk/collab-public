@@ -330,6 +330,10 @@ export class SidecarServer {
         );
       case "session.resize":
         return this.handleResize(sock, id, params as Record<string, unknown>);
+      case "session.pause":
+        return this.handlePause(sock, id, params as Record<string, unknown>);
+      case "session.resume":
+        return this.handleResume(sock, id, params as Record<string, unknown>);
       case "session.kill":
         return this.handleKill(sock, id, params as Record<string, unknown>);
       case "session.list":
@@ -586,6 +590,34 @@ export class SidecarServer {
     }
     session.pty.resize(params.cols as number, params.rows as number);
     session.emulator.resize(params.cols as number, params.rows as number);
+    sock.write(makeResponse(id, { ok: true }));
+  }
+
+  private handlePause(
+    sock: net.Socket,
+    id: number,
+    params: Record<string, unknown>,
+  ): void {
+    const session = this.sessions.get(params.sessionId as string);
+    if (!session) {
+      sock.write(makeError(id, -32000, "Session not found"));
+      return;
+    }
+    session.pty.pause();
+    sock.write(makeResponse(id, { ok: true }));
+  }
+
+  private handleResume(
+    sock: net.Socket,
+    id: number,
+    params: Record<string, unknown>,
+  ): void {
+    const session = this.sessions.get(params.sessionId as string);
+    if (!session) {
+      sock.write(makeError(id, -32000, "Session not found"));
+      return;
+    }
+    session.pty.resume();
     sock.write(makeResponse(id, { ok: true }));
   }
 

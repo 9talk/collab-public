@@ -685,6 +685,28 @@ describe("session.resize works", () => {
   });
 });
 
+describe("session.pause/resume works", () => {
+  it("returns { ok: true } and keeps the session listed", async () => {
+    server = createServer();
+    await server.start();
+
+    const ctrl = await connectControl();
+    const { sessionId } = await createSession(ctrl, 1);
+
+    const pause = await rpcCall(ctrl, 2, "session.pause", { sessionId });
+    assert.deepEqual(pause.result, { ok: true });
+
+    const resume = await rpcCall(ctrl, 3, "session.resume", { sessionId });
+    assert.deepEqual(resume.result, { ok: true });
+
+    const list = await rpcCall(ctrl, 4, "session.list");
+    const sessions = (list.result as { sessions: SessionInfo[] }).sessions;
+    assert.equal(sessions.length, 1);
+
+    ctrl.destroy();
+  });
+});
+
 describe("session.foreground returns a command name", () => {
   it("returns a non-empty command string", async () => {
     server = createServer();
