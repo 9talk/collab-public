@@ -16,13 +16,8 @@ import {
 import "@xterm/xterm/css/xterm.css";
 import "./TerminalTab.css";
 
-// Matches VS Code's TerminalDataBufferer throttle interval.
-// Coalesces rapid PTY data events into a single term.write()
-// call, preventing partial-render artifacts from the renderer
-// processing many small sequential writes.
-const DATA_BUFFER_FLUSH_MS = 5;
 const MAX_WEBGL_RETRIES = 3;
-// alt 屏(Claude Code 全屏)残影重绘的节流间隔(ms,见 flushData):数据流期间
+// alt 屏(Claude Code 全屏)残影重绘的节流间隔(ms,见 writePtyText):数据流期间
 // 最长每这么久强制重绘一次全视口,兜住"输出连续 → 去抖永不触发 → 残影不消"。
 const ALT_REPAINT_INTERVAL_MS = 1000;
 const IS_MAC = window.api.getPlatform() === "darwin";
@@ -104,18 +99,16 @@ function TerminalTab({
   const containerRef = useRef<HTMLDivElement>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const termRef = useRef<Terminal | null>(null);
-  const dataBufferRef = useRef<Uint8Array[]>([]);
-  const flushTimerRef = useRef<number | undefined>(undefined);
   const webglRetriesRef = useRef(0);
   const createWebglRef = useRef<(() => void) | null>(null);
-  const flushDataRef = useRef<(() => void) | null>(null);
+  const writePtyTextRef = useRef<((text: string) => void) | null>(null);
   const refreshingRef = useRef(false);
-  const pendingDuringRefreshRef = useRef<Uint8Array[]>([]);
+  const pendingDuringRefreshRef = useRef<string[]>([]);
   // scrollback 回放窗口:回放未解析完成前 onData 只可能是新 xterm 对历史
   // 查询的自动应答(DSR/DA/DECRQM), 不得写回 pty。
   const replayingRef = useRef(false);
   const isComposingRef = useRef(false);
-  // 记录上一次 alternate screen 状态,仅在翻转时打日志(避免 flushData 高频刷屏)。
+  // 记录上一次 alternate screen 状态,仅在翻转时打日志(避免 writePtyText 高频刷屏)。
   const lastAltScreenRef = useRef<boolean | null>(null);
   // 宿主侧"程序是否有选中"检测(复刻 Claude Code selection.ts 的 anchor/focus 状态机)。
   // 在 onData 拦截 xterm 发往 pty 的 SGR 鼠标字节来更新; mouseBufRef 缓存跨 chunk 的半截序列。
@@ -760,63 +753,24 @@ function TerminalTab({
       }, wait);
     };
 
-    const flushData = () => {
-      if (dataBufferRef.current.length === 0) {
-        flushTimerRef.current = undefined;
-        return;
-      }
-      const chunks = dataBufferRef.current;
-      dataBufferRef.current = [];
-      flushTimerRef.current = undefined;
-      // Merge all chunks into a single term.write() to avoid
-      // triggering multiple WebGL frames, which can cause
-      // ghosting when the renderer can't keep up.
-      let merged: string;
-      if (chunks.length === 1) {
-        merged =
-          typeof chunks[0] === "string"
-            ? chunks[0]
-            : new TextDecoder().decode(chunks[0]);
-      } else {
-        // Build a single Uint8Array and decode once. Handles
-        // both Uint8Array and string chunks (IPC sends strings
-        // but the type says Uint8Array for API stability).
-        const encoder = new TextEncoder();
-        let totalLen = 0;
-        for (const c of chunks) {
-          totalLen +=
-            typeof c === "string" ? encoder.encode(c).length : c.length;
-        }
-        const buf = new Uint8Array(totalLen);
-        let off = 0;
-        for (const c of chunks) {
-          if (typeof c === "string") {
-            const encoded = encoder.encode(c);
-            buf.set(encoded, off);
-            off += encoded.length;
-          } else {
-            buf.set(c, off);
-            off += c.length;
-          }
-        }
-        merged = new TextDecoder().decode(buf);
-      }
+    const writePtyText = (text: string) => {
+      if (text.length === 0) return;
 
       // Diagnostic: detect U+FFFD in data sent to xterm
-      if (merged.includes("�")) {
-        const idx = merged.indexOf("�");
+      if (text.includes("�")) {
+        const idx = text.indexOf("�");
         console.error(
           "[term:utf8] session=" +
             sessionId +
             " U+FFFD at char " +
             idx +
             ' ctx="' +
-            merged.substring(Math.max(0, idx - 20), idx + 20) +
+            text.substring(Math.max(0, idx - 20), idx + 20) +
             '"',
         );
       }
 
-      term.write(merged);
+      term.write(text);
       // Claude Code 全屏(alternate screen)时跳过立即重绘:其滚动由 Claude Code
       // 的 DECSTBM 补丁驱动,走 WebGL 增量渲染即可;滚动高峰重绘会放大卡顿。
       // normal 主屏立即标脏全视口重绘以防高刷屏 ghosting —— 用 refresh 而非
@@ -829,39 +783,35 @@ function TerminalTab({
       }
       repaintAfterData(term, isAlt, scheduleAltRepaint);
     };
-    flushDataRef.current = flushData;
+    writePtyTextRef.current = writePtyText;
 
     const handleData = (payload: { sessionId: string; data: Uint8Array }) => {
       if (payload.sessionId !== sessionId) return;
-      // 程序关闭鼠标追踪(如退出全屏 / 清选中)→ 宿主还原的选中状态一并复位,
-      // 避免 stale 状态下 cmd+c 误发 \x03。抓 DISABLE_MOUSE_TRACKING 里的 \x1b[?1000l。
+
+      let chunk: string;
       try {
         // 主进程经 IPC 发来的是 string（pty.ts forwardPtyData 用 data: enriched），
         // 但类型声明为 Uint8Array；TextDecoder.decode(string) 会抛 TypeError，
-        // 导致 \x1b[?1000l 复位检测从未生效。按实际类型分支处理。
-        const chunk =
+        // 按实际类型分支处理。
+        chunk =
           typeof payload.data === "string"
             ? payload.data
             : new TextDecoder().decode(payload.data);
-        if (chunk.includes("\x1b[?1000l")) {
-          resetHostSel();
-        }
       } catch {
-        /* 字节解码失败,忽略 */
-      }
-      // During a WebGL refresh, buffer data separately to avoid
-      // losing it if flushData races with dataBufferRef.current = [].
-      if (refreshingRef.current) {
-        pendingDuringRefreshRef.current.push(payload.data);
         return;
       }
-      dataBufferRef.current.push(payload.data);
-      if (flushTimerRef.current === undefined) {
-        flushTimerRef.current = window.setTimeout(
-          flushData,
-          DATA_BUFFER_FLUSH_MS,
-        );
+
+      // 程序关闭鼠标追踪(如退出全屏 / 清选中)→ 宿主还原的选中状态一并复位,
+      // 避免 stale 状态下 cmd+c 误发 \x03。抓 DISABLE_MOUSE_TRACKING 里的 \x1b[?1000l。
+      if (chunk.includes("\x1b[?1000l")) {
+        resetHostSel();
       }
+
+      if (refreshingRef.current) {
+        pendingDuringRefreshRef.current.push(chunk);
+        return;
+      }
+      writePtyText(chunk);
     };
     window.api.onPtyData(sessionId, handleData);
 
@@ -1033,10 +983,6 @@ function TerminalTab({
         altRepaintTimer = null;
       }
       pushResizeRef.current = null;
-      if (flushTimerRef.current !== undefined) {
-        clearTimeout(flushTimerRef.current);
-        flushData();
-      }
       cancelAnimationFrame(rafId);
       window.removeEventListener("focus", onWindowFocus);
       mediaQuery.removeEventListener("change", onThemeChange);
@@ -1045,6 +991,7 @@ function TerminalTab({
       container.removeEventListener("paste", handlePaste, true);
       container.removeEventListener("dragover", handleDragOver);
       container.removeEventListener("drop", handleDrop);
+      writePtyTextRef.current = null;
       window.api.offPtyData(sessionId, handleData);
       offPrefChanged();
       offShellBlur();
@@ -1068,14 +1015,8 @@ function TerminalTab({
       const t = termRef.current;
       if (!t) return;
       // Redirect incoming PTY data to a safe buffer while we
-      // swap the WebGL addon, so no data is lost to the race
-      // between flushData and dataBufferRef.current = [].
+      // swap the WebGL addon, so no data is lost across the refresh.
       refreshingRef.current = true;
-      if (flushTimerRef.current !== undefined) {
-        clearTimeout(flushTimerRef.current);
-        flushTimerRef.current = undefined;
-      }
-      dataBufferRef.current = [];
       webglRetriesRef.current = 0;
       createWebglRef.current?.();
       requestAnimationFrame(() => {
@@ -1083,14 +1024,10 @@ function TerminalTab({
         // Replay data that arrived during the refresh.
         const pending = pendingDuringRefreshRef.current;
         pendingDuringRefreshRef.current = [];
-        if (pending.length > 0) {
-          dataBufferRef.current.push(...pending);
-          flushTimerRef.current = window.setTimeout(
-            flushDataRef.current,
-            DATA_BUFFER_FLUSH_MS,
-          );
-        }
         refreshingRef.current = false;
+        if (pending.length > 0) {
+          writePtyTextRef.current?.(pending.join(""));
+        }
         window.api.sendToHost("term:refreshed", sessionId);
       });
     });
