@@ -322,7 +322,13 @@ function processPtyData(sessionId: string, data: Buffer): void {
     );
   }
 
-  const remoteChars = remotePtyConsumers?.onData(sessionId, enriched) ?? 0;
+  // 远端 fan-out 失败(relay 关闭竞态等)不应连带丢掉本地这一批数据。
+  let remoteChars = 0;
+  try {
+    remoteChars = remotePtyConsumers?.onData(sessionId, enriched) ?? 0;
+  } catch (err) {
+    console.error(`[pty:remote] push failed for ${sessionId}:`, err);
+  }
   if (remoteChars > 0) {
     ptyFlowController.noteSent(sessionId, REMOTE_PTY_CONSUMER, remoteChars);
   }
@@ -920,6 +926,9 @@ export async function killSession(sessionId: string): Promise<void> {
   clearForegroundCache(sessionId);
   dataSockets.get(sessionId)?.destroy();
   dataSockets.delete(sessionId);
+  // 会话正在销毁, 尾部批次不再需要; 在等待 kill RPC 前丢弃, 避免
+  // 定时器在 await 期间把旧输出 flush 给远端。
+  clearPendingPtyData(sessionId);
   clearSessionSenders(sessionId);
   try {
     const client = getSidecarClient();
@@ -929,7 +938,6 @@ export async function killSession(sessionId: string): Promise<void> {
   }
   sidecarSessionIds.delete(sessionId);
   sidecarPowerShellSessionIds.delete(sessionId);
-  clearPendingPtyData(sessionId);
   deleteSessionMeta(sessionId);
 }
 
