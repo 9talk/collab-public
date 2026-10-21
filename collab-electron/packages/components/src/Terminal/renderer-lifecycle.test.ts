@@ -77,7 +77,7 @@ describe("repaintAfterData", () => {
     expect(calls).toEqual(["refresh(0,46)"]);
   });
 
-  test("alt 屏: 交给空闲去抖补绘, 不在数据流现场重绘", () => {
+  test("alt 屏: 交给节流重绘, 不在数据流现场重绘", () => {
     const calls: string[] = [];
     const term = {
       rows: 47,

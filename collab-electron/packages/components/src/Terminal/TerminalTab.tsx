@@ -22,8 +22,9 @@ import "./TerminalTab.css";
 // processing many small sequential writes.
 const DATA_BUFFER_FLUSH_MS = 5;
 const MAX_WEBGL_RETRIES = 3;
-// alt 屏(Claude Code 全屏)数据静默后补一次纹理清理的延迟(见 flushData)
-const ALT_IDLE_CLEANUP_MS = 250;
+// alt 屏(Claude Code 全屏)残影重绘的节流间隔(ms,见 flushData):数据流期间
+// 最长每这么久强制重绘一次全视口,兜住"输出连续 → 去抖永不触发 → 残影不消"。
+const ALT_REPAINT_INTERVAL_MS = 1000;
 const IS_MAC = window.api.getPlatform() === "darwin";
 
 // cmd+c 复制键在"无 xterm 原生选中"时（如 Claude Code 等鼠标接管 TUI）
@@ -736,20 +737,27 @@ function TerminalTab({
       window.api.ptyWrite(sessionId, forwarded);
     });
 
-    // alt 屏(Claude Code 全屏)的数据流期间不做清理(见 flushData:滚动高峰
-    // 清理会放大卡顿),但 WebGL 增量渲染可能残留旧行像素(表现为输入栏上方
-    // 多一行,持续到下次重绘才消失)。流停止后补一次清理:去抖窗口内持续有
-    // 数据则一直顺延,流中止时清一次,既避开滚动高峰又覆盖残影。
-    // 仍用 clearTextureAtlas 而非 refresh:refresh 的逐 cell 短路会跳过内容
-    // 未变的 cell,修不了"纹理与顶点 UV 不一致"这类残影,而它是当前唯一的
-    // 纹理层恢复手段(代价:清空跨终端共享的字形图集,在此低频场景可接受)。
-    let altIdleCleanupTimer: ReturnType<typeof setTimeout> | null = null;
-    const scheduleAltIdleCleanup = () => {
-      if (altIdleCleanupTimer) clearTimeout(altIdleCleanupTimer);
-      altIdleCleanupTimer = setTimeout(() => {
-        altIdleCleanupTimer = null;
-        term.clearTextureAtlas();
-      }, ALT_IDLE_CLEANUP_MS);
+    // alt 屏(Claude Code 全屏)的残影重绘。WebGL 增量渲染会残留旧行像素
+    // (表现为输入栏上方多一行,持续到下次重绘才消失)。
+    // 用**节流**而非"静默去抖":Claude Code 输出近乎连续(间隔远小于去抖窗口),
+    // 去抖会被无限顺延、残影永不清理;节流无论流是否中断,都保证每
+    // ALT_REPAINT_INTERVAL_MS 强制全视口重绘一次,把残影可见时长压到 ≤1s。
+    // 用 refresh(全视口标脏重绘)而非 clearTextureAtlas:后者清空跨终端共享的
+    // 字形图集并触发全部重栅格化,代价高得多;需要更彻底的清理时用 Cmd+R
+    // (重建整个 WebglAddon,见 onTerminalRefresh)。
+    let altRepaintTimer: ReturnType<typeof setTimeout> | null = null;
+    let altLastRepaintAt = -Infinity;
+    const scheduleAltRepaint = () => {
+      if (altRepaintTimer) return;
+      const wait = Math.max(
+        0,
+        ALT_REPAINT_INTERVAL_MS - (performance.now() - altLastRepaintAt),
+      );
+      altRepaintTimer = setTimeout(() => {
+        altRepaintTimer = null;
+        altLastRepaintAt = performance.now();
+        term.refresh(0, term.rows - 1);
+      }, wait);
     };
 
     const flushData = () => {
@@ -819,7 +827,7 @@ function TerminalTab({
         lastAltScreenRef.current = isAlt;
         console.log(`[alt-debug] alternate screen=${isAlt ? "ON" : "OFF"}`);
       }
-      repaintAfterData(term, isAlt, scheduleAltIdleCleanup);
+      repaintAfterData(term, isAlt, scheduleAltRepaint);
     };
     flushDataRef.current = flushData;
 
@@ -1020,9 +1028,9 @@ function TerminalTab({
         clearTimeout(resizePushTimer);
         resizePushTimer = null;
       }
-      if (altIdleCleanupTimer) {
-        clearTimeout(altIdleCleanupTimer);
-        altIdleCleanupTimer = null;
+      if (altRepaintTimer) {
+        clearTimeout(altRepaintTimer);
+        altRepaintTimer = null;
       }
       pushResizeRef.current = null;
       if (flushTimerRef.current !== undefined) {

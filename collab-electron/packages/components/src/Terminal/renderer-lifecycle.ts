@@ -42,18 +42,20 @@ export function createDisposableSlot<T extends Disposable>() {
 /**
  * 数据落盘后的视口重绘策略。
  *
- * 用 refresh(标记脏行重绘)而非 clearTextureAtlas():后者会清空跨 Terminal
- * 实例共享的字形图集并触发全部重栅格化,代价远高于重绘本身。alt 屏(全屏
- * TUI)把补绘推迟到数据流空闲,避免在滚动高峰放大卡顿。
+ * 主屏:立即 refresh(标记脏行重绘)全视口。
+ * alt 屏(全屏 TUI,如 Claude Code):不在数据流现场重绘(滚动高峰会放大卡顿),
+ * 交给 scheduleAltRepaint 去节流,最长每 ALT_REPAINT_INTERVAL_MS 强制重绘一次
+ * —— 见 TerminalTab 的说明。用 refresh 而非 clearTextureAtlas:后者清空跨
+ * Terminal 实例共享的字形图集并触发全部重栅格化,代价远高于重绘本身。
  */
 export function repaintAfterData(
   term: { rows: number; refresh(start: number, end: number): void },
   isAltScreen: boolean,
-  scheduleIdleRepaint: () => void,
+  scheduleAltRepaint: () => void,
 ): void {
   if (!isAltScreen) {
     term.refresh(0, term.rows - 1);
     return;
   }
-  scheduleIdleRepaint();
+  scheduleAltRepaint();
 }
