@@ -47,6 +47,10 @@ if [ -z "$EVENT" ]; then
   exit 0
 fi
 
+# 只有 Collaborator 启动的终端才注入该变量；Anygo 注入的是 ANYGO_TILE_ID 并自行播放
+TILE_ID="${COLLAB_TILE_ID:-}"
+[ -z "$TILE_ID" ] && exit 0
+
 SOUND_FILE="$SOUND_DIR/$EVENT.mp3"
 if [ ! -f "$SOUND_FILE" ]; then
   log "skip NO-BUNDLED-SOUND event=$EVENT"
@@ -104,7 +108,7 @@ if [ "$STATUS" = "default" ]; then
 fi
 
 if err="$(afplay "$SOUND_FILE" 2>&1)"; then
-  log "play OK event=$EVENT sound=$SOUND_FILE"
+  log "play OK event=$EVENT tile=$TILE_ID sound=$SOUND_FILE"
 else
-  log "play FAIL event=$EVENT sound=$SOUND_FILE err=${err:-unknown}"
+  log "play FAIL event=$EVENT tile=$TILE_ID sound=$SOUND_FILE err=${err:-unknown}"
 fi
